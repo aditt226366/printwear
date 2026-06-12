@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Printwear CRM Login</title>
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body class="login-shell">
+    <main class="login-page">
+      <section class="login-panel">
+        <div class="login-brand">
+          <span class="brand-mark">PW</span>
+          <div>
+            <p class="eyebrow">Printwear CRM</p>
+            <h1>Welcome back</h1>
+          </div>
+        </div>
+
+        <form id="loginForm" class="login-form">
+          <label>
+            <span>Email</span>
+            <input id="email" name="email" type="email" autocomplete="username" required />
+          </label>
+          <label>
+            <span>Password</span>
+            <input id="password" name="password" type="password" autocomplete="current-password" required />
+          </label>
+          <button type="submit" class="primary-button full-width">Open dashboard</button>
+          <p id="loginError" class="form-error" role="alert"></p>
+        </form>
+      </section>
+
+      <aside class="login-visual" aria-label="Dashboard preview">
+        <div class="signal-strip">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+        <div class="preview-board">
+          <div class="preview-row strong"></div>
+          <div class="preview-row"></div>
+          <div class="preview-row short"></div>
+          <div class="preview-meter">
+            <span style="width: 74%"></span>
+          </div>
+        </div>
+        <p>AI-qualified WhatsApp leads, sales conversations, and follow-up signals in one premium workspace.</p>
+      </aside>
+    </main>
+
+    <script src="/assets/login.js"></script>
+  </body>
+</html>

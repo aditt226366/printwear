@@ -1,0 +1,164 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum LeadStatus {
+  NEW       @map("new")
+  MESSAGED  @map("messaged")
+  REPLIED   @map("replied")
+  FAILED    @map("failed")
+}
+
+enum LeadTemperature {
+  HOT    @map("hot")
+  WARM   @map("warm")
+  SCRAP  @map("scrap")
+}
+
+enum HumanPriority {
+  HIGH    @map("high")
+  MEDIUM  @map("medium")
+  LOW     @map("low")
+}
+
+enum OrderStatus {
+  COLLECTING_DETAILS  @map("collecting_details")
+  READY_FOR_REVIEW    @map("ready_for_review")
+  QUOTATION_NEEDED    @map("quotation_needed")
+  CONFIRMED           @map("confirmed")
+  READY_FOR_DISPATCH  @map("ready_for_dispatch")
+  DISPATCHED          @map("dispatched")
+  CANCELLED           @map("cancelled")
+}
+
+enum MessageDirection {
+  INBOUND   @map("inbound")
+  OUTBOUND  @map("outbound")
+}
+
+enum MessageType {
+  TEXT      @map("text")
+  TEMPLATE  @map("template")
+  IMAGE     @map("image")
+  VIDEO     @map("video")
+  DOCUMENT  @map("document")
+  AUDIO     @map("audio")
+}
+
+enum MessageStatus {
+  PENDING    @map("pending")
+  SENT       @map("sent")
+  DELIVERED  @map("delivered")
+  READ       @map("read")
+  FAILED     @map("failed")
+  RECEIVED   @map("received")
+}
+
+enum KnowledgeSourceType {
+  MANUAL   @map("manual")
+  WEBSITE  @map("website")
+  UPLOAD   @map("upload")
+  SEED     @map("seed")
+}
+
+model Lead {
+  id                   String           @id @default(cuid())
+  name                 String
+  phone                String           @unique
+  status               LeadStatus       @default(NEW)
+  source               String           @default("google_sheets")
+  messageCount         Int              @default(0)
+  leadTemperature      LeadTemperature  @default(SCRAP)
+  temperatureReason    String           @default("0-1 messages")
+  humanTakeoverRequired Boolean         @default(false)
+  humanPriority        HumanPriority?
+  humanReason          String?
+  humanResolvedAt      DateTime?
+  googleSheetRowNumber Int?             @unique
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  messages     Message[]
+  sendLogs     SendLog[]
+  orderSummary OrderSummary?
+
+  @@index([status])
+  @@index([leadTemperature])
+  @@index([humanTakeoverRequired, humanResolvedAt])
+}
+
+model Message {
+  id                String            @id @default(cuid())
+  leadId            String
+  whatsappMessageId String?           @unique
+  direction         MessageDirection
+  type              MessageType
+  content           String
+  status            MessageStatus
+  rawPayload        Json?
+  createdAt         DateTime          @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, createdAt])
+  @@index([status])
+}
+
+model KnowledgeBase {
+  id          String              @id @default(cuid())
+  title       String
+  content     String
+  category    String
+  sourceType  KnowledgeSourceType @default(MANUAL)
+  sourceUrl   String?
+  sourceName  String?
+  sourceKey   String?
+  chunkIndex  Int                 @default(0)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([category])
+  @@index([sourceType])
+  @@index([sourceKey])
+}
+
+model SendLog {
+  id           String   @id @default(cuid())
+  leadId       String?
+  action       String
+  status       String
+  errorMessage String?
+  createdAt    DateTime @default(now())
+
+  lead Lead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@index([leadId])
+  @@index([action, status])
+}
+
+model OrderSummary {
+  id               String      @id @default(cuid())
+  leadId           String      @unique
+  productType      String?
+  quantity         Int?
+  size             String?
+  color            String?
+  gsm              String?
+  customization    String?
+  deliveryLocation String?
+  notes            String?
+  status           OrderStatus @default(COLLECTING_DETAILS)
+  confidenceScore  Float       @default(0)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([updatedAt])
+}

@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Printwear Sales Command Center</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&display=swap" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body class="app-shell bg-[#060A0F] text-[#F8FAFC]">
+    <aside class="sidebar">
+      <div class="brand-block">
+        <span class="brand-mark">PW</span>
+        <div>
+          <strong>Printwear AI CRM</strong>
+          <span>WhatsApp revenue ops</span>
+        </div>
+      </div>
+
+      <nav class="nav-list" aria-label="CRM sections">
+        <button class="nav-item active" data-view="overview">
+          <i data-lucide="command"></i>
+          Command
+        </button>
+        <button class="nav-item" data-view="chats">
+          <i data-lucide="messages-square"></i>
+          Chats
+        </button>
+        <button class="nav-item" data-view="leads" data-temperature="">
+          <i data-lucide="contact-round"></i>
+          Leads
+        </button>
+      </nav>
+
+      <div class="sidebar-panel">
+        <div class="sidebar-panel-top">
+          <span class="pulse-dot"></span>
+          <strong>Workspace live</strong>
+        </div>
+        <span id="sidebarSummary">Syncing lead intelligence</span>
+        <div class="mini-meter"><span id="sidebarMeter"></span></div>
+      </div>
+
+      <form method="post" action="/logout" class="logout-form">
+        <button type="submit" class="secondary-button full-width">
+          <i data-lucide="log-out"></i>
+          Sign out
+        </button>
+      </form>
+    </aside>
+
+    <main class="workspace">
+      <header class="topbar">
+        <div class="global-search">
+          <i data-lucide="search"></i>
+          <input id="globalSearch" placeholder="Search leads, messages, campaigns..." />
+          <kbd>/</kbd>
+        </div>
+        <div class="top-actions">
+          <button id="importLeadsBtn" class="secondary-button compact-action">
+            <i data-lucide="file-spreadsheet"></i>
+            Import Leads
+          </button>
+          <button id="sendInitialBtn" class="primary-button compact-action">
+            <i data-lucide="send"></i>
+            Send Welcomes
+          </button>
+          <button class="secondary-button icon-button" type="button" aria-label="Notifications">
+            <i data-lucide="bell"></i>
+          </button>
+        </div>
+        <div class="profile-menu">
+          <div class="tiny-status" aria-label="System status">
+            <span><i></i>WhatsApp</span>
+            <span><i></i>Claude</span>
+            <span><i></i>Sheets</span>
+          </div>
+          <button class="profile-button" type="button" aria-label="Profile menu">
+            <span>AD</span>
+            <i data-lucide="chevron-down"></i>
+          </button>
+        </div>
+      </header>
+
+      <section id="notice" class="notice hidden"></section>
+
+      <section id="overviewView" class="view active-view">
+        <div id="overviewSkeleton" class="skeleton-grid">
+          <div class="skeleton-card"></div>
+          <div class="skeleton-card"></div>
+          <div class="skeleton-card"></div>
+          <div class="skeleton-card"></div>
+          <div class="skeleton-card wide"></div>
+          <div class="skeleton-card wide"></div>
+        </div>
+
+        <div id="overviewContent" class="dashboard-stack hidden">
+          <section class="kpi-grid" aria-label="CRM KPIs">
+            <article class="metric-tile accent-green">
+              <div class="metric-top"><i data-lucide="database"></i><span id="totalLeadTrend">+0%</span></div>
+              <strong id="totalLeads">0</strong>
+              <h3>Total Leads</h3>
+              <p id="totalLeadInsight">All active records in the CRM.</p>
+            </article>
+            <article class="metric-tile accent-hot">
+              <div class="metric-top"><i data-lucide="flame"></i><span id="hotLeadTrend">Priority</span></div>
+              <strong id="hotLeads">0</strong>
+              <h3>Hot Leads</h3>
+              <p id="hotLeadInsight">High-intent buyers need fast action.</p>
+            </article>
+            <article class="metric-tile accent-warm">
+              <div class="metric-top"><i data-lucide="badge-dollar-sign"></i><span id="warmLeadTrend">Nurture</span></div>
+              <strong id="warmLeads">0</strong>
+              <h3>Warm Leads</h3>
+              <p id="warmLeadInsight">Qualified accounts ready for follow-up.</p>
+            </article>
+            <article class="metric-tile accent-scrap">
+              <div class="metric-top"><i data-lucide="archive-x"></i><span id="scrapLeadTrend">Clean</span></div>
+              <strong id="scrapLeads">0</strong>
+              <h3>Scrap Leads</h3>
+              <p id="scrapLeadInsight">Low-fit leads filtered from priority work.</p>
+            </article>
+          </section>
+
+          <section class="overview-lists-grid">
+            <article class="panel premium-card">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Human Action Queue</p>
+                  <h2>Conversations that need manual attention.</h2>
+                  <span>Sales and support chats that need a human right now.</span>
+                </div>
+              </div>
+              <div id="humanActionQueueList" class="intel-list"></div>
+            </article>
+
+            <article class="panel premium-card order-pipeline-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Order Pipeline</p>
+                  <h2>Orders ready for review, quotation, confirmation, and dispatch.</h2>
+                  <span>Extracted order details from real WhatsApp conversations.</span>
+                </div>
+              </div>
+              <div id="orderPipelineBoard" class="order-pipeline-board"></div>
+            </article>
+          </section>
+        </div>
+      </section>
+
+      <section id="chatsView" class="view">
+        <div class="page-heading-row chat-page-heading">
+          <div>
+            <p class="eyebrow">WhatsApp control room</p>
+            <h1>Chats</h1>
+            <span>AI-assisted conversations with human takeover when the deal needs a closer.</span>
+          </div>
+          <span class="status-pill connected"><i data-lucide="bot"></i>AI drafting replies</span>
+        </div>
+
+        <div class="chat-layout premium-card">
+          <aside class="conversation-list-panel">
+            <div class="panel-search">
+              <i data-lucide="search"></i>
+              <input id="chatSearch" placeholder="Search chats" />
+            </div>
+            <div id="chatConversationList" class="chat-conversation-list">
+              <div class="lead-skeleton"></div>
+              <div class="lead-skeleton"></div>
+              <div class="lead-skeleton"></div>
+            </div>
+          </aside>
+
+          <section class="chat-center">
+            <div class="chat-header">
+              <div>
+                <p class="eyebrow">Selected thread</p>
+                <h2 id="chatLeadName">Select a conversation</h2>
+                <span id="chatLeadMeta">Open a lead to view the WhatsApp timeline.</span>
+              </div>
+              <div class="chat-header-actions">
+                <span id="aiStatusIndicator" class="status-pill"><i data-lucide="sparkles"></i>AI assist</span>
+                <button id="humanTakeoverBtn" class="danger-button" type="button">
+                  <i data-lucide="user-round-check"></i>
+                  Human takeover
+                </button>
+              </div>
+            </div>
+            <div id="chatThread" class="message-thread empty-state">
+              <div class="empty-card">
+                <strong>No chat selected</strong>
+                <span>Choose a conversation from the left to inspect customer context and reply.</span>
+              </div>
+            </div>
+            <button id="newMessageBtn" class="new-message-button hidden" type="button">
+              <i data-lucide="arrow-down"></i>
+              New message
+            </button>
+            <form id="chatReplyForm" class="reply-box hidden">
+              <textarea id="chatReplyText" maxlength="700" placeholder="Write a WhatsApp reply"></textarea>
+              <button type="submit" class="primary-button">
+                <i data-lucide="send-horizontal"></i>
+                Send
+              </button>
+            </form>
+          </section>
+
+          <aside class="lead-profile-panel">
+            <div class="profile-card">
+              <span id="profileAvatar" class="lead-avatar large">PW</span>
+              <h2 id="profileName">Lead profile</h2>
+              <span id="profilePhone">Select a conversation</span>
+              <span id="profileStatus" class="tag neutral">Not selected</span>
+            </div>
+            <div class="profile-stats">
+              <div><span>Lead score</span><strong id="profileScore">--</strong></div>
+              <div><span>Messages</span><strong id="profileMessages">--</strong></div>
+            </div>
+            <div class="profile-insight">
+              <p class="eyebrow">AI Insight</p>
+              <span id="profileReason">Select a lead to see scoring context and next-best action.</span>
+            </div>
+            <div class="profile-insight">
+              <p class="eyebrow">Human Attention</p>
+              <div id="humanAttentionCard" class="profile-detail-list">
+                <span>Requires human: No</span>
+                <span>Priority: --</span>
+                <span>Reason: --</span>
+              </div>
+              <button id="profileResolveHumanBtn" class="secondary-button full-width hidden" type="button">
+                <i data-lucide="check-circle-2"></i>
+                Mark resolved
+              </button>
+            </div>
+            <div class="profile-insight">
+              <p class="eyebrow">Order Summary</p>
+              <div id="orderSummaryCard" class="profile-detail-list">
+                <span>Product: --</span>
+                <span>Quantity: --</span>
+                <span>Status: --</span>
+              </div>
+              <p class="action-status hidden" id="orderActionStatus">Sending update...</p>
+              <div class="profile-order-actions">
+                <button class="secondary-button order-confirm" type="button" data-order-action="CONFIRM">Mark confirmed</button>
+                <button class="secondary-button order-ready" type="button" data-order-action="READY_FOR_DISPATCH">Ready for dispatch</button>
+                <button class="secondary-button order-dispatch" type="button" data-order-action="DISPATCH">Dispatched</button>
+                <button class="danger-button order-cancel" type="button" data-order-action="CANCEL">Cancel</button>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section id="leadsView" class="view">
+        <div class="page-heading-row leads-heading">
+          <div>
+            <p class="eyebrow">CRM lead desk</p>
+            <h1>Leads</h1>
+            <span>Premium intent cards with scoring, segment filters, and quick chat access.</span>
+          </div>
+          <div class="lead-controls">
+            <div class="panel-search">
+              <i data-lucide="search"></i>
+              <input id="leadSearch" placeholder="Search lead, phone, intent..." />
+            </div>
+            <div class="input-shell">
+              <i data-lucide="sliders-horizontal"></i>
+              <select id="temperatureFilter" aria-label="Filter by lead temperature">
+                <option value="">All leads</option>
+                <option value="HOT">Hot</option>
+                <option value="WARM">Warm</option>
+                <option value="SCRAP">Scrap</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="segmented-tabs" role="tablist" aria-label="Lead segments">
+          <button class="segment-tab active" data-temperature-tab="">All</button>
+          <button class="segment-tab" data-temperature-tab="HOT">Hot</button>
+          <button class="segment-tab" data-temperature-tab="WARM">Warm</button>
+          <button class="segment-tab" data-temperature-tab="SCRAP">Scrap</button>
+        </div>
+
+        <section class="panel premium-card leads-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Lead queue</p>
+              <h2>Intent-ranked customer list</h2>
+              <span id="leadFilterSummary">Loading leads</span>
+            </div>
+          </div>
+          <div id="leadList" class="crm-lead-grid">
+            <div class="lead-skeleton"></div>
+            <div class="lead-skeleton"></div>
+            <div class="lead-skeleton"></div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="/assets/dashboard.js"></script>
+  </body>
+</html>
