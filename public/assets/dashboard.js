@@ -10,7 +10,8 @@ const state = {
   latestOverview: null,
   isRefreshing: false,
   humanActionQueue: [],
-  orderPipeline: {}
+  orderPipeline: {},
+  dashboardLoaded: false
 };
 
 const views = {
@@ -121,19 +122,14 @@ function logDashboardError(context, error, details = {}) {
   });
 }
 
-async function api(path, options = {}) {
-  const response = await fetch(`/admin/api${path}`, {
+async function publicApi(path, options = {}) {
+  const response = await fetch(`/api${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
       ...(options.headers || {})
     }
   });
-
-  if (response.status === 401) {
-    window.location.href = "/login";
-    return null;
-  }
 
   const data = response.status === 204 ? {} : await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || "Something went wrong");
@@ -666,13 +662,12 @@ async function loadOverview() {
     const data = await dashboardApi();
     const recentLeads = data.recentLeads || data.recentConversations || [];
     data.recentLeads = recentLeads;
+    state.dashboardLoaded = true;
     state.humanActionQueue = data.humanActionQueue || data.items || [];
     state.orderPipeline = data.orderPipeline || data.pipeline || {};
-    if (recentLeads.length) {
-      state.leads = recentLeads;
-      renderLeadCards();
-      renderChatList();
-    }
+    state.leads = recentLeads;
+    renderLeadCards();
+    renderChatList();
     renderHumanActionQueue();
     renderOrderPipeline();
     renderOverview(data);
@@ -684,33 +679,48 @@ async function loadOverview() {
 
 async function loadLeads(options = {}) {
   const updateOverview = options.updateOverview ?? state.currentView === "overview";
-  const data = await api(
-    `/leads${buildQuery({
-      search: state.leadSearch,
-      temperature: state.temperatureFilter
-    })}`
-  );
-  state.leads = data?.leads || [];
+  if (!state.dashboardLoaded) {
+    await loadOverview();
+  }
   renderLeadCards();
   renderChatList();
   if (updateOverview) renderDerivedOverview();
 }
 
 async function loadOperationalData() {
-  const [queueData, pipelineData] = await Promise.all([
-    api("/human-action-queue"),
-    api("/order-pipeline")
-  ]);
-  state.humanActionQueue = queueData?.items || [];
-  state.orderPipeline = pipelineData?.pipeline || {};
+  if (!state.dashboardLoaded) {
+    await loadOverview();
+  }
   renderHumanActionQueue();
   renderOrderPipeline();
   refreshIcons();
 }
 
 async function loadConversation(leadId, options = {}) {
-  const data = await api(`/leads/${leadId}/conversation`);
-  if (data) renderConversation(data, options);
+  const lead = state.leads.find((item) => item.id === leadId);
+  if (!lead) {
+    showNotice("Conversation details are unavailable in this dashboard snapshot.", true);
+    return;
+  }
+
+  renderConversation(
+    {
+      lead,
+      messages: lead.lastMessage
+        ? [
+            {
+              id: `snapshot-${lead.id}`,
+              direction: "INBOUND",
+              type: "TEXT",
+              content: lead.lastMessage,
+              status: "RECEIVED",
+              createdAt: lead.updatedAt
+            }
+          ]
+        : []
+    },
+    options
+  );
 }
 
 async function openLeadChat(leadId) {
@@ -726,29 +736,7 @@ async function refreshChatStateForLead(leadId, options = {}) {
 }
 
 function connectChatEvents() {
-  if (!window.EventSource) return;
-
-  const events = new EventSource("/admin/api/events");
-  const handleEvent = (event) => {
-    const data = JSON.parse(event.data);
-    if (!data.leadId) return;
-
-    const thread = $("#chatThread");
-    const nearBottom = isNearBottom(thread);
-    refreshChatStateForLead(data.leadId, { forceBottom: nearBottom }).catch((error) => showNotice(error.message, true));
-
-    if (data.type === "order.updated") {
-      loadOperationalData().catch((error) => showNotice(error.message, true));
-    }
-  };
-
-  events.addEventListener("message.created", handleEvent);
-  events.addEventListener("message.status", handleEvent);
-  events.addEventListener("order.updated", handleEvent);
-  events.addEventListener("lead.updated", handleEvent);
-  events.onerror = () => {
-    console.warn("Chat event stream disconnected. Browser will retry automatically.");
-  };
+  console.info("[Dashboard] Real-time admin event stream is disabled on the public production dashboard.");
 }
 
 function setTemperatureFilter(value) {
@@ -834,7 +822,7 @@ function bindEvents() {
 
   $("#importLeadsBtn")?.addEventListener("click", async () => {
     try {
-      const result = await api("/actions/import-leads", { method: "POST" });
+      const result = await publicApi("/leads/import", { method: "POST" });
       showNotice(`Imported ${result.imported} leads`);
       await refreshCurrentView();
     } catch (error) {
@@ -844,7 +832,7 @@ function bindEvents() {
 
   $("#sendInitialBtn")?.addEventListener("click", async () => {
     try {
-      const result = await api("/actions/send-initial", { method: "POST" });
+      const result = await publicApi("/messages/send-initial", { method: "POST" });
       showNotice(`Sent ${result.sent} welcome messages. ${result.failed} failed.`);
       await refreshCurrentView();
     } catch (error) {
@@ -887,51 +875,14 @@ async function sendManualReply(event) {
   const text = input.value.trim();
   if (!text) return;
 
-  const tempMessage = {
-    id: `temp-${Date.now()}`,
-    direction: "OUTBOUND",
-    type: "TEXT",
-    content: text,
-    status: "PENDING",
-    createdAt: new Date().toISOString()
-  };
-  const previousConversation = state.selectedConversation;
-  if (previousConversation) {
-    state.selectedConversation = {
-      ...previousConversation,
-      messages: [...previousConversation.messages, tempMessage]
-    };
-    renderConversation(state.selectedConversation, { forceBottom: true });
-  }
-  input.value = "";
-
-  try {
-    const result = await api(`/leads/${state.selectedLeadId}/messages`, {
-      method: "POST",
-      body: JSON.stringify({ text })
-    });
-    showNotice("WhatsApp reply sent");
-    if (state.selectedConversation && result?.message) {
-      state.selectedConversation = {
-        ...state.selectedConversation,
-        messages: state.selectedConversation.messages.map((message) => (message.id === tempMessage.id ? result.message : message))
-      };
-      renderConversation(state.selectedConversation, { forceBottom: true });
-    }
-    await refreshChatStateForLead(state.selectedLeadId, { forceBottom: true });
-  } catch (error) {
-    if (previousConversation) {
-      state.selectedConversation = previousConversation;
-      renderConversation(previousConversation, { forceBottom: true });
-      input.value = text;
-    }
-    showNotice(error.message, true);
-  }
+  logDashboardError("Manual reply blocked", new Error("No public API route is available for sending chat replies from this dashboard build."));
+  showNotice("Manual replies are unavailable from this production dashboard view.", true);
+  input.value = text;
 }
 
 async function resolveHumanAction(leadId) {
   try {
-    await api(`/human-action-queue/${leadId}/resolve`, { method: "POST" });
+    await publicApi(`/human-action-queue/${leadId}/resolve`, { method: "POST" });
     showNotice("Human attention item resolved");
     await Promise.all([loadOperationalData(), loadLeads()]);
     if (state.selectedLeadId === leadId) await loadConversation(leadId);
@@ -953,7 +904,7 @@ async function performOrderAction(orderId, action, button) {
   }
 
   try {
-    const result = await api(`/orders/${orderId}/action`, {
+    const result = await publicApi(`/orders/${orderId}/action`, {
       method: "POST",
       body: JSON.stringify({ action })
     });
