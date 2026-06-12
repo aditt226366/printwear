@@ -9,6 +9,7 @@ import { humanActionService } from "../services/humanAction.service.js";
 import { orderActionService } from "../services/orderAction.service.js";
 import { orderSummaryService } from "../services/orderSummary.service.js";
 import { asyncHandler, AppError } from "../utils/errors.js";
+import { logger } from "../utils/logger.js";
 
 const knowledgeSchema = z.object({
   title: z.string().trim().min(2),
@@ -51,6 +52,74 @@ const orderActionSchema = z.object({
 
 export const getOverview = asyncHandler(async (_req: Request, res: Response) => {
   res.json(await dashboardService.overview());
+});
+
+function emptyDashboardResponse() {
+  const pipeline = Object.fromEntries(Object.values(OrderStatus).map((status) => [status, []]));
+
+  return {
+    totalLeads: 0,
+    hotLeads: 0,
+    warmLeads: 0,
+    scrapLeads: 0,
+    inboundMessages: 0,
+    outboundMessages: 0,
+    recentConversations: [],
+    recentLeads: [],
+    recentLogs: [],
+    humanActionQueue: [],
+    orderPipeline: pipeline,
+    pipeline,
+    stats: {
+      totalLeads: 0,
+      hotLeads: 0,
+      warmLeads: 0,
+      scrapLeads: 0,
+      inboundMessages: 0,
+      outboundMessages: 0
+    }
+  };
+}
+
+export const getDashboard = asyncHandler(async (_req: Request, res: Response) => {
+  const fallback = emptyDashboardResponse();
+  const [overviewResult, queueResult, pipelineResult] = await Promise.allSettled([
+    dashboardService.overview(),
+    humanActionService.listQueue(),
+    orderSummaryService.listPipeline()
+  ]);
+
+  if (overviewResult.status === "rejected") {
+    logger.error({ error: overviewResult.reason }, "Dashboard overview query failed");
+  }
+  if (queueResult.status === "rejected") {
+    logger.error({ error: queueResult.reason }, "Dashboard human action queue query failed");
+  }
+  if (pipelineResult.status === "rejected") {
+    logger.error({ error: pipelineResult.reason }, "Dashboard order pipeline query failed");
+  }
+
+  const overview = overviewResult.status === "fulfilled" ? overviewResult.value : fallback;
+  const stats = overview.stats ?? fallback.stats;
+  const recentLeads = overview.recentLeads ?? [];
+  const humanActionQueue = queueResult.status === "fulfilled" ? queueResult.value : [];
+  const orderPipeline = pipelineResult.status === "fulfilled" ? pipelineResult.value : fallback.orderPipeline;
+
+  res.json({
+    ...overview,
+    stats,
+    totalLeads: stats.totalLeads ?? 0,
+    hotLeads: stats.hotLeads ?? 0,
+    warmLeads: stats.warmLeads ?? 0,
+    scrapLeads: stats.scrapLeads ?? 0,
+    inboundMessages: stats.inboundMessages ?? 0,
+    outboundMessages: stats.outboundMessages ?? 0,
+    recentConversations: recentLeads,
+    recentLeads,
+    humanActionQueue,
+    orderPipeline,
+    pipeline: orderPipeline
+  });
 });
 
 export const streamChatEvents = asyncHandler(async (_req: Request, res: Response) => {

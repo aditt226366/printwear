@@ -1,5 +1,6 @@
 import { Router } from "express";
 import {
+  getDashboard,
   getHumanActionQueue,
   getOrderPipeline,
   performOrderAction,
@@ -13,6 +14,7 @@ import { sendInitialMessages } from "../controllers/messages.controller.js";
 
 export const apiRoutes = Router();
 
+apiRoutes.get("/dashboard", getDashboard);
 apiRoutes.post("/leads/import", importLeads);
 apiRoutes.post("/messages/send-initial", sendInitialMessages);
 apiRoutes.post("/knowledge/seed", seedKnowledgeBase);
