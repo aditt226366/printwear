@@ -1,5 +1,7 @@
 import { LeadStatus, Prisma } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
+import { AppError } from "../utils/errors.js";
+import { logger } from "../utils/logger.js";
 import { normalizePhoneNumber } from "../utils/phone.js";
 import { leadScoringService } from "./leadScoring.service.js";
 
@@ -18,6 +20,7 @@ export const leadService = {
     }
 
     try {
+      logger.info({ rowNumber: lead.rowNumber }, "Creating lead in database");
       await prisma.lead.create({
         data: {
           name: lead.name.trim() || "Unknown",
@@ -34,16 +37,31 @@ export const leadService = {
         return { imported: false, reason: "duplicate" as const };
       }
 
-      throw error;
+      logger.error({ error, rowNumber: lead.rowNumber }, "Database insert failed while importing lead");
+      throw new AppError(
+        "Database insert failed",
+        500,
+        "Unable to insert lead into the database. Check DATABASE_URL and database connectivity."
+      );
     }
   },
 
   async findNewLeadsForInitialMessages(limit = 100) {
-    return prisma.lead.findMany({
-      where: { status: LeadStatus.NEW },
-      orderBy: { createdAt: "asc" },
-      take: limit
-    });
+    try {
+      logger.info({ limit }, "Loading leads pending welcome message from database");
+      return await prisma.lead.findMany({
+        where: { status: LeadStatus.NEW },
+        orderBy: { createdAt: "asc" },
+        take: limit
+      });
+    } catch (error) {
+      logger.error({ error }, "Database read failed while loading pending welcome leads");
+      throw new AppError(
+        "Database read failed",
+        500,
+        "Unable to load pending welcome leads from the database. Check DATABASE_URL and database connectivity."
+      );
+    }
   },
 
   async markInitialMessageSent(leadId: string) {

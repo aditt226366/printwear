@@ -132,7 +132,10 @@ async function publicApi(path, options = {}) {
   });
 
   const data = response.status === 204 ? {} : await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || "Something went wrong");
+  if (!response.ok) {
+    const details = typeof data.details === "string" ? data.details : "";
+    throw new Error(details ? `${data.error || "Request failed"}: ${details}` : data.error || "Something went wrong");
+  }
   return data;
 }
 

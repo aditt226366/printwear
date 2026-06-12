@@ -3,7 +3,8 @@ import { googleSheetsService } from "../services/googleSheets.service.js";
 import { chatEventsService } from "../services/chatEvents.service.js";
 import { leadService } from "../services/lead.service.js";
 import { messageService } from "../services/message.service.js";
-import { whatsappService } from "../services/whatsapp.service.js";
+import { validateWhatsAppConfig, whatsappService } from "../services/whatsapp.service.js";
+import { AppError } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
 
 const templateText =
@@ -27,10 +28,19 @@ Reply with:
 4 - Custom Bulk Order`;
 
 export async function sendInitialMessagesJob() {
+  logger.info("Validating WhatsApp environment for welcome sends");
+  validateWhatsAppConfig();
+  logger.info("WhatsApp environment validated for welcome sends");
+
   const leads = await leadService.findNewLeadsForInitialMessages();
+  logger.info({ pendingLeadCount: leads.length }, "Loaded pending welcome leads from database");
   let sent = 0;
   let skipped = 0;
   let failed = 0;
+
+  if (leads.length === 0) {
+    logger.info("No leads pending welcome message");
+  }
 
   for (const lead of leads) {
     try {
@@ -45,10 +55,14 @@ export async function sendInitialMessagesJob() {
         leadId: lead.id,
         action: "send_initial_template",
         status: "attempted"
+      }).catch((logError) => {
+        logger.error({ logError, leadId: lead.id }, "Failed to write attempted send log");
       });
 
+      logger.info({ leadId: lead.id }, "Sending WhatsApp welcome template");
       const response = await whatsappService.sendTemplateMessage(lead.phone, lead.name);
 
+      logger.info({ leadId: lead.id, messageId: response.messageId }, "Writing welcome message result to database");
       const result = await prisma.$transaction(async (tx) => {
         const message = await tx.message.create({
           data: {
@@ -76,7 +90,15 @@ export async function sendInitialMessagesJob() {
         });
 
         return { message, lead: updatedLead };
+      }).catch((error) => {
+        logger.error({ error, leadId: lead.id, messageId: response.messageId }, "Database update failed after WhatsApp welcome send");
+        throw new AppError(
+          "Database update failed",
+          500,
+          "WhatsApp accepted the message, but the app could not save the message result. Check DATABASE_URL and database connectivity."
+        );
       });
+      logger.info({ leadId: lead.id, messageId: result.message.whatsappMessageId }, "Welcome database update complete");
 
       chatEventsService.publish({
         type: "message.created",
@@ -94,6 +116,7 @@ export async function sendInitialMessagesJob() {
       }
 
       await leadService.refreshLeadScore(lead.id);
+      logger.info({ leadId: lead.id }, "Welcome send workflow completed");
       sent += 1;
     } catch (error) {
       failed += 1;
@@ -105,16 +128,24 @@ export async function sendInitialMessagesJob() {
         action: "send_initial_template",
         status: "failed",
         errorMessage
+      }).catch((logError) => {
+        logger.error({ logError, leadId: lead.id }, "Failed to write failed send log");
       });
       await leadService.markInitialMessageFailed(lead.id).catch((markError) => {
         logger.error({ markError, leadId: lead.id }, "Failed to mark lead as failed");
       });
+
+      if (error instanceof AppError) {
+        throw error;
+      }
     }
   }
 
   return {
+    success: true,
     processed: leads.length,
     sent,
+    sentCount: sent,
     skipped,
     failed
   };
