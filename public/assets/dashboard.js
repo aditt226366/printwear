@@ -113,6 +113,14 @@ function showNotice(message, isError = false) {
   window.setTimeout(() => notice.classList.add("hidden"), 4600);
 }
 
+function logDashboardError(context, error, details = {}) {
+  console.error(`[Dashboard] ${context}`, {
+    error,
+    message: error instanceof Error ? error.message : String(error),
+    ...details
+  });
+}
+
 async function api(path, options = {}) {
   const response = await fetch(`/admin/api${path}`, {
     ...options,
@@ -129,6 +137,36 @@ async function api(path, options = {}) {
 
   const data = response.status === 204 ? {} : await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || "Something went wrong");
+  return data;
+}
+
+async function dashboardApi() {
+  const response = await fetch("/api/dashboard", {
+    headers: {
+      Accept: "application/json"
+    }
+  });
+  const text = await response.text();
+  let data = {};
+
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch (error) {
+    logDashboardError("Failed to parse /api/dashboard JSON", error, {
+      status: response.status,
+      body: text
+    });
+    throw new Error("Dashboard API returned invalid JSON");
+  }
+
+  if (!response.ok) {
+    logDashboardError("/api/dashboard request failed", new Error(data.error || response.statusText), {
+      status: response.status,
+      response: data
+    });
+    throw new Error("Dashboard data could not load");
+  }
+
   return data;
 }
 
@@ -412,7 +450,15 @@ function renderDerivedOverview() {
 }
 
 function renderOverview(data) {
-  const stats = data.stats;
+  const stats = data.stats || {
+    totalLeads: data.totalLeads || 0,
+    hotLeads: data.hotLeads || 0,
+    warmLeads: data.warmLeads || 0,
+    scrapLeads: data.scrapLeads || 0,
+    inboundMessages: data.inboundMessages || 0,
+    outboundMessages: data.outboundMessages || 0
+  };
+  data.stats = stats;
   state.latestOverview = data;
   $("#overviewSkeleton").classList.add("hidden");
   $("#overviewContent").classList.remove("hidden");
@@ -616,8 +662,24 @@ function renderConversation(data, options = {}) {
 }
 
 async function loadOverview() {
-  const data = await api("/overview");
-  if (data) renderOverview(data);
+  try {
+    const data = await dashboardApi();
+    const recentLeads = data.recentLeads || data.recentConversations || [];
+    data.recentLeads = recentLeads;
+    state.humanActionQueue = data.humanActionQueue || data.items || [];
+    state.orderPipeline = data.orderPipeline || data.pipeline || {};
+    if (recentLeads.length) {
+      state.leads = recentLeads;
+      renderLeadCards();
+      renderChatList();
+    }
+    renderHumanActionQueue();
+    renderOrderPipeline();
+    renderOverview(data);
+  } catch (error) {
+    logDashboardError("Overview load failed", error);
+    showNotice("Dashboard data could not load. Check browser console for details.", true);
+  }
 }
 
 async function loadLeads(options = {}) {
@@ -708,8 +770,7 @@ function switchView(name) {
     button.classList.toggle("active", button.dataset.view === name);
   });
   runMotion(name === "overview" ? ".premium-card, .metric-tile" : ".premium-card, .lead-card, .chat-list-row");
-  if (name === "overview") loadOverview().catch((error) => showNotice(error.message, true));
-  if (name === "overview") loadOperationalData().catch((error) => showNotice(error.message, true));
+  if (name === "overview") loadOverview();
   if (name === "leads" || name === "chats") loadLeads().catch((error) => showNotice(error.message, true));
 }
 
@@ -924,7 +985,7 @@ async function performOrderAction(orderId, action, button) {
 bindEvents();
 refreshIcons();
 connectChatEvents();
-Promise.all([loadOverview(), loadLeads(), loadOperationalData()]).catch((error) => showNotice(error.message, true));
+loadOverview();
 
 premiumLibrariesReady.then(() => {
   refreshIcons();
