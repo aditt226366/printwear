@@ -12,6 +12,31 @@ export type ImportedLead = {
   source?: string;
 };
 
+function getPrismaErrorLogFields(error: unknown) {
+  const prismaError = error as {
+    code?: string;
+    message?: string;
+    meta?: unknown;
+    name?: string;
+    clientVersion?: string;
+  };
+
+  return {
+    prismaError: {
+      code: prismaError.code ?? null,
+      message: prismaError.message ?? null,
+      meta: prismaError.meta ?? null,
+      name: prismaError.name ?? null,
+      clientVersion: prismaError.clientVersion ?? null
+    },
+    prismaCode: prismaError.code,
+    prismaMessage: prismaError.message,
+    prismaMeta: prismaError.meta,
+    prismaName: prismaError.name,
+    prismaClientVersion: prismaError.clientVersion
+  };
+}
+
 export const leadService = {
   async importLead(lead: ImportedLead) {
     const phone = normalizePhoneNumber(lead.phone);
@@ -37,7 +62,14 @@ export const leadService = {
         return { imported: false, reason: "duplicate" as const };
       }
 
-      logger.error({ error, rowNumber: lead.rowNumber }, "Database insert failed while importing lead");
+      logger.error(
+        {
+          error,
+          ...getPrismaErrorLogFields(error),
+          rowNumber: lead.rowNumber
+        },
+        "Prisma lead insert error details"
+      );
       throw new AppError(
         "Database insert failed",
         500,
