@@ -40,6 +40,23 @@ function aiInsightFromReason(reason: string) {
   return reason.startsWith("AI Insight:") ? reason : null;
 }
 
+function unreadInboundCount(messages: Array<{ direction: MessageDirection }>) {
+  let count = 0;
+
+  for (const message of messages) {
+    if (message.direction !== MessageDirection.INBOUND) {
+      break;
+    }
+    count += 1;
+  }
+
+  return count;
+}
+
+function messageSender(direction: MessageDirection) {
+  return direction === MessageDirection.INBOUND ? "Customer" : "Business";
+}
+
 export const dashboardService = {
   async overview() {
     const [
@@ -65,7 +82,7 @@ export const dashboardService = {
           orderSummary: true,
           messages: {
             orderBy: { createdAt: "desc" },
-            take: 1
+            take: 20
           }
         }
       }),
@@ -100,8 +117,10 @@ export const dashboardService = {
         humanResolvedAt: lead.humanResolvedAt,
         orderSummary: lead.orderSummary,
         messageCount: lead.messageCount,
-        updatedAt: lead.updatedAt,
-        lastMessage: lead.messages[0]?.content ?? "No conversation yet"
+        updatedAt: lead.messages[0]?.createdAt ?? lead.updatedAt,
+        lastMessage: lead.messages[0]?.content ?? "No conversation yet",
+        lastMessageAt: lead.messages[0]?.createdAt ?? lead.updatedAt,
+        unreadCount: unreadInboundCount(lead.messages)
       })),
       recentLogs: recentLogs.map((log) => ({
         id: log.id,
@@ -144,7 +163,7 @@ export const dashboardService = {
         orderSummary: true,
         messages: {
           orderBy: { createdAt: "desc" },
-          take: 1
+          take: 20
         }
       }
     });
@@ -165,8 +184,10 @@ export const dashboardService = {
       humanReason: lead.humanReason,
       humanResolvedAt: lead.humanResolvedAt,
       orderSummary: lead.orderSummary,
-      updatedAt: lead.updatedAt,
-      lastMessage: lead.messages[0]?.content ?? "No messages yet"
+      updatedAt: lead.messages[0]?.createdAt ?? lead.updatedAt,
+      lastMessage: lead.messages[0]?.content ?? "No messages yet",
+      lastMessageAt: lead.messages[0]?.createdAt ?? lead.updatedAt,
+      unreadCount: unreadInboundCount(lead.messages)
     }));
   },
 
@@ -205,9 +226,12 @@ export const dashboardService = {
       messages: lead.messages.map((message) => ({
         id: message.id,
         direction: message.direction,
+        sender: messageSender(message.direction),
         type: message.type,
+        text: message.content,
         content: message.content,
         status: message.status,
+        timestamp: message.createdAt,
         createdAt: message.createdAt
       }))
     };

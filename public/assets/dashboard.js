@@ -89,6 +89,32 @@ function previewText(value) {
   return String(value || "No messages yet").replace(/\s+/g, " ").trim();
 }
 
+function messageTimestamp(message) {
+  return message?.timestamp || message?.createdAt || message?.time || new Date().toISOString();
+}
+
+function normalizeMessage(message) {
+  const direction = String(message?.direction || "INBOUND").toUpperCase();
+  const text = message?.text ?? message?.content ?? "";
+
+  return {
+    id: String(message?.id || `${direction}-${messageTimestamp(message)}-${text}`),
+    timestamp: messageTimestamp(message),
+    createdAt: messageTimestamp(message),
+    direction,
+    sender: message?.sender || (direction === "INBOUND" ? "Customer" : "Business"),
+    text,
+    content: text,
+    status: message?.status || (direction === "INBOUND" ? "RECEIVED" : "SENT")
+  };
+}
+
+function normalizeMessages(messages = []) {
+  return [...messages]
+    .map(normalizeMessage)
+    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+}
+
 function formatOrderStatus(value) {
   return pretty(String(value || "").replace(/_/g, " "));
 }
@@ -533,27 +559,31 @@ function renderLeadCards() {
 function renderChatList() {
   const list = $("#chatConversationList");
   if (!list) return;
-  const leads = getFilteredLeads(true).sort((a, b) => scoreForLead(b) - scoreForLead(a));
+  const leads = getFilteredLeads(true).sort(
+    (a, b) => new Date(b.lastMessageAt || b.updatedAt).getTime() - new Date(a.lastMessageAt || a.updatedAt).getTime()
+  );
 
   list.innerHTML = leads.length
     ? leads
         .map(
-          (lead) => `
+          (lead) => {
+            const unreadCount = Number(lead.unreadCount || 0);
+            return `
             <button class="chat-list-row ${state.selectedLeadId === lead.id ? "active" : ""}" data-chat-lead="${lead.id}">
               <span class="lead-avatar">${escapeHtml(lead.name).slice(0, 1).toUpperCase()}</span>
               <span class="chat-list-main">
                 <span class="chat-list-top">
                   <strong>${escapeHtml(lead.name)}</strong>
-                  <span class="tag ${lead.temperature.toLowerCase()}">${pretty(lead.temperature)}</span>
                 </span>
                 <small>${escapeHtml(previewText(lead.lastMessage))}</small>
               </span>
               <span class="chat-list-meta">
-                <time>${relativeTime(lead.updatedAt)}</time>
-                <small>${messageCountLabel(lead)}</small>
+                <time>${relativeTime(lead.lastMessageAt || lead.updatedAt)}</time>
+                ${unreadCount > 0 ? `<small class="unread-badge">${unreadCount}</small>` : `<small class="unread-badge empty"></small>`}
               </span>
             </button>
-          `
+          `;
+          }
         )
         .join("")
     : emptyState("No chats found", "Try a different search or import leads to start conversations.");
@@ -621,14 +651,15 @@ function renderThread(messages, targetId, emptyCopy, options = {}) {
   if (!thread) return;
   const shouldStickToBottom = options.forceBottom || isNearBottom(thread);
   const previousScrollTop = thread.scrollTop;
-  thread.classList.remove("empty-state");
-  thread.innerHTML = messages.length
-    ? messages
+  const orderedMessages = normalizeMessages(messages);
+  thread.classList.toggle("empty-state", orderedMessages.length === 0);
+  thread.innerHTML = orderedMessages.length
+    ? orderedMessages
         .map(
           (message) => `
             <div class="bubble ${message.direction.toLowerCase()}">
-              <span>${escapeHtml(message.content)}</span>
-              <small>${pretty(message.status)} - ${formatDate(message.createdAt)}</small>
+              <span>${escapeHtml(message.text)}</span>
+              <small>${escapeHtml(message.sender)} - ${formatDate(message.timestamp)}</small>
             </div>
           `
         )
@@ -644,15 +675,28 @@ function renderThread(messages, targetId, emptyCopy, options = {}) {
 }
 
 function renderConversation(data, options = {}) {
+  const messages = normalizeMessages(data.messages);
+  const latestMessage = messages.at(-1);
   state.selectedLeadId = data.lead.id;
-  state.selectedConversation = data;
+  state.selectedConversation = { ...data, messages };
   const leadFromList = { ...(state.leads.find((lead) => lead.id === data.lead.id) || {}), ...data.lead };
   const meta = `${pretty(data.lead.status)} - ${data.lead.messageCount} messages - ${pretty(data.lead.temperature)}`;
+  state.leads = state.leads.map((lead) =>
+    lead.id === data.lead.id
+      ? {
+          ...lead,
+          ...data.lead,
+          lastMessage: latestMessage?.text ?? lead.lastMessage,
+          lastMessageAt: latestMessage?.timestamp ?? lead.lastMessageAt ?? lead.updatedAt,
+          updatedAt: latestMessage?.timestamp ?? lead.updatedAt
+        }
+      : lead
+  );
 
   setText("chatLeadName", data.lead.name);
   setText("chatLeadMeta", meta);
   $("#chatReplyForm")?.classList.remove("hidden");
-  renderThread(data.messages, "#chatThread", "Send a welcome message to start the WhatsApp thread.", options);
+  renderThread(messages, "#chatThread", "Send a welcome message to start the WhatsApp thread.", options);
   renderLeadProfile(leadFromList);
 
   renderChatList();
@@ -685,6 +729,8 @@ async function loadLeads(options = {}) {
   if (!state.dashboardLoaded) {
     await loadOverview();
   }
+  const data = await publicApi("/leads");
+  state.leads = data.leads || [];
   renderLeadCards();
   renderChatList();
   if (updateOverview) renderDerivedOverview();
@@ -700,30 +746,19 @@ async function loadOperationalData() {
 }
 
 async function loadConversation(leadId, options = {}) {
-  const lead = state.leads.find((item) => item.id === leadId);
-  if (!lead) {
-    showNotice("Conversation details are unavailable in this dashboard snapshot.", true);
-    return;
+  try {
+    const data = await publicApi(`/leads/${leadId}/conversation`);
+    renderConversation(
+      {
+        ...data,
+        messages: normalizeMessages(data.messages)
+      },
+      options
+    );
+  } catch (error) {
+    logDashboardError("Conversation load failed", error, { leadId });
+    showNotice(error.message, true);
   }
-
-  renderConversation(
-    {
-      lead,
-      messages: lead.lastMessage
-        ? [
-            {
-              id: `snapshot-${lead.id}`,
-              direction: "INBOUND",
-              type: "TEXT",
-              content: lead.lastMessage,
-              status: "RECEIVED",
-              createdAt: lead.updatedAt
-            }
-          ]
-        : []
-    },
-    options
-  );
 }
 
 async function openLeadChat(leadId) {
@@ -739,7 +774,73 @@ async function refreshChatStateForLead(leadId, options = {}) {
 }
 
 function connectChatEvents() {
-  console.info("[Dashboard] Real-time admin event stream is disabled on the public production dashboard.");
+  if (!window.EventSource) {
+    console.warn("[Dashboard] EventSource is not supported in this browser.");
+    return;
+  }
+
+  const events = new EventSource("/api/events");
+  function handleChatEvent(event) {
+    let data;
+    try {
+      data = JSON.parse(event.data);
+    } catch (error) {
+      logDashboardError("Invalid chat event payload", error, { payload: event.data });
+      return;
+    }
+
+    if (data.type === "message.created" && data.leadId) {
+      const message = normalizeMessage(data.payload?.message);
+      state.leads = state.leads.map((lead) =>
+        lead.id === data.leadId
+          ? {
+              ...lead,
+              lastMessage: message.text,
+              lastMessageAt: message.timestamp,
+              updatedAt: message.timestamp,
+              unreadCount: message.direction === "INBOUND" ? Number(lead.unreadCount || 0) + 1 : 0
+            }
+          : lead
+      );
+
+      if (state.selectedConversation?.lead?.id === data.leadId) {
+        state.selectedConversation = {
+          ...state.selectedConversation,
+          messages: normalizeMessages([
+            ...state.selectedConversation.messages.filter((item) => item.id !== message.id),
+            message
+          ])
+        };
+        renderConversation(state.selectedConversation, { forceBottom: true });
+      } else {
+        renderChatList();
+      }
+    }
+
+    if (data.type === "lead.updated" && data.leadId) {
+      state.leads = state.leads.map((lead) =>
+        lead.id === data.leadId ? { ...lead, ...(data.payload?.lead || {}) } : lead
+      );
+      if (state.selectedConversation?.lead?.id === data.leadId) {
+        state.selectedConversation = {
+          ...state.selectedConversation,
+          lead: { ...state.selectedConversation.lead, ...(data.payload?.lead || {}) }
+        };
+        renderConversation(state.selectedConversation);
+      } else {
+        renderChatList();
+      }
+    }
+  }
+
+  events.addEventListener("message.created", handleChatEvent);
+  events.addEventListener("lead.updated", handleChatEvent);
+  events.addEventListener("message.status", handleChatEvent);
+  events.addEventListener("order.updated", handleChatEvent);
+
+  events.addEventListener("error", (error) => {
+    logDashboardError("Chat event stream error", error);
+  });
 }
 
 function setTemperatureFilter(value) {

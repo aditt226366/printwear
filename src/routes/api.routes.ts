@@ -1,10 +1,13 @@
 import { Router } from "express";
 import {
   getDashboard,
+  getConversation,
   getHumanActionQueue,
+  getLeads,
   getOrderPipeline,
   performOrderAction,
   resolveHumanAction,
+  streamChatEvents,
   updateOrder,
   updateOrderStatus
 } from "../controllers/admin.controller.js";
@@ -15,6 +18,9 @@ import { sendInitialMessages } from "../controllers/messages.controller.js";
 export const apiRoutes = Router();
 
 apiRoutes.get("/dashboard", getDashboard);
+apiRoutes.get("/events", streamChatEvents);
+apiRoutes.get("/leads", getLeads);
+apiRoutes.get("/leads/:leadId/conversation", getConversation);
 apiRoutes.post("/leads/import", importLeads);
 apiRoutes.post("/messages/send-initial", sendInitialMessages);
 apiRoutes.post("/knowledge/seed", seedKnowledgeBase);
