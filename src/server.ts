@@ -4,9 +4,10 @@ import { createApp } from "./app.js";
 import { logger } from "./utils/logger.js";
 
 const app = createApp();
+const port = Number(process.env.PORT) || 3000;
 
-const server = app.listen(env.PORT, () => {
-  logger.info({ port: env.PORT }, "Server started");
+const server = app.listen(port, () => {
+  logger.info({ port }, "Server started");
 });
 
 async function shutdown(signal: string) {

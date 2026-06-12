@@ -57,6 +57,10 @@ export function createApp() {
     res.json({ status: "ok" });
   });
 
+  app.get("/api/health", (_req, res) => {
+    res.json({ status: "ok" });
+  });
+
   app.use(authRoutes);
   app.use("/admin/api", adminRoutes);
   app.use("/api", apiRoutes);
