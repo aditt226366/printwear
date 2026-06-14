@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Printwear CRM Login</title>
-    <link rel="stylesheet" href="/assets/styles.css" />
+    <link rel="stylesheet" href="/assets/styles.css?v=login-polish" />
   </head>
   <body class="login-shell">
     <main class="login-page">
@@ -16,15 +16,16 @@
             <h1>Welcome back</h1>
           </div>
         </div>
+        <p class="login-subtitle">Sign in to manage WhatsApp leads, orders, and human takeover.</p>
 
         <form id="loginForm" class="login-form">
           <label>
             <span>Email</span>
-            <input id="email" name="email" type="email" autocomplete="username" required />
+            <input id="email" name="email" type="email" autocomplete="username" placeholder="Admin email" required />
           </label>
           <label>
             <span>Password</span>
-            <input id="password" name="password" type="password" autocomplete="current-password" required />
+            <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Password" required />
           </label>
           <button type="submit" class="primary-button full-width">Open dashboard</button>
           <p id="loginError" class="form-error" role="alert"></p>
@@ -49,6 +50,6 @@
       </aside>
     </main>
 
-    <script src="/assets/login.js"></script>
+    <script src="/assets/login.js?v=login-polish"></script>
   </body>
 </html>
