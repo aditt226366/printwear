@@ -59,10 +59,10 @@
 
         <div id="overviewContent" class="dashboard-stack hidden">
           <section class="dashboard-hero premium-card">
-            <div>
+            <div class="hero-copy">
               <p class="eyebrow">Live CRM Intelligence</p>
               <h1>Printwear CRM Command Center</h1>
-              <span id="dashboardHeroSummary">Tracking WhatsApp demand, lead quality, human handoffs, and order momentum.</span>
+              <span id="dashboardHeroSummary">Live WhatsApp sales, orders, and human takeover intelligence.</span>
               <div class="hero-actions">
                 <button id="importLeadsBtn" class="secondary-button compact-action">
                   <i data-lucide="file-spreadsheet"></i>
@@ -74,43 +74,38 @@
                 </button>
               </div>
             </div>
-            <div class="hero-summary-card">
-              <span>Conversation volume</span>
-              <strong id="heroConversationTotal">0</strong>
-              <small>Inbound and outbound messages</small>
-            </div>
           </section>
 
           <section class="kpi-grid hero-kpis" aria-label="CRM KPIs">
-            <article class="metric-tile accent-black">
-              <div class="metric-top"><i data-lucide="database"></i><span id="totalLeadTrend">All records</span></div>
-              <strong id="totalLeads">0</strong>
-              <h3>Total Leads</h3>
-              <p id="totalLeadInsight">All active records in the CRM.</p>
-            </article>
-            <article class="metric-tile accent-blue">
-              <div class="metric-top"><i data-lucide="messages-square"></i><span>WhatsApp</span></div>
-              <strong id="activeChats">0</strong>
-              <h3>Active Conversations</h3>
-              <p id="activeChatsInsight">Leads with at least one tracked message.</p>
-            </article>
-            <article class="metric-tile accent-green">
-              <div class="metric-top"><i data-lucide="circle-check-big"></i><span>Orders</span></div>
-              <strong id="ordersConfirmed">0</strong>
-              <h3>Orders Confirmed</h3>
-              <p id="ordersConfirmedInsight">Confirmed or dispatch-ready orders.</p>
+            <article class="metric-tile accent-hot">
+              <div class="metric-top"><i data-lucide="flame"></i><span id="hotLeadTrend">6+ messages</span></div>
+              <strong id="hotLeads">0</strong>
+              <h3>Hot Leads</h3>
+              <p id="hotLeadInsight">Leads with enough conversation depth for same-day closing.</p>
             </article>
             <article class="metric-tile accent-warm">
-              <div class="metric-top"><i data-lucide="badge-dollar-sign"></i><span>Pipeline</span></div>
-              <strong id="revenuePotential">0</strong>
-              <h3>Revenue Potential</h3>
-              <p id="revenuePotentialInsight">Estimated from active lead momentum.</p>
+              <div class="metric-top"><i data-lucide="thermometer-sun"></i><span id="warmLeadTrend">2-5 messages</span></div>
+              <strong id="warmLeads">0</strong>
+              <h3>Warm Leads</h3>
+              <p id="warmLeadInsight">Customers showing intent and needing nurture.</p>
             </article>
-            <article class="metric-tile accent-hot">
-              <div class="metric-top"><i data-lucide="user-round-check"></i><span>Manual</span></div>
+            <article class="metric-tile accent-scrap">
+              <div class="metric-top"><i data-lucide="archive-x"></i><span id="scrapLeadTrend">&lt;2 messages</span></div>
+              <strong id="scrapLeads">0</strong>
+              <h3>Scrap Leads</h3>
+              <p id="scrapLeadInsight">Low-engagement records kept out of the closing queue.</p>
+            </article>
+            <article class="metric-tile accent-blue">
+              <div class="metric-top"><i data-lucide="user-round-check"></i><span id="humanTakeoverTrend">Manual queue</span></div>
               <strong id="humanQueueCount">0</strong>
-              <h3>Human Queue Count</h3>
-              <p id="humanQueueInsight">Conversations currently marked for takeover.</p>
+              <h3>Human Takeover</h3>
+              <p id="humanQueueInsight">Chats currently marked for manual attention.</p>
+            </article>
+            <article class="metric-tile accent-green">
+              <div class="metric-top"><i data-lucide="package-check"></i><span id="ordersDoneTrend">Confirmed onward</span></div>
+              <strong id="ordersDone">0</strong>
+              <h3>Orders Done</h3>
+              <p id="ordersDoneInsight">Confirmed, dispatched, delivered, or completed orders.</p>
             </article>
           </section>
 
@@ -123,16 +118,6 @@
                 </div>
               </div>
               <div id="leadGrowthChart" class="line-chart"></div>
-            </article>
-
-            <article class="panel premium-card chart-card">
-              <div class="panel-heading">
-                <div>
-                  <p class="eyebrow">Conversation Volume</p>
-                  <h2>Inbound vs outbound activity.</h2>
-                </div>
-              </div>
-              <div id="conversationVolumeChart" class="bar-chart"></div>
             </article>
 
             <article class="panel premium-card chart-card">
@@ -170,11 +155,11 @@
             <article class="panel premium-card">
               <div class="panel-heading">
                 <div>
-                  <p class="eyebrow">Recent Activity</p>
-                  <h2>What changed recently.</h2>
+                  <p class="eyebrow">Workspace Insights</p>
+                  <h2>Today&apos;s operating summary.</h2>
                 </div>
               </div>
-              <div id="recentActivityList" class="timeline-list"></div>
+              <div id="workspaceInsightsList" class="workspace-insights-list"></div>
             </article>
           </section>
         </div>
@@ -338,8 +323,8 @@
             <span>Extracted WhatsApp order details in clean production cards.</span>
           </div>
         </div>
-        <section class="panel premium-card">
-          <div id="ordersList" class="orders-grid"></div>
+        <section class="panel premium-card scroll-panel order-desk-panel">
+          <div id="ordersList" class="orders-grid scroll-panel-body"></div>
         </section>
       </section>
 
@@ -351,8 +336,8 @@
             <span>Priority customer conversations that need a person.</span>
           </div>
         </div>
-        <section class="panel premium-card">
-          <div id="humanQueueFullList" class="intel-list"></div>
+        <section class="panel premium-card scroll-panel human-desk-panel">
+          <div id="humanQueueFullList" class="intel-list scroll-panel-body"></div>
         </section>
       </section>
 

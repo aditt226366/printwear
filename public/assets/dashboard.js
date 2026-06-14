@@ -164,23 +164,10 @@ function orderStatusClass(value) {
   return String(value || "COLLECTING_DETAILS").toLowerCase().replace(/_/g, "-");
 }
 
-function confirmedOrderCount() {
-  return flattenOrders().filter((order) => ["CONFIRMED", "READY_FOR_DISPATCH", "DISPATCHED"].includes(String(order.status))).length;
-}
-
-function revenuePotentialValue(stats = {}) {
-  const hot = Number(stats.hotLeads || 0);
-  const warm = Number(stats.warmLeads || 0);
-  const confirmed = confirmedOrderCount();
-  return hot * 1800 + warm * 650 + confirmed * 2400;
-}
-
-function moneyLabel(value) {
-  return new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0
-  }).format(Number(value || 0));
+function ordersDoneCount() {
+  return flattenOrders().filter((order) =>
+    ["CONFIRMED", "READY_FOR_DISPATCH", "DISPATCHED", "DELIVERED", "COMPLETED"].includes(String(order.status || "").toUpperCase())
+  ).length;
 }
 
 function isNearBottom(element, threshold = 96) {
@@ -271,13 +258,99 @@ function setText(id, value) {
   if (element) element.textContent = value;
 }
 
+function mergeLeads(current = [], incoming = []) {
+  const byId = new Map(current.map((lead) => [lead.id, lead]));
+  incoming.forEach((lead) => {
+    if (!lead?.id) return;
+    byId.set(lead.id, { ...(byId.get(lead.id) || {}), ...lead });
+  });
+  return [...byId.values()].sort(
+    (a, b) => new Date(b.lastMessageAt || b.updatedAt || 0).getTime() - new Date(a.lastMessageAt || a.updatedAt || 0).getTime()
+  );
+}
+
+function htmlToElement(html) {
+  const template = document.createElement("template");
+  template.innerHTML = html.trim();
+  return template.content.firstElementChild;
+}
+
+function syncElement(target, source) {
+  [...target.attributes].forEach((attribute) => {
+    if (!source.hasAttribute(attribute.name)) target.removeAttribute(attribute.name);
+  });
+  [...source.attributes].forEach((attribute) => {
+    target.setAttribute(attribute.name, attribute.value);
+  });
+  target.innerHTML = source.innerHTML;
+}
+
+function renderKeyedChildren(container, items, keyFn, renderFn, emptyHtml) {
+  if (!container) return;
+  const scrollTop = container.scrollTop;
+
+  if (!items.length) {
+    const nextHtml = emptyHtml.trim();
+    if (container.dataset.emptyState !== "true" || container.innerHTML.trim() !== nextHtml) {
+      container.innerHTML = nextHtml;
+    }
+    container.dataset.emptyState = "true";
+    return;
+  }
+
+  if (container.dataset.emptyState === "true") {
+    container.innerHTML = "";
+  }
+  container.dataset.emptyState = "false";
+
+  const existing = new Map(
+    [...container.children]
+      .filter((child) => child.dataset?.key)
+      .map((child) => [child.dataset.key, child])
+  );
+  const fragment = document.createDocumentFragment();
+
+  items.forEach((item) => {
+    const key = String(keyFn(item));
+    const fresh = htmlToElement(renderFn(item));
+    if (!fresh) return;
+    fresh.dataset.key = key;
+    const node = existing.get(key);
+    if (node) {
+      syncElement(node, fresh);
+      fragment.appendChild(node);
+    } else {
+      fragment.appendChild(fresh);
+    }
+  });
+
+  container.replaceChildren(fragment);
+  container.scrollTop = scrollTop;
+}
+
+function bindDelegatedClick(container, key, selector, handler) {
+  if (!container) return;
+  const listenerKey = `__${key}ClickHandler`;
+  if (container[listenerKey]) {
+    container.removeEventListener("click", container[listenerKey]);
+  }
+  container[listenerKey] = (event) => {
+    const target = event.target.closest(selector);
+    if (!target || !container.contains(target)) return;
+    handler(target, event);
+  };
+  container.addEventListener("click", container[listenerKey]);
+}
+
 function captureUiState() {
   return {
     windowScrollY: window.scrollY,
     chatThreadScrollTop: $("#chatThread")?.scrollTop ?? null,
     chatListScrollTop: $("#chatConversationList")?.scrollTop ?? null,
+    leadListScrollTop: $("#leadList")?.scrollTop ?? null,
     leadProfileScrollTop: document.querySelector(".lead-profile-panel")?.scrollTop ?? null,
-    orderPipelineScrollLeft: $("#orderPipelineBoard")?.scrollLeft ?? null,
+    orderDeskScrollTop: $("#ordersList")?.scrollTop ?? null,
+    humanQueueScrollTop: $("#humanQueueFullList")?.scrollTop ?? null,
     replyText: $("#chatReplyText")?.value ?? null,
     activeElementId: document.activeElement?.id || null
   };
@@ -294,12 +367,18 @@ function restoreUiState(snapshot) {
     if (snapshot.chatListScrollTop !== null && $("#chatConversationList")) {
       $("#chatConversationList").scrollTop = snapshot.chatListScrollTop;
     }
+    if (snapshot.leadListScrollTop !== null && $("#leadList")) {
+      $("#leadList").scrollTop = snapshot.leadListScrollTop;
+    }
     const leadProfile = document.querySelector(".lead-profile-panel");
     if (snapshot.leadProfileScrollTop !== null && leadProfile) {
       leadProfile.scrollTop = snapshot.leadProfileScrollTop;
     }
-    if (snapshot.orderPipelineScrollLeft !== null && $("#orderPipelineBoard")) {
-      $("#orderPipelineBoard").scrollLeft = snapshot.orderPipelineScrollLeft;
+    if (snapshot.orderDeskScrollTop !== null && $("#ordersList")) {
+      $("#ordersList").scrollTop = snapshot.orderDeskScrollTop;
+    }
+    if (snapshot.humanQueueScrollTop !== null && $("#humanQueueFullList")) {
+      $("#humanQueueFullList").scrollTop = snapshot.humanQueueScrollTop;
     }
     if (snapshot.activeElementId && document.querySelector(`#${snapshot.activeElementId}`)) {
       document.querySelector(`#${snapshot.activeElementId}`).focus();
@@ -439,13 +518,14 @@ function renderHumanActionQueue() {
   if (!list) return;
   const items = humanQueueItems();
 
-  list.innerHTML = items.length
-    ? items.map((item) => humanActionRow(item)).join("")
-    : emptyState("No human takeover needed right now.", "New customer requests for human help will appear here.");
-
-  list.querySelectorAll("[data-open-chat]").forEach((button) => {
-    button.addEventListener("click", () => openLeadChat(button.dataset.openChat));
-  });
+  renderKeyedChildren(
+    list,
+    items,
+    (item) => item.leadId,
+    humanActionRow,
+    emptyState("No human takeover needed right now.", "New customer requests for human help will appear here.")
+  );
+  bindDelegatedClick(list, "humanOverviewOpenChat", "[data-open-chat]", (button) => openLeadChat(button.dataset.openChat));
 }
 
 function orderCard(order) {
@@ -582,18 +662,21 @@ function renderLeadGrowthChart(stats = {}) {
   `;
 }
 
-function renderConversationVolumeChart(stats = {}) {
-  const chart = $("#conversationVolumeChart");
-  if (!chart) return;
-  const inbound = Number(stats.inboundMessages || 0);
-  const outbound = Number(stats.outboundMessages || 0);
-  const max = Math.max(1, inbound, outbound);
-  chart.innerHTML = `
-    <div class="volume-bars">
-      <div><span style="height:${Math.max(8, (inbound / max) * 100)}%"></span><b>${inbound}</b><small>Inbound</small></div>
-      <div><span style="height:${Math.max(8, (outbound / max) * 100)}%"></span><b>${outbound}</b><small>Outbound</small></div>
-    </div>
-  `;
+function failedSendCount(data = state.latestOverview) {
+  return (data?.recentLogs || []).filter((log) => /failed?/i.test(`${log.status || ""} ${log.errorMessage || ""}`)).length;
+}
+
+function latestSyncLabel(data = state.latestOverview) {
+  const times = [
+    ...(data?.recentLogs || []).map((log) => log.createdAt),
+    ...(data?.recentLeads || []).map((lead) => lead.lastMessageAt || lead.updatedAt)
+  ]
+    .filter(Boolean)
+    .map((time) => new Date(time).getTime())
+    .filter((time) => Number.isFinite(time));
+
+  if (!times.length) return "No sync yet";
+  return relativeTime(new Date(Math.max(...times)).toISOString());
 }
 
 function renderTemperatureDistribution(stats = {}) {
@@ -640,7 +723,6 @@ function renderResponsePerformance(stats = {}) {
 
 function renderAnalytics(stats = {}) {
   renderLeadGrowthChart(stats);
-  renderConversationVolumeChart(stats);
   renderTemperatureDistribution(stats);
   renderResponsePerformance(stats);
   const reportsLeadMix = $("#reportsLeadMix");
@@ -649,40 +731,71 @@ function renderAnalytics(stats = {}) {
   if (reportsResponse) reportsResponse.innerHTML = $("#responsePerformance")?.innerHTML || "";
 }
 
-function renderRecentActivity(data = state.latestOverview) {
-  const list = $("#recentActivityList");
+function renderWorkspaceInsights(data = state.latestOverview) {
+  const list = $("#workspaceInsightsList");
   if (!list) return;
-  const logs = (data?.recentLogs || []).slice(0, 6).map((log) => ({
-    label: log.action || "Workspace event",
-    detail: log.leadName ? `${log.leadName} - ${log.status || "Updated"}` : log.status || "Updated",
-    time: log.createdAt
-  }));
-  const conversationEvents = (data?.recentLeads || []).slice(0, 4).map((lead) => ({
-    label: Number(lead.messageCount || 0) > 0 ? "Customer replied" : "Lead imported",
-    detail: `${lead.name} - ${chatPreviewText(lead.lastMessage)}`,
-    time: lead.lastMessageAt || lead.updatedAt
-  }));
-  const humanEvents = humanQueueItems().slice(0, 3).map((item) => ({
-    label: "Human takeover requested",
-    detail: `${item.name} - ${item.reason}`,
-    time: item.time
-  }));
-  const events = [...humanEvents, ...logs, ...conversationEvents]
-    .sort((a, b) => new Date(b.time || 0).getTime() - new Date(a.time || 0).getTime())
-    .slice(0, 8);
-  list.innerHTML = events.length
-    ? events
-        .map(
-          (event) => `
-            <article class="timeline-item">
-              <span></span>
-              <div><strong>${escapeHtml(event.label)}</strong><small>${escapeHtml(event.detail)}</small></div>
-              <time>${relativeTime(event.time)}</time>
-            </article>
-          `
-        )
-        .join("")
-    : emptyState("No recent activity yet", "New imports, replies, welcomes, orders, and handoffs will appear here.");
+  const stats = data?.stats || {};
+  const activeChats = Number(stats.activeChats ?? state.leads.filter((lead) => Number(lead.messageCount || 0) > 0).length);
+  const failedSends = failedSendCount(data);
+  const humanCount = humanQueueItems().length;
+  const ordersDone = ordersDoneCount();
+  const totalMessages = Number(stats.inboundMessages || 0) + Number(stats.outboundMessages || 0);
+  const latestLead = (data?.recentLeads || [])[0];
+  const latestLog = (data?.recentLogs || [])[0];
+
+  const items = [
+    {
+      label: "Total leads",
+      value: Number(stats.totalLeads || state.leads.length || 0),
+      detail: "Imported records currently tracked."
+    },
+    {
+      label: "Active conversations",
+      value: activeChats,
+      detail: `${totalMessages} WhatsApp message${totalMessages === 1 ? "" : "s"} logged.`
+    },
+    {
+      label: "Pending human replies",
+      value: humanCount,
+      detail: humanCount ? "Manual follow-up is waiting." : "No human takeover needed right now."
+    },
+    {
+      label: "Orders done",
+      value: ordersDone,
+      detail: "Confirmed, dispatched, delivered, or completed."
+    },
+    {
+      label: "Failed sends",
+      value: failedSends,
+      detail: failedSends ? "Review recent send logs." : "No failed sends in recent logs."
+    },
+    {
+      label: "Latest sync",
+      value: latestSyncLabel(data),
+      detail: latestLog ? `${latestLog.action || "Workspace"} - ${latestLog.status || "updated"}` : "Waiting for the next workspace event."
+    },
+    {
+      label: "Latest lead movement",
+      value: latestLead ? relativeTime(latestLead.lastMessageAt || latestLead.updatedAt) : "--",
+      detail: latestLead ? `${latestLead.name}: ${chatPreviewText(latestLead.lastMessage)}` : "No recent lead movement yet."
+    }
+  ];
+
+  renderKeyedChildren(
+    list,
+    items,
+    (item) => item.label,
+    (item) => `
+      <article class="workspace-insight-row">
+        <span>
+          <strong>${escapeHtml(item.label)}</strong>
+          <small>${escapeHtml(item.detail)}</small>
+        </span>
+        <b>${escapeHtml(item.value)}</b>
+      </article>
+    `,
+    emptyState("Workspace insights will appear here.", "Import leads or send welcomes to populate operational stats.")
+  );
 }
 
 function renderHumanQueueViews() {
@@ -690,22 +803,25 @@ function renderHumanQueueViews() {
   const fullList = $("#humanQueueFullList");
   if (!fullList) return;
   const items = humanQueueItems();
-  fullList.innerHTML = items.length
-    ? items.map((item) => humanActionRow(item)).join("")
-    : emptyState("No human takeover needed right now.", "Priority handoffs will appear here automatically.");
-  fullList.querySelectorAll("[data-open-chat]").forEach((button) => {
-    button.addEventListener("click", () => openLeadChat(button.dataset.openChat));
-  });
+  renderKeyedChildren(
+    fullList,
+    items,
+    (item) => item.leadId,
+    humanActionRow,
+    emptyState("No human takeover needed right now.", "Priority handoffs will appear here automatically.")
+  );
+  bindDelegatedClick(fullList, "humanFullOpenChat", "[data-open-chat]", (button) => openLeadChat(button.dataset.openChat));
 }
 
 function renderOrdersView() {
   const list = $("#ordersList");
   if (!list) return;
   const orders = flattenOrders().sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
-  list.innerHTML = orders.length
-    ? orders
-        .map(
-          (order) => `
+  renderKeyedChildren(
+    list,
+    orders,
+    (order) => order.id || order.leadId,
+    (order) => `
             <article class="modern-order-card">
               <div class="order-card-top">
                 <div>
@@ -729,13 +845,18 @@ function renderOrdersView() {
                   Open Chat
                 </button>
               </div>
+              <div class="row-actions order-row-actions">
+                <button class="secondary-button" type="button" data-order-id="${order.id}" data-next-action="CONFIRM">Mark confirmed</button>
+                <button class="secondary-button" type="button" data-order-id="${order.id}" data-next-action="READY_FOR_DISPATCH">Ready for dispatch</button>
+                <button class="secondary-button" type="button" data-order-id="${order.id}" data-next-action="DISPATCH">Mark dispatched</button>
+              </div>
             </article>
-          `
-        )
-        .join("")
-    : emptyState("No extracted orders yet", "Order cards will appear once WhatsApp conversations include product details.");
-  list.querySelectorAll("[data-open-chat]").forEach((button) => {
-    button.addEventListener("click", () => openLeadChat(button.dataset.openChat));
+          `,
+    emptyState("No extracted orders yet", "Order cards will appear once WhatsApp conversations include product details.")
+  );
+  bindDelegatedClick(list, "ordersOpenChat", "[data-open-chat]", (button) => openLeadChat(button.dataset.openChat));
+  bindDelegatedClick(list, "ordersAction", "[data-order-id][data-next-action]", (button) => {
+    performOrderAction(button.dataset.orderId, button.dataset.nextAction, button);
   });
 }
 
@@ -755,34 +876,34 @@ function renderDerivedOverview() {
   const total = Math.max(1, stats.totalLeads || 0);
   const activeChats = Number(stats.activeChats ?? state.leads.filter((lead) => Number(lead.messageCount || 0) > 0).length);
   const humanCount = humanQueueItems().length;
-  const confirmedOrders = confirmedOrderCount();
-  const revenuePotential = revenuePotentialValue(stats);
+  const ordersDone = ordersDoneCount();
 
   setText("sidebarSummary", `${stats.hotLeads} hot / ${stats.warmLeads} warm / ${stats.scrapLeads} scrap`);
   const meter = $("#sidebarMeter");
   if (meter) meter.style.width = `${Math.max(8, Math.round((stats.hotLeads / total) * 100))}%`;
 
-  setText("dashboardHeroSummary", `${stats.hotLeads} hot leads, ${activeChats} active chats, and ${humanCount} human takeover item${humanCount === 1 ? "" : "s"}.`);
-  animateCounter("heroConversationTotal", totalMessages);
-  setText("totalLeadTrend", `${totalMessages} msgs`);
+  setText(
+    "dashboardHeroSummary",
+    `Live WhatsApp sales, orders, and human takeover intelligence. ${activeChats} active chat${activeChats === 1 ? "" : "s"}, ${ordersDone} order${ordersDone === 1 ? "" : "s"} done.`
+  );
   setText("hotLeadTrend", `${Math.round((stats.hotLeads / total) * 100)}% hot`);
   setText("warmLeadTrend", `${Math.round((stats.warmLeads / total) * 100)}% warm`);
   setText("scrapLeadTrend", `${Math.round((stats.scrapLeads / total) * 100)}% scrap`);
-  animateCounter("activeChats", activeChats);
-  animateCounter("ordersConfirmed", confirmedOrders);
-  setText("revenuePotential", moneyLabel(revenuePotential));
+  setText("humanTakeoverTrend", humanCount ? `${humanCount} waiting` : "Clear");
+  setText("ordersDoneTrend", ordersDone ? `${ordersDone} ready` : "No completed orders");
+  animateCounter("hotLeads", stats.hotLeads);
+  animateCounter("warmLeads", stats.warmLeads);
+  animateCounter("scrapLeads", stats.scrapLeads);
   animateCounter("humanQueueCount", humanCount);
-  setText("totalLeadInsight", `${totalMessages} tracked messages across the workspace.`);
-  setText("hotLeadInsight", `${stats.hotLeads} leads with 6+ messages deserve same-day follow-up.`);
-  setText("warmLeadInsight", `${stats.warmLeads} accounts with 2-5 messages need nurture.`);
-  setText("scrapLeadInsight", `${stats.scrapLeads} records under 2 messages stay low priority.`);
-  setText("activeChatsInsight", `${activeChats} lead${activeChats === 1 ? "" : "s"} have at least one message.`);
-  setText("ordersConfirmedInsight", `${confirmedOrders} confirmed, dispatch-ready, or delivered order${confirmedOrders === 1 ? "" : "s"}.`);
-  setText("revenuePotentialInsight", `${moneyLabel(revenuePotential)} estimated from hot, warm, and confirmed demand.`);
+  animateCounter("ordersDone", ordersDone);
+  setText("hotLeadInsight", `${stats.hotLeads} lead${stats.hotLeads === 1 ? "" : "s"} with 6+ messages deserve same-day follow-up.`);
+  setText("warmLeadInsight", `${stats.warmLeads} account${stats.warmLeads === 1 ? "" : "s"} with 2-5 messages need nurture.`);
+  setText("scrapLeadInsight", `${stats.scrapLeads} record${stats.scrapLeads === 1 ? "" : "s"} under 2 messages stay low priority.`);
   setText("humanQueueInsight", humanCount ? `${humanCount} conversation${humanCount === 1 ? "" : "s"} need manual attention.` : "No human takeover needed right now.");
+  setText("ordersDoneInsight", `${ordersDone} confirmed, dispatched, delivered, or completed order${ordersDone === 1 ? "" : "s"}.`);
 
   renderAnalytics(stats);
-  renderRecentActivity(state.latestOverview);
+  renderWorkspaceInsights(state.latestOverview);
   renderOrdersView();
   renderConversationIntel(recentLeads);
   renderRecentConversations(recentLeads);
@@ -804,7 +925,6 @@ function renderOverview(data) {
   $("#overviewContent").classList.remove("hidden");
   state.overviewLoaded = true;
 
-  animateCounter("totalLeads", stats.totalLeads);
   animateCounter("hotLeads", stats.hotLeads);
   animateCounter("warmLeads", stats.warmLeads);
   animateCounter("scrapLeads", stats.scrapLeads);
@@ -825,18 +945,19 @@ function renderLeadCards() {
   const list = $("#leadList");
   if (!list) return;
 
-  list.innerHTML = leads.length
-    ? leads
-        .map(
-          (lead) => {
-            const temperature = leadTemperature(lead);
-            return `
+  renderKeyedChildren(
+    list,
+    leads,
+    (lead) => lead.id,
+    (lead) => {
+      const temperature = leadTemperature(lead);
+      return `
               <article class="lead-card ${state.selectedLeadId === lead.id ? "active" : ""}" data-lead-card="${lead.id}">
                 <div class="lead-card-top">
                   <span class="lead-avatar">${escapeHtml(lead.name).slice(0, 1).toUpperCase()}</span>
                   <div>
                     <strong>${escapeHtml(lead.name)}</strong>
-                    <small>${pretty(lead.status)} - ${escapeHtml(lead.source || "WhatsApp")}</small>
+                    <small>${escapeHtml(lead.phone || "No phone")} - ${escapeHtml(lead.source || "WhatsApp")}</small>
                   </div>
                   <span class="tag ${temperature.toLowerCase()}">${pretty(temperature)}</span>
                 </div>
@@ -845,9 +966,14 @@ function renderLeadCards() {
                   <div class="score-track"><i style="width:${scoreForLead(lead)}%"></i></div>
                   <strong>${scoreForLead(lead)}</strong>
                 </div>
-                <p>${escapeHtml(lead.aiInsight || lead.temperatureBasis || "No AI insight captured yet")}</p>
+                <p>${escapeHtml(chatPreviewText(lead.lastMessage || lead.aiInsight || lead.temperatureBasis || "No AI insight captured yet"))}</p>
+                <div class="lead-card-meta">
+                  <span><i data-lucide="message-circle"></i>${lead.messageCount || 0} messages</span>
+                  <span><i data-lucide="clock-3"></i>${relativeTime(lead.lastMessageAt || lead.updatedAt)}</span>
+                  <span><i data-lucide="radio"></i>${escapeHtml(lead.source || "WhatsApp")}</span>
+                </div>
                 <div class="lead-card-actions">
-                  <span>${lead.messageCount || 0} messages - ${relativeTime(lead.updatedAt)}</span>
+                  <span>${escapeHtml(lead.temperatureBasis || `${pretty(temperature)} by message count`)}</span>
                   <button class="ghost-action" type="button" data-open-chat="${lead.id}">
                     <i data-lucide="messages-square"></i>
                     Open chat
@@ -855,23 +981,17 @@ function renderLeadCards() {
                 </div>
               </article>
             `;
-          }
-        )
-        .join("")
-    : emptyState("No leads match this view", "Adjust search, clear filters, or import a new Sheet segment.");
+    },
+    emptyState("No leads match this view", "Adjust search, clear filters, or import a new Sheet segment.")
+  );
 
-  list.querySelectorAll("[data-lead-card]").forEach((card) => {
-    card.addEventListener("click", (event) => {
-      if (event.target.closest("[data-open-chat]")) return;
-      loadConversation(card.dataset.leadCard);
-    });
+  bindDelegatedClick(list, "leadCardSelect", "[data-lead-card]", (card, event) => {
+    if (event.target.closest("[data-open-chat]")) return;
+    loadConversation(card.dataset.leadCard);
   });
-  list.querySelectorAll("[data-open-chat]").forEach((button) => {
-    button.addEventListener("click", () => openLeadChat(button.dataset.openChat));
-  });
+  bindDelegatedClick(list, "leadOpenChat", "[data-open-chat]", (button) => openLeadChat(button.dataset.openChat));
 
   refreshIcons();
-  runMotion(".lead-card");
 }
 
 function renderChatList() {
@@ -881,13 +1001,14 @@ function renderChatList() {
     (a, b) => new Date(b.lastMessageAt || b.updatedAt).getTime() - new Date(a.lastMessageAt || a.updatedAt).getTime()
   );
 
-  list.innerHTML = leads.length
-    ? leads
-        .map(
-          (lead) => {
-            const unreadCount = Number(lead.unreadCount || 0);
-            const temperature = leadTemperature(lead);
-            return `
+  renderKeyedChildren(
+    list,
+    leads,
+    (lead) => lead.id,
+    (lead) => {
+      const unreadCount = Number(lead.unreadCount || 0);
+      const temperature = leadTemperature(lead);
+      return `
             <button class="chat-list-row ${state.selectedLeadId === lead.id ? "active" : ""}" data-chat-lead="${lead.id}">
               <span class="lead-avatar">${escapeHtml(lead.name).slice(0, 1).toUpperCase()}</span>
               <span class="chat-list-main">
@@ -903,14 +1024,11 @@ function renderChatList() {
               </span>
             </button>
           `;
-          }
-        )
-        .join("")
-    : emptyState("No chats found", "Try a different search or import leads to start conversations.");
+    },
+    emptyState("No chats found", "Try a different search or import leads to start conversations.")
+  );
 
-  list.querySelectorAll("[data-chat-lead]").forEach((button) => {
-    button.addEventListener("click", () => loadConversation(button.dataset.chatLead));
-  });
+  bindDelegatedClick(list, "chatLeadSelect", "[data-chat-lead]", (button) => loadConversation(button.dataset.chatLead));
 }
 
 function renderLeadProfile(lead) {
@@ -970,22 +1088,22 @@ function renderOrderSummaryProfile(order) {
 function renderThread(messages, targetId, emptyCopy, options = {}) {
   const thread = document.querySelector(targetId);
   if (!thread) return;
-  const shouldStickToBottom = options.preserveScroll ? isNearBottom(thread) : true;
+  const shouldStickToBottom = options.forceBottom || isNearBottom(thread);
   const previousScrollTop = thread.scrollTop;
   const orderedMessages = normalizeMessages(messages);
   thread.classList.toggle("empty-state", orderedMessages.length === 0);
-  thread.innerHTML = orderedMessages.length
-    ? orderedMessages
-        .map(
-          (message) => `
+  renderKeyedChildren(
+    thread,
+    orderedMessages,
+    (message) => message.id,
+    (message) => `
             <div class="bubble ${message.direction.toLowerCase()}">
               <span>${escapeHtml(message.text)}</span>
               <small>${formatDate(message.timestamp)}</small>
             </div>
-          `
-        )
-        .join("")
-    : emptyState("No conversation yet", emptyCopy);
+          `,
+    emptyState("No conversation yet", emptyCopy)
+  );
   if (shouldStickToBottom) {
     thread.scrollTop = thread.scrollHeight;
     $("#newMessageBtn")?.classList.add("hidden");
@@ -1033,7 +1151,7 @@ async function loadOverview() {
     state.dashboardLoaded = true;
     state.humanActionQueue = data.humanActionQueue || data.items || [];
     state.orderPipeline = data.orderPipeline || data.pipeline || {};
-    state.leads = recentLeads;
+    state.leads = state.leads.length ? mergeLeads(state.leads, recentLeads) : recentLeads;
     renderLeadCards();
     renderChatList();
     renderHumanActionQueue();
@@ -1050,7 +1168,7 @@ async function loadLeads(options = {}) {
     await loadOverview();
   }
   const data = await publicApi("/leads");
-  state.leads = data.leads || [];
+  state.leads = data.leads || state.leads;
   renderLeadCards();
   renderChatList();
   renderHumanActionQueue();
@@ -1151,7 +1269,7 @@ function connectChatEvents() {
             message
           ])
         };
-        renderConversation(state.selectedConversation, { forceBottom: true });
+        renderConversation(state.selectedConversation, { forceBottom: isNearBottom($("#chatThread")) });
       } else {
         renderChatList();
       }
@@ -1166,7 +1284,7 @@ function connectChatEvents() {
           ...state.selectedConversation,
           lead: { ...state.selectedConversation.lead, ...(data.payload?.lead || {}) }
         };
-        renderConversation(state.selectedConversation);
+        renderConversation(state.selectedConversation, { forceBottom: isNearBottom($("#chatThread")) });
       } else {
         renderChatList();
       }
@@ -1224,7 +1342,7 @@ async function refreshCurrentView() {
   const snapshot = captureUiState();
   try {
     await Promise.all([loadOverview(), loadLeads(), loadOperationalData()]);
-    if (state.selectedLeadId) await loadConversation(state.selectedLeadId);
+    if (state.selectedLeadId) await loadConversation(state.selectedLeadId, { forceBottom: isNearBottom($("#chatThread")) });
   } finally {
     state.isRefreshing = false;
     restoreUiState(snapshot);
@@ -1235,7 +1353,7 @@ async function pollDashboardData() {
   if (document.hidden || state.isRefreshing || state.isPolling) return;
   state.isPolling = true;
   const selectedLeadId = state.selectedLeadId;
-  const forceBottom = true;
+  const forceBottom = isNearBottom($("#chatThread"));
 
   try {
     await loadLeads({ updateOverview: false });
