@@ -137,6 +137,18 @@ function confidenceLabel(value) {
   return `${Math.round(Number(value || 0) * 100)}%`;
 }
 
+function percentLabel(value, total) {
+  if (!total) return "0%";
+  return `${Math.round((Number(value || 0) / total) * 100)}%`;
+}
+
+function orderReadyCount(pipeline = {}) {
+  return ["READY_FOR_REVIEW", "QUOTATION_NEEDED", "CONFIRMED", "READY_FOR_DISPATCH"].reduce(
+    (sum, stage) => sum + Number(pipeline[stage]?.length || 0),
+    0
+  );
+}
+
 function isNearBottom(element, threshold = 96) {
   if (!element) return true;
   return element.scrollHeight - element.scrollTop - element.clientHeight < threshold;
@@ -452,11 +464,98 @@ function conversationPreviewRow(lead) {
   `;
 }
 
+function renderLeadSourceChart(leads = []) {
+  const chart = $("#leadSourceChart");
+  if (!chart) return;
+
+  const counts = leads.reduce((acc, lead) => {
+    const source = lead.source || "WhatsApp";
+    acc[source] = (acc[source] || 0) + 1;
+    return acc;
+  }, {});
+  const entries = Object.entries(counts)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 5);
+  const total = Math.max(1, leads.length);
+
+  chart.innerHTML = entries.length
+    ? entries
+        .map(
+          ([source, count]) => `
+            <div class="source-row">
+              <div>
+                <strong>${escapeHtml(source)}</strong>
+                <span>${count} lead${count === 1 ? "" : "s"}</span>
+              </div>
+              <div class="source-track"><i style="width:${Math.max(8, Math.round((count / total) * 100))}%"></i></div>
+              <b>${percentLabel(count, total)}</b>
+            </div>
+          `
+        )
+        .join("")
+    : emptyState("No lead sources yet", "Import leads to see source performance.");
+}
+
+function renderPipelineSummary(stats = {}) {
+  const summary = $("#pipelineSummary");
+  if (!summary) return;
+
+  const total = Math.max(1, Number(stats.totalLeads || 0));
+  const segments = [
+    ["Hot", stats.hotLeads || 0, "hot"],
+    ["Warm", stats.warmLeads || 0, "warm"],
+    ["Scrap", stats.scrapLeads || 0, "scrap"]
+  ];
+
+  summary.innerHTML = `
+    <div class="pipeline-meter">
+      ${segments
+        .map(
+          ([label, count, key]) =>
+            `<span class="${key}" style="width:${Math.max(5, Math.round((Number(count) / total) * 100))}%" aria-label="${label} ${count}"></span>`
+        )
+        .join("")}
+    </div>
+    <div class="pipeline-segments">
+      ${segments
+        .map(
+          ([label, count, key]) => `
+            <div>
+              <span class="segment-dot ${key}"></span>
+              <strong>${count}</strong>
+              <small>${label}</small>
+            </div>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderRecentConversationList(leads = []) {
+  const list = $("#recentConversationList");
+  if (!list) return;
+
+  const recent = [...leads]
+    .sort((a, b) => new Date(b.lastMessageAt || b.updatedAt).getTime() - new Date(a.lastMessageAt || a.updatedAt).getTime())
+    .slice(0, 5);
+
+  list.innerHTML = recent.length
+    ? recent.map(conversationPreviewRow).join("")
+    : emptyState("No recent conversations", "Recent WhatsApp threads will appear here.");
+
+  list.querySelectorAll("[data-open-chat]").forEach((button) => {
+    button.addEventListener("click", () => openLeadChat(button.dataset.openChat));
+  });
+}
+
 function renderConversationIntel(recentLeads = []) {
   renderHumanActionQueue();
+  renderLeadSourceChart(recentLeads);
 }
 
 function renderRecentConversations(recentLeads = []) {
+  renderRecentConversationList(recentLeads);
   renderOrderPipeline();
 }
 
@@ -466,20 +565,29 @@ function renderDerivedOverview() {
   const { stats, recentLeads } = state.latestOverview;
   const totalMessages = (stats.inboundMessages || 0) + (stats.outboundMessages || 0);
   const total = Math.max(1, stats.totalLeads || 0);
+  const replyRate = stats.inboundMessages ? Math.round((Number(stats.outboundMessages || 0) / Number(stats.inboundMessages)) * 100) : 0;
+  const readyOrders = orderReadyCount(state.orderPipeline);
 
   setText("sidebarSummary", `${stats.hotLeads} hot / ${stats.warmLeads} warm / ${stats.scrapLeads} scrap`);
   const meter = $("#sidebarMeter");
   if (meter) meter.style.width = `${Math.max(8, Math.round((stats.hotLeads / total) * 100))}%`;
 
+  setText("dashboardHeroSummary", `${stats.hotLeads} hot leads, ${readyOrders} production-ready orders, and ${totalMessages} tracked WhatsApp messages.`);
+  animateCounter("heroConversationTotal", totalMessages);
   setText("totalLeadTrend", `${totalMessages} msgs`);
   setText("hotLeadTrend", `${Math.round((stats.hotLeads / total) * 100)}% hot`);
   setText("warmLeadTrend", `${Math.round((stats.warmLeads / total) * 100)}% warm`);
   setText("scrapLeadTrend", `${Math.round((stats.scrapLeads / total) * 100)}% scrap`);
+  setText("replyRate", `${replyRate}%`);
+  animateCounter("ordersReady", readyOrders);
   setText("totalLeadInsight", `${totalMessages} tracked messages across the workspace.`);
-  setText("hotLeadInsight", `${stats.hotLeads} leads deserve same-day follow-up.`);
-  setText("warmLeadInsight", `${stats.warmLeads} accounts need guided nurture.`);
-  setText("scrapLeadInsight", `${stats.scrapLeads} records are filtered from priority selling.`);
+  setText("hotLeadInsight", `${stats.hotLeads} leads with 6+ messages deserve same-day follow-up.`);
+  setText("warmLeadInsight", `${stats.warmLeads} accounts with 2-5 messages need nurture.`);
+  setText("scrapLeadInsight", `${stats.scrapLeads} records under 2 messages stay low priority.`);
+  setText("replyRateInsight", `${stats.outboundMessages || 0} outbound replies for ${stats.inboundMessages || 0} inbound messages.`);
+  setText("ordersReadyInsight", `${readyOrders} order${readyOrders === 1 ? "" : "s"} waiting for review or production action.`);
 
+  renderPipelineSummary(stats);
   renderConversationIntel(recentLeads);
   renderRecentConversations(recentLeads);
 }
@@ -860,6 +968,9 @@ function setTemperatureFilter(value) {
   document.querySelectorAll("[data-temperature-tab]").forEach((tab) => {
     tab.classList.toggle("active", (tab.dataset.temperatureTab || "") === state.temperatureFilter);
   });
+  document.querySelectorAll(".nav-item[data-view='leads']:not([data-temperature-tab])").forEach((button) => {
+    button.classList.toggle("active", state.currentView === "leads" && !state.temperatureFilter);
+  });
 }
 
 function switchView(name) {
@@ -869,7 +980,10 @@ function switchView(name) {
     element.classList.toggle("active-view", key === name);
   });
   document.querySelectorAll(".nav-item").forEach((button) => {
-    button.classList.toggle("active", button.dataset.view === name);
+    const isSegment = button.dataset.temperatureTab !== undefined;
+    const isSelectedSegment = name === "leads" && isSegment && (button.dataset.temperatureTab || "") === state.temperatureFilter;
+    const isPrimaryView = !isSegment && !button.classList.contains("nested") && button.dataset.view === name;
+    button.classList.toggle("active", isPrimaryView || isSelectedSegment);
   });
   runMotion(name === "overview" ? ".premium-card, .metric-tile" : ".premium-card, .lead-card, .chat-list-row");
   if (name === "overview") loadOverview();

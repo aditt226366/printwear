@@ -10,29 +10,28 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="/assets/styles.css" />
   </head>
-  <body class="app-shell bg-[#060A0F] text-[#F8FAFC]">
+  <body class="app-shell">
     <aside class="sidebar">
       <div class="brand-block">
         <span class="brand-mark">PW</span>
         <div>
           <strong>Printwear AI CRM</strong>
-          <span>WhatsApp revenue ops</span>
+          <span>Revenue workspace</span>
         </div>
       </div>
 
       <nav class="nav-list" aria-label="CRM sections">
-        <button class="nav-item active" data-view="overview">
-          <i data-lucide="command"></i>
-          Command
-        </button>
-        <button class="nav-item" data-view="chats">
-          <i data-lucide="messages-square"></i>
-          Chats
-        </button>
-        <button class="nav-item" data-view="leads" data-temperature="">
-          <i data-lucide="contact-round"></i>
-          Leads
-        </button>
+        <div class="nav-group-label">Workspace</div>
+        <button class="nav-item active" data-view="overview"><i data-lucide="layout-dashboard"></i>Dashboard</button>
+        <button class="nav-item" data-view="chats"><i data-lucide="messages-square"></i>Chats</button>
+        <button class="nav-item" data-view="leads" data-temperature=""><i data-lucide="contact-round"></i>Leads</button>
+        <div class="nav-group-label">Segments</div>
+        <button class="nav-item nested" data-view="leads" data-temperature-tab="HOT"><i data-lucide="flame"></i>Hot leads</button>
+        <button class="nav-item nested" data-view="leads" data-temperature-tab="WARM"><i data-lucide="badge-dollar-sign"></i>Warm leads</button>
+        <button class="nav-item nested" data-view="leads" data-temperature-tab="SCRAP"><i data-lucide="archive-x"></i>Scrap leads</button>
+        <div class="nav-group-label">Operations</div>
+        <button class="nav-item nested" data-view="overview"><i data-lucide="user-round-check"></i>Human queue</button>
+        <button class="nav-item nested" data-view="overview"><i data-lucide="package-check"></i>Order pipeline</button>
       </nav>
 
       <div class="sidebar-panel">
@@ -56,10 +55,18 @@
       <header class="topbar">
         <div class="global-search">
           <i data-lucide="search"></i>
-          <input id="globalSearch" placeholder="Search leads, messages, campaigns..." />
+          <input id="globalSearch" placeholder="Search leads, chats, orders..." />
           <kbd>/</kbd>
         </div>
         <div class="top-actions">
+          <div class="input-shell top-filter">
+            <i data-lucide="calendar-range"></i>
+            <select aria-label="Reporting period">
+              <option>Last 30 days</option>
+              <option>This week</option>
+              <option>This quarter</option>
+            </select>
+          </div>
           <button id="importLeadsBtn" class="secondary-button compact-action">
             <i data-lucide="file-spreadsheet"></i>
             Import Leads
@@ -98,8 +105,21 @@
         </div>
 
         <div id="overviewContent" class="dashboard-stack hidden">
+          <section class="dashboard-hero premium-card">
+            <div>
+              <p class="eyebrow">Printwear report</p>
+              <h1>Revenue command center</h1>
+              <span id="dashboardHeroSummary">Tracking WhatsApp demand, lead quality, and production-ready orders.</span>
+            </div>
+            <div class="hero-summary-card">
+              <span>Conversation volume</span>
+              <strong id="heroConversationTotal">0</strong>
+              <small>Inbound and outbound messages</small>
+            </div>
+          </section>
+
           <section class="kpi-grid" aria-label="CRM KPIs">
-            <article class="metric-tile accent-green">
+            <article class="metric-tile accent-black">
               <div class="metric-top"><i data-lucide="database"></i><span id="totalLeadTrend">+0%</span></div>
               <strong id="totalLeads">0</strong>
               <h3>Total Leads</h3>
@@ -123,9 +143,56 @@
               <h3>Scrap Leads</h3>
               <p id="scrapLeadInsight">Low-fit leads filtered from priority work.</p>
             </article>
+            <article class="metric-tile accent-blue">
+              <div class="metric-top"><i data-lucide="reply"></i><span>WhatsApp</span></div>
+              <strong id="replyRate">0%</strong>
+              <h3>Reply Rate</h3>
+              <p id="replyRateInsight">Outbound replies compared with inbound demand.</p>
+            </article>
+            <article class="metric-tile accent-green">
+              <div class="metric-top"><i data-lucide="package-check"></i><span>Production</span></div>
+              <strong id="ordersReady">0</strong>
+              <h3>Orders Ready</h3>
+              <p id="ordersReadyInsight">Orders waiting for review, quote, or dispatch.</p>
+            </article>
+          </section>
+
+          <section class="analytics-grid">
+            <article class="panel premium-card source-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Lead Sources</p>
+                  <h2>Where conversations start.</h2>
+                  <span>Live mix from imported CRM records.</span>
+                </div>
+              </div>
+              <div id="leadSourceChart" class="source-chart"></div>
+            </article>
+
+            <article class="panel premium-card pipeline-summary-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Lead Pipeline</p>
+                  <h2>Hot, warm, and scrap distribution.</h2>
+                  <span>Hot = 6+ messages, Warm = 2-5, Scrap = under 2.</span>
+                </div>
+              </div>
+              <div id="pipelineSummary" class="pipeline-summary"></div>
+            </article>
           </section>
 
           <section class="overview-lists-grid">
+            <article class="panel premium-card">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Recent Conversations</p>
+                  <h2>Latest WhatsApp activity.</h2>
+                  <span>Compact customer context with quick chat access.</span>
+                </div>
+              </div>
+              <div id="recentConversationList" class="intel-list compact-intel-list"></div>
+            </article>
+
             <article class="panel premium-card">
               <div class="panel-heading">
                 <div>
@@ -136,7 +203,9 @@
               </div>
               <div id="humanActionQueueList" class="intel-list"></div>
             </article>
+          </section>
 
+          <section class="overview-lists-grid single-column">
             <article class="panel premium-card order-pipeline-panel">
               <div class="panel-heading">
                 <div>
