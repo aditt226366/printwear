@@ -4657,3 +4657,70 @@ textarea:focus,
     justify-items: start;
   }
 }
+
+/* Mandatory compact overrides for Orders and Human Queue */
+#ordersView.active-view,
+#humanView.active-view {
+  display: block;
+}
+
+#ordersView .order-command-shell,
+#humanView .human-command-shell {
+  width: min(1180px, 100%);
+  margin-inline: auto;
+  padding: 0 0 24px;
+}
+
+#ordersView .page-heading-row,
+#humanView .page-heading-row {
+  margin-bottom: 0;
+}
+
+#ordersView .order-summary-grid,
+#humanView .human-summary-grid {
+  margin-top: 0;
+}
+
+#ordersView .order-desk-panel,
+#humanView .human-queue-panel {
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: none !important;
+  padding: 16px;
+}
+
+#ordersView .order-desk-list,
+#humanView .human-queue-list {
+  min-height: 0 !important;
+  max-height: min(48vh, 500px);
+  overflow-y: auto;
+}
+
+#ordersView .order-desk-row {
+  min-height: 118px;
+  max-height: 140px;
+  overflow: hidden;
+}
+
+#humanView .human-action-row.takeover-row {
+  min-height: 96px;
+  max-height: 120px;
+  overflow: hidden;
+}
+
+#ordersView .order-summary-card,
+#humanView .human-summary-card {
+  min-height: 96px;
+}
+
+#ordersView .empty-card,
+#humanView .empty-card {
+  min-height: 96px;
+}
+
+@media (max-width: 1180px) {
+  #ordersView .order-desk-row,
+  #humanView .human-action-row.takeover-row {
+    max-height: none;
+  }
+}

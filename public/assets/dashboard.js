@@ -188,8 +188,8 @@ function orderDeskStats() {
     total: orders.length,
     confirmed: orders.filter((order) => normalizedOrderStatus(order) === "CONFIRMED").length,
     dispatchReady: orders.filter((order) => normalizedOrderStatus(order) === "READY_FOR_DISPATCH").length,
-    delivered: orders.filter((order) => ["DELIVERED", "COMPLETED"].includes(normalizedOrderStatus(order))).length,
-    pending: orders.filter((order) => ["COLLECTING_DETAILS", "READY_FOR_REVIEW", "QUOTATION_NEEDED"].includes(normalizedOrderStatus(order))).length
+    dispatched: orders.filter((order) => normalizedOrderStatus(order) === "DISPATCHED").length,
+    delivered: orders.filter((order) => ["DELIVERED", "COMPLETED"].includes(normalizedOrderStatus(order))).length
   };
 }
 
@@ -618,77 +618,6 @@ function renderHumanActionQueue() {
   bindDelegatedClick(list, "humanOverviewOpenChat", "[data-open-chat]", (button) => openLeadChat(button.dataset.openChat));
 }
 
-function orderCard(order) {
-  return `
-    <article class="order-card">
-      <div class="order-card-top">
-        <div>
-          <strong>${escapeHtml(order.customerName)}</strong>
-          <small>${escapeHtml(order.phone)}</small>
-        </div>
-        <span class="status-badge">${formatOrderStatus(order.status)}</span>
-      </div>
-      <div class="order-fields">
-        <span><b>Product</b>${escapeHtml(emptyValue(order.productType))}</span>
-        <span><b>Qty</b>${escapeHtml(emptyValue(order.quantity))}</span>
-        <span><b>Size</b>${escapeHtml(emptyValue(order.size))}</span>
-        <span><b>Color</b>${escapeHtml(emptyValue(order.color))}</span>
-        <span><b>Custom</b>${escapeHtml(emptyValue(order.customization))}</span>
-        <span><b>Location</b>${escapeHtml(emptyValue(order.deliveryLocation))}</span>
-      </div>
-      <div class="order-card-footer">
-        <span>${confidenceLabel(order.confidenceScore)} confidence</span>
-        <button class="ghost-action" type="button" data-open-chat="${order.leadId}">
-          <i data-lucide="messages-square"></i>
-          Open Chat
-        </button>
-      </div>
-      <div class="row-actions">
-        <button class="secondary-button" type="button" data-order-id="${order.id}" data-next-action="CONFIRM">Mark Confirmed</button>
-        <button class="secondary-button" type="button" data-order-id="${order.id}" data-next-action="DISPATCH">Mark Dispatched</button>
-      </div>
-    </article>
-  `;
-}
-
-function renderOrderPipeline() {
-  const board = $("#orderPipelineBoard");
-  if (!board) return;
-
-  const stages = [
-    "COLLECTING_DETAILS",
-    "READY_FOR_REVIEW",
-    "QUOTATION_NEEDED",
-    "CONFIRMED",
-    "READY_FOR_DISPATCH",
-    "DISPATCHED"
-  ];
-
-  board.innerHTML = stages
-    .map((stage) => {
-      const orders = state.orderPipeline[stage] || [];
-      return `
-        <section class="pipeline-column">
-          <div class="pipeline-column-heading">
-            <strong>${formatOrderStatus(stage)}</strong>
-            <span>${orders.length}</span>
-          </div>
-          <div class="pipeline-column-list">
-            ${orders.length ? orders.map(orderCard).join("") : `<div class="empty-pipeline-slot">No orders</div>`}
-          </div>
-        </section>
-      `;
-    })
-    .join("");
-
-  board.querySelectorAll("[data-open-chat]").forEach((button) => {
-    button.addEventListener("click", () => openLeadChat(button.dataset.openChat));
-  });
-  board.querySelectorAll("[data-order-id][data-next-action]").forEach((button) => {
-    button.addEventListener("click", () => performOrderAction(button.dataset.orderId, button.dataset.nextAction, button));
-  });
-}
-
 function conversationPreviewRow(lead) {
   const temperature = leadTemperature(lead);
   return `
@@ -912,10 +841,10 @@ function renderOrderSummaryCards() {
   const stats = orderDeskStats();
   const cards = [
     { key: "total", label: "Total Orders", value: stats.total, icon: "package", accent: "purple" },
-    { key: "confirmed", label: "Confirmed Orders", value: stats.confirmed, icon: "circle-check-big", accent: "green" },
+    { key: "confirmed", label: "Confirmed", value: stats.confirmed, icon: "circle-check-big", accent: "green" },
     { key: "dispatch", label: "Dispatch Ready", value: stats.dispatchReady, icon: "truck", accent: "blue" },
-    { key: "delivered", label: "Delivered Orders", value: stats.delivered, icon: "badge-check", accent: "green" },
-    { key: "pending", label: "Pending Action", value: stats.pending, icon: "clock-3", accent: "amber" }
+    { key: "dispatched", label: "Dispatched", value: stats.dispatched, icon: "send", accent: "amber" },
+    { key: "delivered", label: "Delivered", value: stats.delivered, icon: "badge-check", accent: "green" }
   ];
 
   renderKeyedChildren(
@@ -957,6 +886,8 @@ function renderOrdersView() {
           <span class="order-row-summary">${escapeHtml(orderSummaryText(order))}</span>
           <span class="order-row-meta">
             <span><i data-lucide="hash"></i>Qty ${escapeHtml(emptyValue(order.quantity))}</span>
+            <span><i data-lucide="ruler"></i>Size ${escapeHtml(emptyValue(order.size))}</span>
+            <span><i data-lucide="palette"></i>${escapeHtml(emptyValue(order.color))}</span>
             <span><i data-lucide="map-pin"></i>${escapeHtml(emptyValue(order.deliveryLocation))}</span>
             <span><i data-lucide="activity"></i>${confidenceLabel(order.confidenceScore)} confidence</span>
           </span>
