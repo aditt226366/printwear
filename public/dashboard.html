@@ -316,16 +316,31 @@
       </section>
 
       <section id="ordersView" class="view">
-        <div class="page-heading-row">
-          <div>
-            <p class="eyebrow">Orders</p>
-            <h1>Order Desk</h1>
-            <span>Extracted WhatsApp order details in clean production cards.</span>
+        <div class="order-command-shell">
+          <div class="page-heading-row order-page-heading">
+            <div>
+              <p class="eyebrow">Orders</p>
+              <h1>Order Desk</h1>
+              <span>Confirmed, pending, and dispatch-ready customer orders.</span>
+            </div>
           </div>
+
+          <section id="orderDeskSummaryCards" class="order-summary-grid" aria-label="Order desk summary"></section>
+
+          <section class="order-desk-panel premium-card">
+            <div class="order-desk-toolbar">
+              <div>
+                <p class="eyebrow">Order List</p>
+                <h2 id="ordersListCount">0 Orders</h2>
+              </div>
+              <div class="order-filter-controls" aria-label="Order filters">
+                <button type="button"><i data-lucide="sliders-horizontal"></i>All Status</button>
+                <button type="button"><i data-lucide="arrow-down-wide-narrow"></i>Newest First</button>
+              </div>
+            </div>
+            <div id="ordersList" class="order-desk-list"></div>
+          </section>
         </div>
-        <section class="panel premium-card scroll-panel order-desk-panel">
-          <div id="ordersList" class="orders-grid scroll-panel-body"></div>
-        </section>
       </section>
 
       <section id="humanView" class="view">

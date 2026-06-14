@@ -172,10 +172,38 @@ function orderStatusClass(value) {
   return String(value || "COLLECTING_DETAILS").toLowerCase().replace(/_/g, "-");
 }
 
+function normalizedOrderStatus(order) {
+  return String(order?.status || "COLLECTING_DETAILS").toUpperCase();
+}
+
 function ordersDoneCount() {
   return flattenOrders().filter((order) =>
-    ["CONFIRMED", "READY_FOR_DISPATCH", "DISPATCHED", "DELIVERED", "COMPLETED"].includes(String(order.status || "").toUpperCase())
+    ["CONFIRMED", "READY_FOR_DISPATCH", "DISPATCHED", "DELIVERED", "COMPLETED"].includes(normalizedOrderStatus(order))
   ).length;
+}
+
+function orderDeskStats() {
+  const orders = flattenOrders();
+  return {
+    total: orders.length,
+    confirmed: orders.filter((order) => normalizedOrderStatus(order) === "CONFIRMED").length,
+    dispatchReady: orders.filter((order) => normalizedOrderStatus(order) === "READY_FOR_DISPATCH").length,
+    delivered: orders.filter((order) => ["DELIVERED", "COMPLETED"].includes(normalizedOrderStatus(order))).length,
+    pending: orders.filter((order) => ["COLLECTING_DETAILS", "READY_FOR_REVIEW", "QUOTATION_NEEDED"].includes(normalizedOrderStatus(order))).length
+  };
+}
+
+function orderIdLabel(order) {
+  const id = String(order?.orderNumber || order?.orderId || order?.id || "");
+  if (!id) return "Order --";
+  return `Order ${id.length > 8 ? `#${id.slice(-6).toUpperCase()}` : `#${id.toUpperCase()}`}`;
+}
+
+function orderSummaryText(order) {
+  return [order?.productType, order?.size, order?.color, order?.customization]
+    .filter((value) => value !== null && value !== undefined && String(value).trim())
+    .map((value) => String(value).trim())
+    .join(" - ") || "Order details pending";
 }
 
 function isNearBottom(element, threshold = 96) {
@@ -878,51 +906,83 @@ function renderHumanQueueViews() {
   refreshIcons();
 }
 
+function renderOrderSummaryCards() {
+  const target = $("#orderDeskSummaryCards");
+  if (!target) return;
+  const stats = orderDeskStats();
+  const cards = [
+    { key: "total", label: "Total Orders", value: stats.total, icon: "package", accent: "purple" },
+    { key: "confirmed", label: "Confirmed Orders", value: stats.confirmed, icon: "circle-check-big", accent: "green" },
+    { key: "dispatch", label: "Dispatch Ready", value: stats.dispatchReady, icon: "truck", accent: "blue" },
+    { key: "delivered", label: "Delivered Orders", value: stats.delivered, icon: "badge-check", accent: "green" },
+    { key: "pending", label: "Pending Action", value: stats.pending, icon: "clock-3", accent: "amber" }
+  ];
+
+  renderKeyedChildren(
+    target,
+    cards,
+    (card) => card.key,
+    (card) => `
+      <article class="order-summary-card ${card.accent}">
+        <span><i data-lucide="${card.icon}"></i></span>
+        <div>
+          <strong>${escapeHtml(card.value)}</strong>
+          <small>${escapeHtml(card.label)}</small>
+        </div>
+      </article>
+    `,
+    ""
+  );
+}
+
 function renderOrdersView() {
   const list = $("#ordersList");
+  renderOrderSummaryCards();
   if (!list) return;
   const orders = flattenOrders().sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
+  setText("ordersListCount", `${orders.length} Order${orders.length === 1 ? "" : "s"}`);
   renderKeyedChildren(
     list,
     orders,
     (order) => order.id || order.leadId,
     (order) => `
-            <article class="modern-order-card">
-              <div class="order-card-top">
-                <div>
-                  <strong>${escapeHtml(order.customerName || "Customer")}</strong>
-                  <small>${escapeHtml(order.phone || "")}</small>
-                </div>
-                <span class="status-badge ${orderStatusClass(order.status)}">${formatOrderStatus(order.status)}</span>
-              </div>
-              <div class="order-fields">
-                <span><b>Product</b>${escapeHtml(emptyValue(order.productType))}</span>
-                <span><b>Qty</b>${escapeHtml(emptyValue(order.quantity))}</span>
-                <span><b>Size</b>${escapeHtml(emptyValue(order.size))}</span>
-                <span><b>Color</b>${escapeHtml(emptyValue(order.color))}</span>
-                <span><b>Location</b>${escapeHtml(emptyValue(order.deliveryLocation))}</span>
-                <span><b>Custom</b>${escapeHtml(emptyValue(order.customization))}</span>
-              </div>
-              <div class="order-card-footer">
-                <span>${confidenceLabel(order.confidenceScore)} confidence</span>
-                <button class="ghost-action" type="button" data-open-chat="${order.leadId}">
-                  <i data-lucide="messages-square"></i>
-                  Open Chat
-                </button>
-              </div>
-              <div class="row-actions order-row-actions">
-                <button class="secondary-button" type="button" data-order-id="${order.id}" data-next-action="CONFIRM">Mark confirmed</button>
-                <button class="secondary-button" type="button" data-order-id="${order.id}" data-next-action="READY_FOR_DISPATCH">Ready for dispatch</button>
-                <button class="secondary-button" type="button" data-order-id="${order.id}" data-next-action="DISPATCH">Mark dispatched</button>
-              </div>
-            </article>
+      <article class="order-desk-row">
+        <span class="lead-avatar">${escapeHtml(order.customerName || "O").slice(0, 1).toUpperCase()}</span>
+        <span class="order-row-main">
+          <span class="order-row-top">
+            <strong>${escapeHtml(order.customerName || "Customer")}</strong>
+            <small>${escapeHtml(order.phone || "")}</small>
+            <em>${escapeHtml(orderIdLabel(order))}</em>
+          </span>
+          <span class="order-row-summary">${escapeHtml(orderSummaryText(order))}</span>
+          <span class="order-row-meta">
+            <span><i data-lucide="hash"></i>Qty ${escapeHtml(emptyValue(order.quantity))}</span>
+            <span><i data-lucide="map-pin"></i>${escapeHtml(emptyValue(order.deliveryLocation))}</span>
+            <span><i data-lucide="activity"></i>${confidenceLabel(order.confidenceScore)} confidence</span>
+          </span>
+        </span>
+        <span class="order-row-state">
+          <span class="status-badge ${orderStatusClass(order.status)}">${formatOrderStatus(order.status)}</span>
+          <time>${relativeTime(order.updatedAt)}</time>
+        </span>
+        <span class="order-row-actions">
+          <button class="secondary-button" type="button" data-order-id="${order.id}" data-next-action="CONFIRM">Confirm Order</button>
+          <button class="secondary-button" type="button" data-order-id="${order.id}" data-next-action="READY_FOR_DISPATCH">Dispatch Ready</button>
+          <button class="secondary-button" type="button" data-order-id="${order.id}" data-next-action="DISPATCH">Mark Dispatched</button>
+          <button class="ghost-action" type="button" data-open-chat="${order.leadId}">
+            <i data-lucide="messages-square"></i>
+            Open Chat
+          </button>
+        </span>
+      </article>
           `,
-    emptyState("No extracted orders yet", "Order cards will appear once WhatsApp conversations include product details.")
+    emptyState("No orders yet.", "Order cards will appear once WhatsApp conversations include product details.")
   );
   bindDelegatedClick(list, "ordersOpenChat", "[data-open-chat]", (button) => openLeadChat(button.dataset.openChat));
   bindDelegatedClick(list, "ordersAction", "[data-order-id][data-next-action]", (button) => {
     performOrderAction(button.dataset.orderId, button.dataset.nextAction, button);
   });
+  refreshIcons();
 }
 
 function renderConversationIntel(recentLeads = []) {
