@@ -64,6 +64,7 @@ export const dashboardService = {
       hotLeads,
       warmLeads,
       scrapLeads,
+      activeChats,
       inboundMessages,
       outboundMessages,
       recentLeads,
@@ -73,6 +74,7 @@ export const dashboardService = {
       prisma.lead.count({ where: whereForTemperature("HOT") }),
       prisma.lead.count({ where: whereForTemperature("WARM") }),
       prisma.lead.count({ where: whereForTemperature("SCRAP") }),
+      prisma.lead.count({ where: { messageCount: { gt: 0 } } }),
       prisma.message.count({ where: { direction: MessageDirection.INBOUND } }),
       prisma.message.count({ where: { direction: MessageDirection.OUTBOUND } }),
       prisma.lead.findMany({
@@ -99,6 +101,7 @@ export const dashboardService = {
         hotLeads,
         warmLeads,
         scrapLeads,
+        activeChats,
         inboundMessages,
         outboundMessages
       },

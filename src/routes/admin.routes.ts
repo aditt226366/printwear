@@ -14,6 +14,7 @@ import {
   importLeads,
   ingestWebsiteKnowledge,
   performOrderAction,
+  requestHumanAction,
   resolveHumanAction,
   sendInitialMessages,
   sendManualMessage,
@@ -54,6 +55,7 @@ adminRoutes.use(requireAdmin);
 adminRoutes.get("/events", streamChatEvents);
 adminRoutes.get("/overview", getOverview);
 adminRoutes.get("/human-action-queue", getHumanActionQueue);
+adminRoutes.post("/human-action-queue/:leadId/request", requestHumanAction);
 adminRoutes.post("/human-action-queue/:leadId/resolve", resolveHumanAction);
 adminRoutes.get("/order-pipeline", getOrderPipeline);
 adminRoutes.patch("/orders/:orderId/status", updateOrderStatus);

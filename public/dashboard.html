@@ -31,7 +31,6 @@
         <button class="nav-item nested" data-view="leads" data-temperature-tab="SCRAP"><i data-lucide="archive-x"></i>Scrap leads</button>
         <div class="nav-group-label">Operations</div>
         <button class="nav-item nested" data-view="overview"><i data-lucide="user-round-check"></i>Human queue</button>
-        <button class="nav-item nested" data-view="overview"><i data-lucide="package-check"></i>Order pipeline</button>
       </nav>
 
       <div class="sidebar-panel">
@@ -144,40 +143,16 @@
               <p id="scrapLeadInsight">Low-fit leads filtered from priority work.</p>
             </article>
             <article class="metric-tile accent-blue">
-              <div class="metric-top"><i data-lucide="reply"></i><span>WhatsApp</span></div>
-              <strong id="replyRate">0%</strong>
-              <h3>Reply Rate</h3>
-              <p id="replyRateInsight">Outbound replies compared with inbound demand.</p>
+              <div class="metric-top"><i data-lucide="messages-square"></i><span>WhatsApp</span></div>
+              <strong id="activeChats">0</strong>
+              <h3>Active Chats</h3>
+              <p id="activeChatsInsight">Leads with at least one tracked message.</p>
             </article>
             <article class="metric-tile accent-green">
-              <div class="metric-top"><i data-lucide="package-check"></i><span>Production</span></div>
-              <strong id="ordersReady">0</strong>
-              <h3>Orders Ready</h3>
-              <p id="ordersReadyInsight">Orders waiting for review, quote, or dispatch.</p>
-            </article>
-          </section>
-
-          <section class="analytics-grid">
-            <article class="panel premium-card source-panel">
-              <div class="panel-heading">
-                <div>
-                  <p class="eyebrow">Lead Sources</p>
-                  <h2>Where conversations start.</h2>
-                  <span>Live mix from imported CRM records.</span>
-                </div>
-              </div>
-              <div id="leadSourceChart" class="source-chart"></div>
-            </article>
-
-            <article class="panel premium-card pipeline-summary-panel">
-              <div class="panel-heading">
-                <div>
-                  <p class="eyebrow">Lead Pipeline</p>
-                  <h2>Hot, warm, and scrap distribution.</h2>
-                  <span>Hot = 6+ messages, Warm = 2-5, Scrap = under 2.</span>
-                </div>
-              </div>
-              <div id="pipelineSummary" class="pipeline-summary"></div>
+              <div class="metric-top"><i data-lucide="user-round-check"></i><span>Manual</span></div>
+              <strong id="humanQueueCount">0</strong>
+              <h3>Human Queue</h3>
+              <p id="humanQueueInsight">Conversations currently marked for takeover.</p>
             </article>
           </section>
 
@@ -202,19 +177,6 @@
                 </div>
               </div>
               <div id="humanActionQueueList" class="intel-list"></div>
-            </article>
-          </section>
-
-          <section class="overview-lists-grid single-column">
-            <article class="panel premium-card order-pipeline-panel">
-              <div class="panel-heading">
-                <div>
-                  <p class="eyebrow">Order Pipeline</p>
-                  <h2>Orders ready for review, quotation, confirmation, and dispatch.</h2>
-                  <span>Extracted order details from real WhatsApp conversations.</span>
-                </div>
-              </div>
-              <div id="orderPipelineBoard" class="order-pipeline-board"></div>
             </article>
           </section>
         </div>

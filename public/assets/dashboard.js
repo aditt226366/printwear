@@ -11,8 +11,11 @@ const state = {
   isRefreshing: false,
   humanActionQueue: [],
   orderPipeline: {},
-  dashboardLoaded: false
+  dashboardLoaded: false,
+  isPolling: false
 };
+
+const DASHBOARD_POLL_INTERVAL_MS = 4000;
 
 const views = {
   overview: document.querySelector("#overviewView"),
@@ -85,6 +88,13 @@ function messageCountLabel(lead) {
   return `${count} msg${count === 1 ? "" : "s"}`;
 }
 
+function leadTemperature(lead) {
+  const count = Number(lead?.messageCount || 0);
+  if (count >= 6) return "HOT";
+  if (count >= 2) return "WARM";
+  return "SCRAP";
+}
+
 function previewText(value) {
   return String(value || "No messages yet").replace(/\s+/g, " ").trim();
 }
@@ -121,8 +131,13 @@ function normalizeMessage(message) {
 
 function normalizeMessages(messages = []) {
   return [...messages]
-    .map(normalizeMessage)
-    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    .map((message, index) => ({ ...normalizeMessage(message), index }))
+    .sort((a, b) => {
+      const timeDiff = new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+      if (timeDiff !== 0) return timeDiff;
+      return a.index - b.index;
+    })
+    .map(({ index, ...message }) => message);
 }
 
 function formatOrderStatus(value) {
@@ -135,18 +150,6 @@ function emptyValue(value) {
 
 function confidenceLabel(value) {
   return `${Math.round(Number(value || 0) * 100)}%`;
-}
-
-function percentLabel(value, total) {
-  if (!total) return "0%";
-  return `${Math.round((Number(value || 0) / total) * 100)}%`;
-}
-
-function orderReadyCount(pipeline = {}) {
-  return ["READY_FOR_REVIEW", "QUOTATION_NEEDED", "CONFIRMED", "READY_FOR_DISPATCH"].reduce(
-    (sum, stage) => sum + Number(pipeline[stage]?.length || 0),
-    0
-  );
 }
 
 function isNearBottom(element, threshold = 96) {
@@ -181,8 +184,14 @@ async function publicApi(path, options = {}) {
 
   const data = response.status === 204 ? {} : await response.json().catch(() => ({}));
   if (!response.ok) {
-    const details = typeof data.details === "string" ? data.details : "";
-    throw new Error(details ? `${data.error || "Request failed"}: ${details}` : data.error || "Something went wrong");
+    const errorText = String(data.error || data.message || "").trim();
+    const details = typeof data.details === "string" ? data.details.trim() : "";
+    if (response.status === 404) throw new Error(errorText || "That record could not be found.");
+    if (response.status === 401 || response.status === 403) throw new Error("Your session is not authorized for this action.");
+    if (errorText && !/internal server error/i.test(errorText)) {
+      throw new Error(details && !/internal server error/i.test(details) ? `${errorText}: ${details}` : errorText);
+    }
+    throw new Error("Something went wrong while contacting the server. Please try again.");
   }
   return data;
 }
@@ -317,42 +326,79 @@ function scoreForLead(lead) {
 function getFilteredLeads(forChats = false) {
   const search = (forChats ? state.chatSearch : state.leadSearch).toLowerCase();
   return state.leads.filter((lead) => {
-    const matchesTemperature = forChats || !state.temperatureFilter || lead.temperature === state.temperatureFilter;
+    const matchesTemperature = forChats || !state.temperatureFilter || leadTemperature(lead) === state.temperatureFilter;
     const haystack = `${lead.name} ${lead.source || ""} ${lead.temperatureReason || ""} ${lead.aiInsight || ""} ${lead.lastMessage || ""}`.toLowerCase();
     return matchesTemperature && (!search || haystack.includes(search));
   });
 }
 
+function priorityRank(priority) {
+  const value = String(priority || "LOW").toUpperCase();
+  if (value === "HIGH") return 0;
+  if (value === "MEDIUM") return 1;
+  return 2;
+}
+
+function isHumanQueueLead(lead) {
+  return Boolean((lead?.humanTakeoverRequired || lead?.requiresHuman) && !lead?.humanResolvedAt);
+}
+
+function humanQueueItems() {
+  const byId = new Map();
+
+  state.humanActionQueue.forEach((item) => {
+    const leadId = item.leadId || item.id;
+    if (!leadId) return;
+    byId.set(leadId, {
+      leadId,
+      name: item.customerName || item.name || "Unknown lead",
+      phone: item.phone || "",
+      lastMessage: item.lastMessage || "No messages yet",
+      reason: item.reason || item.humanReason || "Human takeover requested",
+      priority: item.priority || item.humanPriority || "LOW",
+      time: item.time || item.lastMessageAt || item.updatedAt,
+      messageCount: item.messageCount || 0
+    });
+  });
+
+  state.leads.filter(isHumanQueueLead).forEach((lead) => {
+    byId.set(lead.id, {
+      leadId: lead.id,
+      name: lead.name,
+      phone: lead.phone,
+      lastMessage: lead.lastMessage,
+      reason: lead.humanReason || "Human takeover requested",
+      priority: lead.humanPriority || "LOW",
+      time: lead.lastMessageAt || lead.updatedAt,
+      messageCount: lead.messageCount || 0
+    });
+  });
+
+  return [...byId.values()].sort(
+    (a, b) => priorityRank(a.priority) - priorityRank(b.priority) || new Date(b.time || 0).getTime() - new Date(a.time || 0).getTime()
+  );
+}
+
 function humanActionRow(item) {
   return `
-    <article class="human-action-row">
-      <button class="conversation-preview-row" data-open-chat="${item.leadId}">
-        <span class="lead-avatar">${escapeHtml(item.customerName).slice(0, 1).toUpperCase()}</span>
-        <span class="conversation-preview-main">
-          <span class="conversation-preview-top">
-            <strong>${escapeHtml(item.customerName)}</strong>
-            <span class="priority-badge ${String(item.priority || "LOW").toLowerCase()}">${pretty(item.priority || "LOW")}</span>
-            <span class="tag ${String(item.temperature).toLowerCase()}">${pretty(item.temperature)}</span>
-          </span>
-          <span class="conversation-preview-text">${escapeHtml(previewText(item.lastMessage))}</span>
-          <span class="conversation-preview-phone">${escapeHtml(item.phone)} - ${escapeHtml(item.reason || "Manual review needed")}</span>
+    <article class="human-action-row compact-human-row">
+      <span class="lead-avatar">${escapeHtml(item.name).slice(0, 1).toUpperCase()}</span>
+      <span class="human-main">
+        <span class="human-top">
+          <strong>${escapeHtml(item.name)}</strong>
+          <span>${escapeHtml(item.phone)}</span>
         </span>
-        <span class="conversation-preview-meta">
-          <time>${relativeTime(item.time)}</time>
-          <small>${messageCountLabel(item)}</small>
-        </span>
-        <i data-lucide="arrow-up-right"></i>
+        <span class="conversation-preview-text">${escapeHtml(chatPreviewText(item.lastMessage))}</span>
+        <span class="conversation-preview-phone">${escapeHtml(item.reason || "Human takeover requested")}</span>
+      </span>
+      <span class="human-meta">
+        <time>${relativeTime(item.time)}</time>
+        <span class="priority-badge ${String(item.priority || "LOW").toLowerCase()}">${pretty(item.priority || "LOW")}</span>
+      </span>
+      <button class="secondary-button compact-action" type="button" data-open-chat="${item.leadId}">
+        <i data-lucide="messages-square"></i>
+        Open Chat
       </button>
-      <div class="row-actions">
-        <button class="secondary-button" type="button" data-open-chat="${item.leadId}">
-          <i data-lucide="messages-square"></i>
-          Open Chat
-        </button>
-        <button class="secondary-button" type="button" data-resolve-human="${item.leadId}">
-          <i data-lucide="check-circle-2"></i>
-          Mark Resolved
-        </button>
-      </div>
     </article>
   `;
 }
@@ -360,16 +406,14 @@ function humanActionRow(item) {
 function renderHumanActionQueue() {
   const list = $("#humanActionQueueList");
   if (!list) return;
+  const items = humanQueueItems();
 
-  list.innerHTML = state.humanActionQueue.length
-    ? state.humanActionQueue.map((item) => humanActionRow(item)).join("")
-    : emptyState("No chats need manual attention", "Customer conversations that need human review will appear here.");
+  list.innerHTML = items.length
+    ? items.map((item) => humanActionRow(item)).join("")
+    : emptyState("No human takeover needed right now.", "New customer requests for human help will appear here.");
 
   list.querySelectorAll("[data-open-chat]").forEach((button) => {
     button.addEventListener("click", () => openLeadChat(button.dataset.openChat));
-  });
-  list.querySelectorAll("[data-resolve-human]").forEach((button) => {
-    button.addEventListener("click", () => resolveHumanAction(button.dataset.resolveHuman));
   });
 }
 
@@ -445,13 +489,14 @@ function renderOrderPipeline() {
 }
 
 function conversationPreviewRow(lead) {
+  const temperature = leadTemperature(lead);
   return `
     <button class="conversation-preview-row" data-open-chat="${lead.id}">
       <span class="lead-avatar">${escapeHtml(lead.name).slice(0, 1).toUpperCase()}</span>
       <span class="conversation-preview-main">
         <span class="conversation-preview-top">
           <strong>${escapeHtml(lead.name)}</strong>
-          <span class="tag ${lead.temperature.toLowerCase()}">${pretty(lead.temperature)}</span>
+          <span class="tag ${temperature.toLowerCase()}">${pretty(temperature)}</span>
         </span>
         <span class="conversation-preview-text">${escapeHtml(previewText(lead.lastMessage))}</span>
       </span>
@@ -461,74 +506,6 @@ function conversationPreviewRow(lead) {
       </span>
       <i data-lucide="arrow-up-right"></i>
     </button>
-  `;
-}
-
-function renderLeadSourceChart(leads = []) {
-  const chart = $("#leadSourceChart");
-  if (!chart) return;
-
-  const counts = leads.reduce((acc, lead) => {
-    const source = lead.source || "WhatsApp";
-    acc[source] = (acc[source] || 0) + 1;
-    return acc;
-  }, {});
-  const entries = Object.entries(counts)
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 5);
-  const total = Math.max(1, leads.length);
-
-  chart.innerHTML = entries.length
-    ? entries
-        .map(
-          ([source, count]) => `
-            <div class="source-row">
-              <div>
-                <strong>${escapeHtml(source)}</strong>
-                <span>${count} lead${count === 1 ? "" : "s"}</span>
-              </div>
-              <div class="source-track"><i style="width:${Math.max(8, Math.round((count / total) * 100))}%"></i></div>
-              <b>${percentLabel(count, total)}</b>
-            </div>
-          `
-        )
-        .join("")
-    : emptyState("No lead sources yet", "Import leads to see source performance.");
-}
-
-function renderPipelineSummary(stats = {}) {
-  const summary = $("#pipelineSummary");
-  if (!summary) return;
-
-  const total = Math.max(1, Number(stats.totalLeads || 0));
-  const segments = [
-    ["Hot", stats.hotLeads || 0, "hot"],
-    ["Warm", stats.warmLeads || 0, "warm"],
-    ["Scrap", stats.scrapLeads || 0, "scrap"]
-  ];
-
-  summary.innerHTML = `
-    <div class="pipeline-meter">
-      ${segments
-        .map(
-          ([label, count, key]) =>
-            `<span class="${key}" style="width:${Math.max(5, Math.round((Number(count) / total) * 100))}%" aria-label="${label} ${count}"></span>`
-        )
-        .join("")}
-    </div>
-    <div class="pipeline-segments">
-      ${segments
-        .map(
-          ([label, count, key]) => `
-            <div>
-              <span class="segment-dot ${key}"></span>
-              <strong>${count}</strong>
-              <small>${label}</small>
-            </div>
-          `
-        )
-        .join("")}
-    </div>
   `;
 }
 
@@ -551,12 +528,10 @@ function renderRecentConversationList(leads = []) {
 
 function renderConversationIntel(recentLeads = []) {
   renderHumanActionQueue();
-  renderLeadSourceChart(recentLeads);
 }
 
 function renderRecentConversations(recentLeads = []) {
   renderRecentConversationList(recentLeads);
-  renderOrderPipeline();
 }
 
 function renderDerivedOverview() {
@@ -565,29 +540,28 @@ function renderDerivedOverview() {
   const { stats, recentLeads } = state.latestOverview;
   const totalMessages = (stats.inboundMessages || 0) + (stats.outboundMessages || 0);
   const total = Math.max(1, stats.totalLeads || 0);
-  const replyRate = stats.inboundMessages ? Math.round((Number(stats.outboundMessages || 0) / Number(stats.inboundMessages)) * 100) : 0;
-  const readyOrders = orderReadyCount(state.orderPipeline);
+  const activeChats = Number(stats.activeChats ?? state.leads.filter((lead) => Number(lead.messageCount || 0) > 0).length);
+  const humanCount = humanQueueItems().length;
 
   setText("sidebarSummary", `${stats.hotLeads} hot / ${stats.warmLeads} warm / ${stats.scrapLeads} scrap`);
   const meter = $("#sidebarMeter");
   if (meter) meter.style.width = `${Math.max(8, Math.round((stats.hotLeads / total) * 100))}%`;
 
-  setText("dashboardHeroSummary", `${stats.hotLeads} hot leads, ${readyOrders} production-ready orders, and ${totalMessages} tracked WhatsApp messages.`);
+  setText("dashboardHeroSummary", `${stats.hotLeads} hot leads, ${activeChats} active chats, and ${humanCount} human takeover item${humanCount === 1 ? "" : "s"}.`);
   animateCounter("heroConversationTotal", totalMessages);
   setText("totalLeadTrend", `${totalMessages} msgs`);
   setText("hotLeadTrend", `${Math.round((stats.hotLeads / total) * 100)}% hot`);
   setText("warmLeadTrend", `${Math.round((stats.warmLeads / total) * 100)}% warm`);
   setText("scrapLeadTrend", `${Math.round((stats.scrapLeads / total) * 100)}% scrap`);
-  setText("replyRate", `${replyRate}%`);
-  animateCounter("ordersReady", readyOrders);
+  animateCounter("activeChats", activeChats);
+  animateCounter("humanQueueCount", humanCount);
   setText("totalLeadInsight", `${totalMessages} tracked messages across the workspace.`);
   setText("hotLeadInsight", `${stats.hotLeads} leads with 6+ messages deserve same-day follow-up.`);
   setText("warmLeadInsight", `${stats.warmLeads} accounts with 2-5 messages need nurture.`);
   setText("scrapLeadInsight", `${stats.scrapLeads} records under 2 messages stay low priority.`);
-  setText("replyRateInsight", `${stats.outboundMessages || 0} outbound replies for ${stats.inboundMessages || 0} inbound messages.`);
-  setText("ordersReadyInsight", `${readyOrders} order${readyOrders === 1 ? "" : "s"} waiting for review or production action.`);
+  setText("activeChatsInsight", `${activeChats} lead${activeChats === 1 ? "" : "s"} have at least one message.`);
+  setText("humanQueueInsight", humanCount ? `${humanCount} conversation${humanCount === 1 ? "" : "s"} need manual attention.` : "No human takeover needed right now.");
 
-  renderPipelineSummary(stats);
   renderConversationIntel(recentLeads);
   renderRecentConversations(recentLeads);
 }
@@ -631,31 +605,34 @@ function renderLeadCards() {
   list.innerHTML = leads.length
     ? leads
         .map(
-          (lead) => `
-            <article class="lead-card ${state.selectedLeadId === lead.id ? "active" : ""}" data-lead-card="${lead.id}">
-              <div class="lead-card-top">
-                <span class="lead-avatar">${escapeHtml(lead.name).slice(0, 1).toUpperCase()}</span>
-                <div>
-                  <strong>${escapeHtml(lead.name)}</strong>
-                  <small>${pretty(lead.status)} - ${escapeHtml(lead.source || "WhatsApp")}</small>
+          (lead) => {
+            const temperature = leadTemperature(lead);
+            return `
+              <article class="lead-card ${state.selectedLeadId === lead.id ? "active" : ""}" data-lead-card="${lead.id}">
+                <div class="lead-card-top">
+                  <span class="lead-avatar">${escapeHtml(lead.name).slice(0, 1).toUpperCase()}</span>
+                  <div>
+                    <strong>${escapeHtml(lead.name)}</strong>
+                    <small>${pretty(lead.status)} - ${escapeHtml(lead.source || "WhatsApp")}</small>
+                  </div>
+                  <span class="tag ${temperature.toLowerCase()}">${pretty(temperature)}</span>
                 </div>
-                <span class="tag ${lead.temperature.toLowerCase()}">${pretty(lead.temperature)}</span>
-              </div>
-              <div class="score-row">
-                <span>Lead score</span>
-                <div class="score-track"><i style="width:${scoreForLead(lead)}%"></i></div>
-                <strong>${scoreForLead(lead)}</strong>
-              </div>
-              <p>${escapeHtml(lead.aiInsight || lead.temperatureBasis || "No AI insight captured yet")}</p>
-              <div class="lead-card-actions">
-                <span>${lead.messageCount || 0} messages - ${relativeTime(lead.updatedAt)}</span>
-                <button class="ghost-action" type="button" data-open-chat="${lead.id}">
-                  <i data-lucide="messages-square"></i>
-                  Open chat
-                </button>
-              </div>
-            </article>
-          `
+                <div class="score-row">
+                  <span>Lead score</span>
+                  <div class="score-track"><i style="width:${scoreForLead(lead)}%"></i></div>
+                  <strong>${scoreForLead(lead)}</strong>
+                </div>
+                <p>${escapeHtml(lead.aiInsight || lead.temperatureBasis || "No AI insight captured yet")}</p>
+                <div class="lead-card-actions">
+                  <span>${lead.messageCount || 0} messages - ${relativeTime(lead.updatedAt)}</span>
+                  <button class="ghost-action" type="button" data-open-chat="${lead.id}">
+                    <i data-lucide="messages-square"></i>
+                    Open chat
+                  </button>
+                </div>
+              </article>
+            `;
+          }
         )
         .join("")
     : emptyState("No leads match this view", "Adjust search, clear filters, or import a new Sheet segment.");
@@ -686,12 +663,14 @@ function renderChatList() {
         .map(
           (lead) => {
             const unreadCount = Number(lead.unreadCount || 0);
+            const temperature = leadTemperature(lead);
             return `
             <button class="chat-list-row ${state.selectedLeadId === lead.id ? "active" : ""}" data-chat-lead="${lead.id}">
               <span class="lead-avatar">${escapeHtml(lead.name).slice(0, 1).toUpperCase()}</span>
               <span class="chat-list-main">
                 <span class="chat-list-top">
                   <strong>${escapeHtml(lead.name)}</strong>
+                  <span class="chat-temp-badge ${temperature.toLowerCase()}">${pretty(temperature)}</span>
                 </span>
                 <small>${escapeHtml(chatPreviewText(lead.lastMessage))}</small>
               </span>
@@ -721,8 +700,9 @@ function renderLeadProfile(lead) {
   setText("profileReason", lead?.aiInsight || lead?.temperatureBasis || "Select a lead to see scoring context and next-best action.");
   const profileStatus = $("#profileStatus");
   if (profileStatus) {
-    profileStatus.textContent = lead ? pretty(lead.temperature) : "Not selected";
-    profileStatus.className = `tag ${lead ? lead.temperature.toLowerCase() : "neutral"}`;
+    const temperature = lead ? leadTemperature(lead) : "neutral";
+    profileStatus.textContent = lead ? pretty(temperature) : "Not selected";
+    profileStatus.className = `tag ${temperature.toLowerCase()}`;
   }
   renderHumanAttentionProfile(lead);
   renderOrderSummaryProfile(lead?.orderSummary);
@@ -767,7 +747,7 @@ function renderOrderSummaryProfile(order) {
 function renderThread(messages, targetId, emptyCopy, options = {}) {
   const thread = document.querySelector(targetId);
   if (!thread) return;
-  const shouldStickToBottom = options.forceBottom || isNearBottom(thread);
+  const shouldStickToBottom = options.preserveScroll ? isNearBottom(thread) : true;
   const previousScrollTop = thread.scrollTop;
   const orderedMessages = normalizeMessages(messages);
   thread.classList.toggle("empty-state", orderedMessages.length === 0);
@@ -777,7 +757,7 @@ function renderThread(messages, targetId, emptyCopy, options = {}) {
           (message) => `
             <div class="bubble ${message.direction.toLowerCase()}">
               <span>${escapeHtml(message.text)}</span>
-              <small>${escapeHtml(message.sender)} - ${formatDate(message.timestamp)}</small>
+              <small>${formatDate(message.timestamp)}</small>
             </div>
           `
         )
@@ -798,7 +778,7 @@ function renderConversation(data, options = {}) {
   state.selectedLeadId = data.lead.id;
   state.selectedConversation = { ...data, messages };
   const leadFromList = { ...(state.leads.find((lead) => lead.id === data.lead.id) || {}), ...data.lead };
-  const meta = `${pretty(data.lead.status)} - ${data.lead.messageCount} messages - ${pretty(data.lead.temperature)}`;
+  const meta = `${pretty(data.lead.status)} - ${data.lead.messageCount} messages - ${pretty(leadTemperature(data.lead))}`;
   state.leads = state.leads.map((lead) =>
     lead.id === data.lead.id
       ? {
@@ -834,7 +814,6 @@ async function loadOverview() {
     renderLeadCards();
     renderChatList();
     renderHumanActionQueue();
-    renderOrderPipeline();
     renderOverview(data);
   } catch (error) {
     logDashboardError("Overview load failed", error);
@@ -851,6 +830,7 @@ async function loadLeads(options = {}) {
   state.leads = data.leads || [];
   renderLeadCards();
   renderChatList();
+  renderHumanActionQueue();
   if (updateOverview) renderDerivedOverview();
 }
 
@@ -858,8 +838,12 @@ async function loadOperationalData() {
   if (!state.dashboardLoaded) {
     await loadOverview();
   }
+  const queue = await publicApi("/human-action-queue").catch((error) => {
+    logDashboardError("Human queue refresh failed", error);
+    return null;
+  });
+  if (queue) state.humanActionQueue = queue.items || [];
   renderHumanActionQueue();
-  renderOrderPipeline();
   refreshIcons();
 }
 
@@ -1003,6 +987,39 @@ async function refreshCurrentView() {
   }
 }
 
+async function pollDashboardData() {
+  if (document.hidden || state.isRefreshing || state.isPolling) return;
+  state.isPolling = true;
+  const selectedLeadId = state.selectedLeadId;
+  const forceBottom = true;
+
+  try {
+    await loadLeads({ updateOverview: false });
+    if (selectedLeadId) {
+      await loadConversation(selectedLeadId, { forceBottom });
+    }
+    if (state.currentView === "overview") {
+      const data = await dashboardApi();
+      state.latestOverview = data;
+      state.humanActionQueue = data.humanActionQueue || data.items || [];
+      state.orderPipeline = data.orderPipeline || data.pipeline || {};
+      renderDerivedOverview();
+    } else {
+      await loadOperationalData();
+    }
+  } catch (error) {
+    logDashboardError("Dashboard polling failed", error);
+  } finally {
+    state.isPolling = false;
+  }
+}
+
+function startDashboardPolling() {
+  window.setInterval(() => {
+    pollDashboardData();
+  }, DASHBOARD_POLL_INTERVAL_MS);
+}
+
 function bindEvents() {
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => switchView(button.dataset.view));
@@ -1068,10 +1085,26 @@ function bindEvents() {
     }
   });
 
-  $("#humanTakeoverBtn")?.addEventListener("click", () => {
-    showNotice("Human takeover enabled for this thread. AI remains in assist mode.");
-    $("#aiStatusIndicator").innerHTML = `<i data-lucide="user-round-check"></i>Human in control`;
-    refreshIcons();
+  $("#humanTakeoverBtn")?.addEventListener("click", async () => {
+    if (!state.selectedLeadId) return;
+    try {
+      const result = await publicApi(`/human-action-queue/${state.selectedLeadId}/request`, { method: "POST" });
+      state.leads = state.leads.map((lead) => (lead.id === state.selectedLeadId ? { ...lead, ...(result.lead || {}) } : lead));
+      if (state.selectedConversation?.lead?.id === state.selectedLeadId) {
+        state.selectedConversation = {
+          ...state.selectedConversation,
+          lead: { ...state.selectedConversation.lead, ...(result.lead || {}) }
+        };
+      }
+      showNotice("Human takeover enabled for this thread.");
+      $("#aiStatusIndicator").innerHTML = `<i data-lucide="user-round-check"></i>Human in control`;
+      renderHumanActionQueue();
+      renderLeadProfile(state.selectedConversation?.lead);
+      refreshIcons();
+    } catch (error) {
+      logDashboardError("Human takeover request failed", error);
+      showNotice("Could not enable human takeover. Please try again.", true);
+    }
   });
 
   $("#profileResolveHumanBtn")?.addEventListener("click", () => {
@@ -1103,9 +1136,52 @@ async function sendManualReply(event) {
   const text = input.value.trim();
   if (!text) return;
 
-  logDashboardError("Manual reply blocked", new Error("No public API route is available for sending chat replies from this dashboard build."));
-  showNotice("Manual replies are unavailable from this production dashboard view.", true);
-  input.value = text;
+  const optimisticMessage = normalizeMessage({
+    id: `optimistic-${Date.now()}`,
+    direction: "OUTBOUND",
+    sender: "Business",
+    text,
+    timestamp: new Date().toISOString(),
+    status: "SENDING"
+  });
+  input.value = "";
+
+  if (state.selectedConversation) {
+    state.selectedConversation = {
+      ...state.selectedConversation,
+      messages: normalizeMessages([...state.selectedConversation.messages, optimisticMessage])
+    };
+    renderThread(state.selectedConversation.messages, "#chatThread", "Send a welcome message to start the WhatsApp thread.", { forceBottom: true });
+  }
+
+  try {
+    const result = await publicApi(`/leads/${state.selectedLeadId}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ text })
+    });
+    if (state.selectedConversation && result?.message) {
+      state.selectedConversation = {
+        ...state.selectedConversation,
+        messages: normalizeMessages([
+          ...state.selectedConversation.messages.filter((message) => message.id !== optimisticMessage.id && message.id !== result.message.id),
+          result.message
+        ])
+      };
+      renderConversation(state.selectedConversation, { forceBottom: true });
+    }
+    await loadLeads({ updateOverview: false });
+  } catch (error) {
+    if (state.selectedConversation) {
+      state.selectedConversation = {
+        ...state.selectedConversation,
+        messages: state.selectedConversation.messages.filter((message) => message.id !== optimisticMessage.id)
+      };
+      renderThread(state.selectedConversation.messages, "#chatThread", "Send a welcome message to start the WhatsApp thread.", { forceBottom: true });
+    }
+    input.value = text;
+    logDashboardError("Manual reply failed", error);
+    showNotice("Message could not be sent. Check WhatsApp settings and try again.", true);
+  }
 }
 
 async function resolveHumanAction(leadId) {
@@ -1165,6 +1241,7 @@ bindEvents();
 refreshIcons();
 connectChatEvents();
 loadOverview();
+startDashboardPolling();
 
 premiumLibrariesReady.then(() => {
   refreshIcons();

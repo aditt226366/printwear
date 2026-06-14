@@ -6,7 +6,9 @@ import {
   getLeads,
   getOrderPipeline,
   performOrderAction,
+  requestHumanAction,
   resolveHumanAction,
+  sendManualMessage,
   streamChatEvents,
   updateOrder,
   updateOrderStatus
@@ -21,11 +23,13 @@ apiRoutes.get("/dashboard", getDashboard);
 apiRoutes.get("/events", streamChatEvents);
 apiRoutes.get("/leads", getLeads);
 apiRoutes.get("/leads/:leadId/conversation", getConversation);
+apiRoutes.post("/leads/:leadId/messages", sendManualMessage);
 apiRoutes.post("/leads/import", importLeads);
 apiRoutes.post("/messages/send-initial", sendInitialMessages);
 apiRoutes.post("/knowledge/seed", seedKnowledgeBase);
 apiRoutes.get("/knowledge", listKnowledgeBase);
 apiRoutes.get("/human-action-queue", getHumanActionQueue);
+apiRoutes.post("/human-action-queue/:leadId/request", requestHumanAction);
 apiRoutes.post("/human-action-queue/:leadId/resolve", resolveHumanAction);
 apiRoutes.get("/order-pipeline", getOrderPipeline);
 apiRoutes.patch("/orders/:orderId/status", updateOrderStatus);

@@ -150,6 +150,11 @@ export const getHumanActionQueue = asyncHandler(async (_req: Request, res: Respo
   res.json({ items: await humanActionService.listQueue() });
 });
 
+export const requestHumanAction = asyncHandler(async (req: Request, res: Response) => {
+  const lead = await humanActionService.request(req.params.leadId);
+  res.json({ lead });
+});
+
 export const resolveHumanAction = asyncHandler(async (req: Request, res: Response) => {
   const lead = await humanActionService.resolve(req.params.leadId);
   res.json({ lead });

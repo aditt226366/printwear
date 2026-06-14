@@ -135,6 +135,18 @@ export const humanActionService = {
     });
   },
 
+  async request(leadId: string, reason = "Manual human takeover") {
+    return prisma.lead.update({
+      where: { id: leadId },
+      data: {
+        humanTakeoverRequired: true,
+        humanPriority: HumanPriority.HIGH,
+        humanReason: reason,
+        humanResolvedAt: null
+      }
+    });
+  },
+
   async listQueue() {
     const leads = await prisma.lead.findMany({
       where: {
