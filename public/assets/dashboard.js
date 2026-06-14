@@ -89,6 +89,16 @@ function previewText(value) {
   return String(value || "No messages yet").replace(/\s+/g, " ").trim();
 }
 
+function chatPreviewText(value) {
+  const firstLine = String(value || "No messages yet").split(/\r?\n/)[0];
+  return previewText(firstLine);
+}
+
+function unreadBadgeLabel(value) {
+  const count = Number(value || 0);
+  return count > 99 ? "99+" : String(count);
+}
+
 function messageTimestamp(message) {
   return message?.timestamp || message?.createdAt || message?.time || new Date().toISOString();
 }
@@ -575,11 +585,11 @@ function renderChatList() {
                 <span class="chat-list-top">
                   <strong>${escapeHtml(lead.name)}</strong>
                 </span>
-                <small>${escapeHtml(previewText(lead.lastMessage))}</small>
+                <small>${escapeHtml(chatPreviewText(lead.lastMessage))}</small>
               </span>
               <span class="chat-list-meta">
                 <time>${relativeTime(lead.lastMessageAt || lead.updatedAt)}</time>
-                ${unreadCount > 0 ? `<small class="unread-badge">${unreadCount}</small>` : `<small class="unread-badge empty"></small>`}
+                ${unreadCount > 0 ? `<small class="unread-badge">${unreadBadgeLabel(unreadCount)}</small>` : `<small class="unread-badge empty"></small>`}
               </span>
             </button>
           `;
