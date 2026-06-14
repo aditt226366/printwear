@@ -11,86 +11,40 @@
     <link rel="stylesheet" href="/assets/styles.css" />
   </head>
   <body class="app-shell">
-    <aside class="sidebar">
+    <header class="topbar">
       <div class="brand-block">
         <span class="brand-mark">PW</span>
         <div>
-          <strong>Printwear AI CRM</strong>
-          <span>Revenue workspace</span>
+          <strong>Printwear CRM</strong>
+          <span>Command center</span>
         </div>
       </div>
 
-      <nav class="nav-list" aria-label="CRM sections">
-        <div class="nav-group-label">Workspace</div>
+      <nav class="top-nav" aria-label="CRM sections">
         <button class="nav-item active" data-view="overview"><i data-lucide="layout-dashboard"></i>Dashboard</button>
         <button class="nav-item" data-view="chats"><i data-lucide="messages-square"></i>Chats</button>
         <button class="nav-item" data-view="leads" data-temperature=""><i data-lucide="contact-round"></i>Leads</button>
-        <div class="nav-group-label">Segments</div>
-        <button class="nav-item nested" data-view="leads" data-temperature-tab="HOT"><i data-lucide="flame"></i>Hot leads</button>
-        <button class="nav-item nested" data-view="leads" data-temperature-tab="WARM"><i data-lucide="badge-dollar-sign"></i>Warm leads</button>
-        <button class="nav-item nested" data-view="leads" data-temperature-tab="SCRAP"><i data-lucide="archive-x"></i>Scrap leads</button>
-        <div class="nav-group-label">Operations</div>
-        <button class="nav-item nested" data-view="overview"><i data-lucide="user-round-check"></i>Human queue</button>
+        <button class="nav-item" data-view="orders"><i data-lucide="package-check"></i>Orders</button>
+        <button class="nav-item" data-view="human"><i data-lucide="user-round-check"></i>Human Queue</button>
+        <button class="nav-item" data-view="reports"><i data-lucide="chart-no-axes-combined"></i>Reports</button>
+        <button class="nav-item" data-view="settings"><i data-lucide="settings"></i>Settings</button>
       </nav>
 
-      <div class="sidebar-panel">
-        <div class="sidebar-panel-top">
-          <span class="pulse-dot"></span>
-          <strong>Workspace live</strong>
-        </div>
-        <span id="sidebarSummary">Syncing lead intelligence</span>
-        <div class="mini-meter"><span id="sidebarMeter"></span></div>
-      </div>
-
-      <form method="post" action="/logout" class="logout-form">
-        <button type="submit" class="secondary-button full-width">
-          <i data-lucide="log-out"></i>
-          Sign out
-        </button>
-      </form>
-    </aside>
-
-    <main class="workspace">
-      <header class="topbar">
+      <div class="topbar-right">
         <div class="global-search">
           <i data-lucide="search"></i>
           <input id="globalSearch" placeholder="Search leads, chats, orders..." />
-          <kbd>/</kbd>
         </div>
-        <div class="top-actions">
-          <div class="input-shell top-filter">
-            <i data-lucide="calendar-range"></i>
-            <select aria-label="Reporting period">
-              <option>Last 30 days</option>
-              <option>This week</option>
-              <option>This quarter</option>
-            </select>
-          </div>
-          <button id="importLeadsBtn" class="secondary-button compact-action">
-            <i data-lucide="file-spreadsheet"></i>
-            Import Leads
-          </button>
-          <button id="sendInitialBtn" class="primary-button compact-action">
-            <i data-lucide="send"></i>
-            Send Welcomes
-          </button>
-          <button class="secondary-button icon-button" type="button" aria-label="Notifications">
-            <i data-lucide="bell"></i>
-          </button>
-        </div>
-        <div class="profile-menu">
-          <div class="tiny-status" aria-label="System status">
-            <span><i></i>WhatsApp</span>
-            <span><i></i>Claude</span>
-            <span><i></i>Sheets</span>
-          </div>
-          <button class="profile-button" type="button" aria-label="Profile menu">
-            <span>AD</span>
-            <i data-lucide="chevron-down"></i>
-          </button>
-        </div>
-      </header>
+        <button class="secondary-button icon-button" type="button" aria-label="Notifications">
+          <i data-lucide="bell"></i>
+        </button>
+        <button class="profile-button" type="button" aria-label="Profile menu">
+          <span>AD</span>
+        </button>
+      </div>
+    </header>
 
+    <main class="workspace">
       <section id="notice" class="notice hidden"></section>
 
       <section id="overviewView" class="view active-view">
@@ -106,9 +60,19 @@
         <div id="overviewContent" class="dashboard-stack hidden">
           <section class="dashboard-hero premium-card">
             <div>
-              <p class="eyebrow">Printwear report</p>
-              <h1>Revenue command center</h1>
-              <span id="dashboardHeroSummary">Tracking WhatsApp demand, lead quality, and production-ready orders.</span>
+              <p class="eyebrow">Live CRM Intelligence</p>
+              <h1>Printwear CRM Command Center</h1>
+              <span id="dashboardHeroSummary">Tracking WhatsApp demand, lead quality, human handoffs, and order momentum.</span>
+              <div class="hero-actions">
+                <button id="importLeadsBtn" class="secondary-button compact-action">
+                  <i data-lucide="file-spreadsheet"></i>
+                  Import Leads
+                </button>
+                <button id="sendInitialBtn" class="primary-button compact-action">
+                  <i data-lucide="send"></i>
+                  Send Welcomes
+                </button>
+              </div>
             </div>
             <div class="hero-summary-card">
               <span>Conversation volume</span>
@@ -117,42 +81,78 @@
             </div>
           </section>
 
-          <section class="kpi-grid" aria-label="CRM KPIs">
+          <section class="kpi-grid hero-kpis" aria-label="CRM KPIs">
             <article class="metric-tile accent-black">
-              <div class="metric-top"><i data-lucide="database"></i><span id="totalLeadTrend">+0%</span></div>
+              <div class="metric-top"><i data-lucide="database"></i><span id="totalLeadTrend">All records</span></div>
               <strong id="totalLeads">0</strong>
               <h3>Total Leads</h3>
               <p id="totalLeadInsight">All active records in the CRM.</p>
             </article>
-            <article class="metric-tile accent-hot">
-              <div class="metric-top"><i data-lucide="flame"></i><span id="hotLeadTrend">Priority</span></div>
-              <strong id="hotLeads">0</strong>
-              <h3>Hot Leads</h3>
-              <p id="hotLeadInsight">High-intent buyers need fast action.</p>
-            </article>
-            <article class="metric-tile accent-warm">
-              <div class="metric-top"><i data-lucide="badge-dollar-sign"></i><span id="warmLeadTrend">Nurture</span></div>
-              <strong id="warmLeads">0</strong>
-              <h3>Warm Leads</h3>
-              <p id="warmLeadInsight">Qualified accounts ready for follow-up.</p>
-            </article>
-            <article class="metric-tile accent-scrap">
-              <div class="metric-top"><i data-lucide="archive-x"></i><span id="scrapLeadTrend">Clean</span></div>
-              <strong id="scrapLeads">0</strong>
-              <h3>Scrap Leads</h3>
-              <p id="scrapLeadInsight">Low-fit leads filtered from priority work.</p>
-            </article>
             <article class="metric-tile accent-blue">
               <div class="metric-top"><i data-lucide="messages-square"></i><span>WhatsApp</span></div>
               <strong id="activeChats">0</strong>
-              <h3>Active Chats</h3>
+              <h3>Active Conversations</h3>
               <p id="activeChatsInsight">Leads with at least one tracked message.</p>
             </article>
             <article class="metric-tile accent-green">
+              <div class="metric-top"><i data-lucide="circle-check-big"></i><span>Orders</span></div>
+              <strong id="ordersConfirmed">0</strong>
+              <h3>Orders Confirmed</h3>
+              <p id="ordersConfirmedInsight">Confirmed or dispatch-ready orders.</p>
+            </article>
+            <article class="metric-tile accent-warm">
+              <div class="metric-top"><i data-lucide="badge-dollar-sign"></i><span>Pipeline</span></div>
+              <strong id="revenuePotential">0</strong>
+              <h3>Revenue Potential</h3>
+              <p id="revenuePotentialInsight">Estimated from active lead momentum.</p>
+            </article>
+            <article class="metric-tile accent-hot">
               <div class="metric-top"><i data-lucide="user-round-check"></i><span>Manual</span></div>
               <strong id="humanQueueCount">0</strong>
-              <h3>Human Queue</h3>
+              <h3>Human Queue Count</h3>
               <p id="humanQueueInsight">Conversations currently marked for takeover.</p>
+            </article>
+          </section>
+
+          <section class="analytics-grid">
+            <article class="panel premium-card chart-card">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Lead Growth Trend</p>
+                  <h2>Momentum by lead temperature.</h2>
+                </div>
+              </div>
+              <div id="leadGrowthChart" class="line-chart"></div>
+            </article>
+
+            <article class="panel premium-card chart-card">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Conversation Volume</p>
+                  <h2>Inbound vs outbound activity.</h2>
+                </div>
+              </div>
+              <div id="conversationVolumeChart" class="bar-chart"></div>
+            </article>
+
+            <article class="panel premium-card chart-card">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Hot/Warm/Scrap Distribution</p>
+                  <h2>Lead quality from message counts.</h2>
+                </div>
+              </div>
+              <div id="temperatureDistribution" class="distribution-chart"></div>
+            </article>
+
+            <article class="panel premium-card chart-card">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Response Performance</p>
+                  <h2>Reply coverage and handoff pressure.</h2>
+                </div>
+              </div>
+              <div id="responsePerformance" class="performance-chart"></div>
             </article>
           </section>
 
@@ -160,23 +160,21 @@
             <article class="panel premium-card">
               <div class="panel-heading">
                 <div>
-                  <p class="eyebrow">Recent Conversations</p>
-                  <h2>Latest WhatsApp activity.</h2>
-                  <span>Compact customer context with quick chat access.</span>
+                  <p class="eyebrow">Human Queue</p>
+                  <h2>Priority conversations.</h2>
                 </div>
               </div>
-              <div id="recentConversationList" class="intel-list compact-intel-list"></div>
+              <div id="humanActionQueueList" class="intel-list"></div>
             </article>
 
             <article class="panel premium-card">
               <div class="panel-heading">
                 <div>
-                  <p class="eyebrow">Human Action Queue</p>
-                  <h2>Conversations that need manual attention.</h2>
-                  <span>Sales and support chats that need a human right now.</span>
+                  <p class="eyebrow">Recent Activity</p>
+                  <h2>What changed recently.</h2>
                 </div>
               </div>
-              <div id="humanActionQueueList" class="intel-list"></div>
+              <div id="recentActivityList" class="timeline-list"></div>
             </article>
           </section>
         </div>
@@ -329,6 +327,70 @@
             <div class="lead-skeleton"></div>
             <div class="lead-skeleton"></div>
           </div>
+        </section>
+      </section>
+
+      <section id="ordersView" class="view">
+        <div class="page-heading-row">
+          <div>
+            <p class="eyebrow">Orders</p>
+            <h1>Order Desk</h1>
+            <span>Extracted WhatsApp order details in clean production cards.</span>
+          </div>
+        </div>
+        <section class="panel premium-card">
+          <div id="ordersList" class="orders-grid"></div>
+        </section>
+      </section>
+
+      <section id="humanView" class="view">
+        <div class="page-heading-row">
+          <div>
+            <p class="eyebrow">Human Queue</p>
+            <h1>Manual Takeover</h1>
+            <span>Priority customer conversations that need a person.</span>
+          </div>
+        </div>
+        <section class="panel premium-card">
+          <div id="humanQueueFullList" class="intel-list"></div>
+        </section>
+      </section>
+
+      <section id="reportsView" class="view">
+        <div class="page-heading-row">
+          <div>
+            <p class="eyebrow">Reports</p>
+            <h1>Performance Reports</h1>
+            <span>High-level CRM reporting based on live WhatsApp and order data.</span>
+          </div>
+        </div>
+        <section class="analytics-grid">
+          <article class="panel premium-card chart-card"><div id="reportsLeadMix" class="distribution-chart"></div></article>
+          <article class="panel premium-card chart-card"><div id="reportsResponse" class="performance-chart"></div></article>
+        </section>
+      </section>
+
+      <section id="settingsView" class="view">
+        <div class="page-heading-row">
+          <div>
+            <p class="eyebrow">Settings</p>
+            <h1>Workspace Settings</h1>
+            <span>Operational controls for the Printwear CRM workspace.</span>
+          </div>
+        </div>
+        <section class="settings-grid">
+          <article class="panel premium-card">
+            <h2>Connected Systems</h2>
+            <div class="tiny-status"><span><i></i>WhatsApp</span><span><i></i>Claude</span><span><i></i>Supabase</span></div>
+          </article>
+          <article class="panel premium-card">
+            <h2>Lead Rules</h2>
+            <div class="profile-detail-list">
+              <span>Hot: <strong>6+ messages</strong></span>
+              <span>Warm: <strong>2-5 messages</strong></span>
+              <span>Scrap: <strong>&lt;2 messages</strong></span>
+            </div>
+          </article>
         </section>
       </section>
     </main>

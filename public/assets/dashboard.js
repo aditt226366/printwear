@@ -20,7 +20,11 @@ const DASHBOARD_POLL_INTERVAL_MS = 4000;
 const views = {
   overview: document.querySelector("#overviewView"),
   chats: document.querySelector("#chatsView"),
-  leads: document.querySelector("#leadsView")
+  leads: document.querySelector("#leadsView"),
+  orders: document.querySelector("#ordersView"),
+  human: document.querySelector("#humanView"),
+  reports: document.querySelector("#reportsView"),
+  settings: document.querySelector("#settingsView")
 };
 
 const premiumLibrariesReady = loadPremiumLibraries();
@@ -150,6 +154,33 @@ function emptyValue(value) {
 
 function confidenceLabel(value) {
   return `${Math.round(Number(value || 0) * 100)}%`;
+}
+
+function flattenOrders(pipeline = state.orderPipeline) {
+  return Object.values(pipeline || {}).flatMap((orders) => (Array.isArray(orders) ? orders : []));
+}
+
+function orderStatusClass(value) {
+  return String(value || "COLLECTING_DETAILS").toLowerCase().replace(/_/g, "-");
+}
+
+function confirmedOrderCount() {
+  return flattenOrders().filter((order) => ["CONFIRMED", "READY_FOR_DISPATCH", "DISPATCHED"].includes(String(order.status))).length;
+}
+
+function revenuePotentialValue(stats = {}) {
+  const hot = Number(stats.hotLeads || 0);
+  const warm = Number(stats.warmLeads || 0);
+  const confirmed = confirmedOrderCount();
+  return hot * 1800 + warm * 650 + confirmed * 2400;
+}
+
+function moneyLabel(value) {
+  return new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0
+  }).format(Number(value || 0));
 }
 
 function isNearBottom(element, threshold = 96) {
@@ -526,8 +557,190 @@ function renderRecentConversationList(leads = []) {
   });
 }
 
-function renderConversationIntel(recentLeads = []) {
+function renderLeadGrowthChart(stats = {}) {
+  const chart = $("#leadGrowthChart");
+  if (!chart) return;
+  const values = [
+    Number(stats.scrapLeads || 0),
+    Number(stats.warmLeads || 0),
+    Number(stats.hotLeads || 0),
+    Number(stats.totalLeads || 0)
+  ];
+  const max = Math.max(1, ...values);
+  const points = values
+    .map((value, index) => `${12 + index * 28},${86 - Math.round((value / max) * 62)}`)
+    .join(" ");
+  chart.innerHTML = `
+    <svg viewBox="0 0 100 100" role="img" aria-label="Lead growth trend">
+      <defs><linearGradient id="leadGlow" x1="0" x2="1"><stop stop-color="#6d5dfc"/><stop offset="1" stop-color="#bb7cff"/></linearGradient></defs>
+      <polyline points="${points}" fill="none" stroke="url(#leadGlow)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></polyline>
+      ${values
+        .map((value, index) => `<circle cx="${12 + index * 28}" cy="${86 - Math.round((value / max) * 62)}" r="3.5"></circle>`)
+        .join("")}
+    </svg>
+    <div class="chart-caption"><span>Scrap</span><span>Warm</span><span>Hot</span><span>Total</span></div>
+  `;
+}
+
+function renderConversationVolumeChart(stats = {}) {
+  const chart = $("#conversationVolumeChart");
+  if (!chart) return;
+  const inbound = Number(stats.inboundMessages || 0);
+  const outbound = Number(stats.outboundMessages || 0);
+  const max = Math.max(1, inbound, outbound);
+  chart.innerHTML = `
+    <div class="volume-bars">
+      <div><span style="height:${Math.max(8, (inbound / max) * 100)}%"></span><b>${inbound}</b><small>Inbound</small></div>
+      <div><span style="height:${Math.max(8, (outbound / max) * 100)}%"></span><b>${outbound}</b><small>Outbound</small></div>
+    </div>
+  `;
+}
+
+function renderTemperatureDistribution(stats = {}) {
+  const target = $("#temperatureDistribution");
+  if (!target) return;
+  const total = Math.max(1, Number(stats.totalLeads || 0));
+  const items = [
+    ["Hot", Number(stats.hotLeads || 0), "hot"],
+    ["Warm", Number(stats.warmLeads || 0), "warm"],
+    ["Scrap", Number(stats.scrapLeads || 0), "scrap"]
+  ];
+  target.innerHTML = `
+    <div class="distribution-meter">
+      ${items
+        .map(([, count, key]) => `<span class="${key}" style="width:${Math.max(4, Math.round((count / total) * 100))}%"></span>`)
+        .join("")}
+    </div>
+    <div class="distribution-legend">
+      ${items
+        .map(([label, count, key]) => `<div><i class="${key}"></i><strong>${count}</strong><span>${label}</span></div>`)
+        .join("")}
+    </div>
+  `;
+}
+
+function renderResponsePerformance(stats = {}) {
+  const target = $("#responsePerformance");
+  if (!target) return;
+  const inbound = Number(stats.inboundMessages || 0);
+  const outbound = Number(stats.outboundMessages || 0);
+  const replyRate = inbound ? Math.min(100, Math.round((outbound / inbound) * 100)) : 0;
+  const humanPressure = Math.min(100, Math.round((humanQueueItems().length / Math.max(1, Number(stats.totalLeads || 0))) * 100));
+  target.innerHTML = `
+    <div class="performance-ring" style="--value:${replyRate}">
+      <strong>${replyRate}%</strong>
+      <span>Reply coverage</span>
+    </div>
+    <div class="performance-lines">
+      <div><span>Human pressure</span><b>${humanPressure}%</b><i><em style="width:${humanPressure}%"></em></i></div>
+      <div><span>Automation coverage</span><b>${Math.max(0, 100 - humanPressure)}%</b><i><em style="width:${Math.max(0, 100 - humanPressure)}%"></em></i></div>
+    </div>
+  `;
+}
+
+function renderAnalytics(stats = {}) {
+  renderLeadGrowthChart(stats);
+  renderConversationVolumeChart(stats);
+  renderTemperatureDistribution(stats);
+  renderResponsePerformance(stats);
+  const reportsLeadMix = $("#reportsLeadMix");
+  const reportsResponse = $("#reportsResponse");
+  if (reportsLeadMix) reportsLeadMix.innerHTML = $("#temperatureDistribution")?.innerHTML || "";
+  if (reportsResponse) reportsResponse.innerHTML = $("#responsePerformance")?.innerHTML || "";
+}
+
+function renderRecentActivity(data = state.latestOverview) {
+  const list = $("#recentActivityList");
+  if (!list) return;
+  const logs = (data?.recentLogs || []).slice(0, 6).map((log) => ({
+    label: log.action || "Workspace event",
+    detail: log.leadName ? `${log.leadName} - ${log.status || "Updated"}` : log.status || "Updated",
+    time: log.createdAt
+  }));
+  const conversationEvents = (data?.recentLeads || []).slice(0, 4).map((lead) => ({
+    label: Number(lead.messageCount || 0) > 0 ? "Customer replied" : "Lead imported",
+    detail: `${lead.name} - ${chatPreviewText(lead.lastMessage)}`,
+    time: lead.lastMessageAt || lead.updatedAt
+  }));
+  const humanEvents = humanQueueItems().slice(0, 3).map((item) => ({
+    label: "Human takeover requested",
+    detail: `${item.name} - ${item.reason}`,
+    time: item.time
+  }));
+  const events = [...humanEvents, ...logs, ...conversationEvents]
+    .sort((a, b) => new Date(b.time || 0).getTime() - new Date(a.time || 0).getTime())
+    .slice(0, 8);
+  list.innerHTML = events.length
+    ? events
+        .map(
+          (event) => `
+            <article class="timeline-item">
+              <span></span>
+              <div><strong>${escapeHtml(event.label)}</strong><small>${escapeHtml(event.detail)}</small></div>
+              <time>${relativeTime(event.time)}</time>
+            </article>
+          `
+        )
+        .join("")
+    : emptyState("No recent activity yet", "New imports, replies, welcomes, orders, and handoffs will appear here.");
+}
+
+function renderHumanQueueViews() {
   renderHumanActionQueue();
+  const fullList = $("#humanQueueFullList");
+  if (!fullList) return;
+  const items = humanQueueItems();
+  fullList.innerHTML = items.length
+    ? items.map((item) => humanActionRow(item)).join("")
+    : emptyState("No human takeover needed right now.", "Priority handoffs will appear here automatically.");
+  fullList.querySelectorAll("[data-open-chat]").forEach((button) => {
+    button.addEventListener("click", () => openLeadChat(button.dataset.openChat));
+  });
+}
+
+function renderOrdersView() {
+  const list = $("#ordersList");
+  if (!list) return;
+  const orders = flattenOrders().sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
+  list.innerHTML = orders.length
+    ? orders
+        .map(
+          (order) => `
+            <article class="modern-order-card">
+              <div class="order-card-top">
+                <div>
+                  <strong>${escapeHtml(order.customerName || "Customer")}</strong>
+                  <small>${escapeHtml(order.phone || "")}</small>
+                </div>
+                <span class="status-badge ${orderStatusClass(order.status)}">${formatOrderStatus(order.status)}</span>
+              </div>
+              <div class="order-fields">
+                <span><b>Product</b>${escapeHtml(emptyValue(order.productType))}</span>
+                <span><b>Qty</b>${escapeHtml(emptyValue(order.quantity))}</span>
+                <span><b>Size</b>${escapeHtml(emptyValue(order.size))}</span>
+                <span><b>Color</b>${escapeHtml(emptyValue(order.color))}</span>
+                <span><b>Location</b>${escapeHtml(emptyValue(order.deliveryLocation))}</span>
+                <span><b>Custom</b>${escapeHtml(emptyValue(order.customization))}</span>
+              </div>
+              <div class="order-card-footer">
+                <span>${confidenceLabel(order.confidenceScore)} confidence</span>
+                <button class="ghost-action" type="button" data-open-chat="${order.leadId}">
+                  <i data-lucide="messages-square"></i>
+                  Open Chat
+                </button>
+              </div>
+            </article>
+          `
+        )
+        .join("")
+    : emptyState("No extracted orders yet", "Order cards will appear once WhatsApp conversations include product details.");
+  list.querySelectorAll("[data-open-chat]").forEach((button) => {
+    button.addEventListener("click", () => openLeadChat(button.dataset.openChat));
+  });
+}
+
+function renderConversationIntel(recentLeads = []) {
+  renderHumanQueueViews();
 }
 
 function renderRecentConversations(recentLeads = []) {
@@ -542,6 +755,8 @@ function renderDerivedOverview() {
   const total = Math.max(1, stats.totalLeads || 0);
   const activeChats = Number(stats.activeChats ?? state.leads.filter((lead) => Number(lead.messageCount || 0) > 0).length);
   const humanCount = humanQueueItems().length;
+  const confirmedOrders = confirmedOrderCount();
+  const revenuePotential = revenuePotentialValue(stats);
 
   setText("sidebarSummary", `${stats.hotLeads} hot / ${stats.warmLeads} warm / ${stats.scrapLeads} scrap`);
   const meter = $("#sidebarMeter");
@@ -554,14 +769,21 @@ function renderDerivedOverview() {
   setText("warmLeadTrend", `${Math.round((stats.warmLeads / total) * 100)}% warm`);
   setText("scrapLeadTrend", `${Math.round((stats.scrapLeads / total) * 100)}% scrap`);
   animateCounter("activeChats", activeChats);
+  animateCounter("ordersConfirmed", confirmedOrders);
+  setText("revenuePotential", moneyLabel(revenuePotential));
   animateCounter("humanQueueCount", humanCount);
   setText("totalLeadInsight", `${totalMessages} tracked messages across the workspace.`);
   setText("hotLeadInsight", `${stats.hotLeads} leads with 6+ messages deserve same-day follow-up.`);
   setText("warmLeadInsight", `${stats.warmLeads} accounts with 2-5 messages need nurture.`);
   setText("scrapLeadInsight", `${stats.scrapLeads} records under 2 messages stay low priority.`);
   setText("activeChatsInsight", `${activeChats} lead${activeChats === 1 ? "" : "s"} have at least one message.`);
+  setText("ordersConfirmedInsight", `${confirmedOrders} confirmed, dispatch-ready, or delivered order${confirmedOrders === 1 ? "" : "s"}.`);
+  setText("revenuePotentialInsight", `${moneyLabel(revenuePotential)} estimated from hot, warm, and confirmed demand.`);
   setText("humanQueueInsight", humanCount ? `${humanCount} conversation${humanCount === 1 ? "" : "s"} need manual attention.` : "No human takeover needed right now.");
 
+  renderAnalytics(stats);
+  renderRecentActivity(state.latestOverview);
+  renderOrdersView();
   renderConversationIntel(recentLeads);
   renderRecentConversations(recentLeads);
 }
@@ -572,6 +794,7 @@ function renderOverview(data) {
     hotLeads: data.hotLeads || 0,
     warmLeads: data.warmLeads || 0,
     scrapLeads: data.scrapLeads || 0,
+    activeChats: data.activeChats || 0,
     inboundMessages: data.inboundMessages || 0,
     outboundMessages: data.outboundMessages || 0
   };
@@ -844,6 +1067,21 @@ async function loadOperationalData() {
   });
   if (queue) state.humanActionQueue = queue.items || [];
   renderHumanActionQueue();
+  renderHumanQueueViews();
+  refreshIcons();
+}
+
+async function loadOrderData() {
+  if (!state.dashboardLoaded) {
+    await loadOverview();
+  }
+  const data = await publicApi("/order-pipeline").catch((error) => {
+    logDashboardError("Order pipeline refresh failed", error);
+    return null;
+  });
+  if (data) state.orderPipeline = data.pipeline || {};
+  renderOrdersView();
+  if (state.latestOverview) renderDerivedOverview();
   refreshIcons();
 }
 
@@ -966,12 +1204,18 @@ function switchView(name) {
   document.querySelectorAll(".nav-item").forEach((button) => {
     const isSegment = button.dataset.temperatureTab !== undefined;
     const isSelectedSegment = name === "leads" && isSegment && (button.dataset.temperatureTab || "") === state.temperatureFilter;
-    const isPrimaryView = !isSegment && !button.classList.contains("nested") && button.dataset.view === name;
+    const isPrimaryView = !isSegment && button.dataset.view === name;
     button.classList.toggle("active", isPrimaryView || isSelectedSegment);
   });
   runMotion(name === "overview" ? ".premium-card, .metric-tile" : ".premium-card, .lead-card, .chat-list-row");
   if (name === "overview") loadOverview();
   if (name === "leads" || name === "chats") loadLeads().catch((error) => showNotice(error.message, true));
+  if (name === "orders") loadOrderData().catch((error) => showNotice(error.message, true));
+  if (name === "human") loadOperationalData().catch((error) => showNotice(error.message, true));
+  if (name === "reports") {
+    if (state.latestOverview) renderAnalytics(state.latestOverview.stats || {});
+    else loadOverview().catch((error) => showNotice(error.message, true));
+  }
 }
 
 async function refreshCurrentView() {
@@ -998,12 +1242,14 @@ async function pollDashboardData() {
     if (selectedLeadId) {
       await loadConversation(selectedLeadId, { forceBottom });
     }
-    if (state.currentView === "overview") {
+    if (state.currentView === "overview" || state.currentView === "reports") {
       const data = await dashboardApi();
       state.latestOverview = data;
       state.humanActionQueue = data.humanActionQueue || data.items || [];
       state.orderPipeline = data.orderPipeline || data.pipeline || {};
       renderDerivedOverview();
+    } else if (state.currentView === "orders") {
+      await loadOrderData();
     } else {
       await loadOperationalData();
     }
