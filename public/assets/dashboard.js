@@ -12,10 +12,13 @@ const state = {
   humanActionQueue: [],
   orderPipeline: {},
   dashboardLoaded: false,
-  isPolling: false
+  isPolling: false,
+  isSendingReply: false,
+  connectionState: "connected"
 };
 
 const DASHBOARD_POLL_INTERVAL_MS = 4000;
+const REQUEST_TIMEOUT_MS = 12000;
 
 const views = {
   overview: document.querySelector("#overviewView"),
@@ -125,14 +128,25 @@ function messageTimestamp(message) {
   return message?.timestamp || message?.createdAt || message?.time || new Date().toISOString();
 }
 
+function hashString(value) {
+  let hash = 0;
+  const input = String(value || "");
+  for (let index = 0; index < input.length; index += 1) {
+    hash = (hash << 5) - hash + input.charCodeAt(index);
+    hash |= 0;
+  }
+  return Math.abs(hash).toString(36);
+}
+
 function normalizeMessage(message) {
   const direction = String(message?.direction || "INBOUND").toUpperCase();
   const text = message?.text ?? message?.content ?? "";
+  const timestamp = messageTimestamp(message);
 
   return {
-    id: String(message?.id || `${direction}-${messageTimestamp(message)}-${text}`),
-    timestamp: messageTimestamp(message),
-    createdAt: messageTimestamp(message),
+    id: String(message?.id || `msg-${hashString(`${direction}|${timestamp}|${text}`)}`),
+    timestamp,
+    createdAt: timestamp,
     direction,
     sender: message?.sender || (direction === "INBOUND" ? "Customer" : "Business"),
     text,
@@ -220,15 +234,62 @@ function showNotice(message, isError = false) {
 }
 
 function logDashboardError(context, error, details = {}) {
+  const safeDetails = Object.fromEntries(
+    Object.entries(details).filter(([key]) => ["status", "path", "leadId", "view", "type"].includes(key))
+  );
   console.error(`[Dashboard] ${context}`, {
-    error,
     message: error instanceof Error ? error.message : String(error),
-    ...details
+    ...safeDetails
   });
 }
 
+function stableStringify(value) {
+  return JSON.stringify(value, (_key, item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return item;
+    return Object.keys(item)
+      .sort()
+      .reduce((result, key) => {
+        result[key] = item[key];
+        return result;
+      }, {});
+  });
+}
+
+function setConnectionStatus(status, message = "") {
+  state.connectionState = status;
+  let indicator = $("#connectionStatus");
+  if (!indicator) {
+    indicator = document.createElement("div");
+    indicator.id = "connectionStatus";
+    indicator.className = "connection-status hidden";
+    document.body.appendChild(indicator);
+  }
+
+  indicator.textContent = message;
+  indicator.classList.toggle("hidden", status === "connected");
+  indicator.classList.toggle("error", status === "error");
+}
+
+async function fetchWithTimeout(resource, options = {}, timeoutMs = REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(resource, {
+      ...options,
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error("Request timed out. Reconnecting...");
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
 async function publicApi(path, options = {}) {
-  const response = await fetch(`/api${path}`, {
+  const response = await fetchWithTimeout(`/api${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -251,7 +312,7 @@ async function publicApi(path, options = {}) {
 }
 
 async function dashboardApi() {
-  const response = await fetch("/api/dashboard", {
+  const response = await fetchWithTimeout("/api/dashboard", {
     headers: {
       Accept: "application/json"
     }
@@ -264,7 +325,7 @@ async function dashboardApi() {
   } catch (error) {
     logDashboardError("Failed to parse /api/dashboard JSON", error, {
       status: response.status,
-      body: text
+      path: "/api/dashboard"
     });
     throw new Error("Dashboard API returned invalid JSON");
   }
@@ -272,7 +333,7 @@ async function dashboardApi() {
   if (!response.ok) {
     logDashboardError("/api/dashboard request failed", new Error(data.error || response.statusText), {
       status: response.status,
-      response: data
+      path: "/api/dashboard"
     });
     throw new Error("Dashboard data could not load");
   }
@@ -291,7 +352,16 @@ function buildQuery(params) {
 
 function setText(id, value) {
   const element = document.querySelector(`#${id}`);
-  if (element) element.textContent = value;
+  if (element && element.textContent !== String(value)) element.textContent = value;
+}
+
+function setHtmlIfChanged(element, html) {
+  if (!element) return false;
+  const nextHtml = String(html);
+  if (element.dataset.htmlSignature === nextHtml) return false;
+  element.innerHTML = nextHtml;
+  element.dataset.htmlSignature = nextHtml;
+  return true;
 }
 
 function mergeLeads(current = [], incoming = []) {
@@ -321,47 +391,86 @@ function syncElement(target, source) {
   target.innerHTML = source.innerHTML;
 }
 
-function renderKeyedChildren(container, items, keyFn, renderFn, emptyHtml) {
+function renderKeyedChildren(container, items, keyFn, renderFn, emptyHtml, options = {}) {
   if (!container) return;
   const scrollTop = container.scrollTop;
 
   if (!items.length) {
     const nextHtml = emptyHtml.trim();
+    const nextSignature = `empty:${nextHtml}`;
+    if (container.dataset.renderSignature === nextSignature) return false;
     if (container.dataset.emptyState !== "true" || container.innerHTML.trim() !== nextHtml) {
       container.innerHTML = nextHtml;
     }
     container.dataset.emptyState = "true";
-    return;
+    container.dataset.renderSignature = nextSignature;
+    return true;
   }
-
-  if (container.dataset.emptyState === "true") {
-    container.innerHTML = "";
-  }
-  container.dataset.emptyState = "false";
 
   const existing = new Map(
     [...container.children]
       .filter((child) => child.dataset?.key)
       .map((child) => [child.dataset.key, child])
   );
-  const fragment = document.createDocumentFragment();
+  const rendered = items
+    .map((item) => {
+      const key = String(keyFn(item));
+      const fresh = htmlToElement(renderFn(item));
+      if (!fresh) return null;
+      fresh.dataset.key = key;
+      const signature = stableStringify({
+        key,
+        html: fresh.outerHTML,
+        data: options.signatureFn ? options.signatureFn(item) : null
+      });
+      fresh.dataset.renderSignature = signature;
+      return { key, fresh, signature };
+    })
+    .filter(Boolean);
+  const nextSignature = stableStringify(rendered.map((item) => [item.key, item.signature]));
+  if (container.dataset.renderSignature === nextSignature && container.dataset.emptyState !== "true") return false;
 
-  items.forEach((item) => {
-    const key = String(keyFn(item));
-    const fresh = htmlToElement(renderFn(item));
-    if (!fresh) return;
-    fresh.dataset.key = key;
-    const node = existing.get(key);
+  if (container.dataset.emptyState === "true") {
+    container.innerHTML = "";
+  }
+  container.dataset.emptyState = "false";
+
+  let changed = false;
+  let cursor = container.firstElementChild;
+  const seen = new Set();
+
+  rendered.forEach(({ key, fresh, signature }) => {
+    seen.add(key);
+    let node = existing.get(key);
     if (node) {
-      syncElement(node, fresh);
-      fragment.appendChild(node);
+      if (node.dataset.renderSignature !== signature) {
+        syncElement(node, fresh);
+        node.dataset.renderSignature = signature;
+        changed = true;
+      }
     } else {
-      fragment.appendChild(fresh);
+      node = fresh;
+      changed = true;
+    }
+
+    if (node !== cursor) {
+      container.insertBefore(node, cursor);
+      changed = true;
+    } else {
+      cursor = cursor?.nextElementSibling || null;
     }
   });
 
-  container.replaceChildren(fragment);
+  [...container.children].forEach((child) => {
+    if (!child.dataset?.key || !seen.has(child.dataset.key)) {
+      child.remove();
+      changed = true;
+    }
+  });
+
+  container.dataset.renderSignature = nextSignature;
   container.scrollTop = scrollTop;
+  return changed;
 }
 
 function bindDelegatedClick(container, key, selector, handler) {
@@ -647,13 +756,14 @@ function renderRecentConversationList(leads = []) {
     .sort((a, b) => new Date(b.lastMessageAt || b.updatedAt).getTime() - new Date(a.lastMessageAt || a.updatedAt).getTime())
     .slice(0, 5);
 
-  list.innerHTML = recent.length
-    ? recent.map(conversationPreviewRow).join("")
-    : emptyState("No recent conversations", "Recent WhatsApp threads will appear here.");
-
-  list.querySelectorAll("[data-open-chat]").forEach((button) => {
-    button.addEventListener("click", () => openLeadChat(button.dataset.openChat));
-  });
+  renderKeyedChildren(
+    list,
+    recent,
+    (lead) => lead.id,
+    conversationPreviewRow,
+    emptyState("No recent conversations", "Recent WhatsApp threads will appear here.")
+  );
+  bindDelegatedClick(list, "recentConversationOpenChat", "[data-open-chat]", (button) => openLeadChat(button.dataset.openChat));
 }
 
 function renderLeadGrowthChart(stats = {}) {
@@ -669,7 +779,9 @@ function renderLeadGrowthChart(stats = {}) {
   const points = values
     .map((value, index) => `${12 + index * 28},${86 - Math.round((value / max) * 62)}`)
     .join(" ");
-  chart.innerHTML = `
+  setHtmlIfChanged(
+    chart,
+    `
     <svg viewBox="0 0 100 100" role="img" aria-label="Lead growth trend">
       <defs><linearGradient id="leadGlow" x1="0" x2="1"><stop stop-color="#6d5dfc"/><stop offset="1" stop-color="#bb7cff"/></linearGradient></defs>
       <polyline points="${points}" fill="none" stroke="url(#leadGlow)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></polyline>
@@ -678,7 +790,8 @@ function renderLeadGrowthChart(stats = {}) {
         .join("")}
     </svg>
     <div class="chart-caption"><span>Scrap</span><span>Warm</span><span>Hot</span><span>Total</span></div>
-  `;
+  `
+  );
 }
 
 function failedSendCount(data = state.latestOverview) {
@@ -707,7 +820,9 @@ function renderTemperatureDistribution(stats = {}) {
     ["Warm", Number(stats.warmLeads || 0), "warm"],
     ["Scrap", Number(stats.scrapLeads || 0), "scrap"]
   ];
-  target.innerHTML = `
+  setHtmlIfChanged(
+    target,
+    `
     <div class="distribution-meter">
       ${items
         .map(([, count, key]) => `<span class="${key}" style="width:${Math.max(4, Math.round((count / total) * 100))}%"></span>`)
@@ -718,7 +833,8 @@ function renderTemperatureDistribution(stats = {}) {
         .map(([label, count, key]) => `<div><i class="${key}"></i><strong>${count}</strong><span>${label}</span></div>`)
         .join("")}
     </div>
-  `;
+  `
+  );
 }
 
 function renderResponsePerformance(stats = {}) {
@@ -728,7 +844,9 @@ function renderResponsePerformance(stats = {}) {
   const outbound = Number(stats.outboundMessages || 0);
   const replyRate = inbound ? Math.min(100, Math.round((outbound / inbound) * 100)) : 0;
   const humanPressure = Math.min(100, Math.round((humanQueueItems().length / Math.max(1, Number(stats.totalLeads || 0))) * 100));
-  target.innerHTML = `
+  setHtmlIfChanged(
+    target,
+    `
     <div class="performance-ring" style="--value:${replyRate}">
       <strong>${replyRate}%</strong>
       <span>Reply coverage</span>
@@ -737,7 +855,8 @@ function renderResponsePerformance(stats = {}) {
       <div><span>Human pressure</span><b>${humanPressure}%</b><i><em style="width:${humanPressure}%"></em></i></div>
       <div><span>Automation coverage</span><b>${Math.max(0, 100 - humanPressure)}%</b><i><em style="width:${Math.max(0, 100 - humanPressure)}%"></em></i></div>
     </div>
-  `;
+  `
+  );
 }
 
 function renderAnalytics(stats = {}) {
@@ -746,8 +865,8 @@ function renderAnalytics(stats = {}) {
   renderResponsePerformance(stats);
   const reportsLeadMix = $("#reportsLeadMix");
   const reportsResponse = $("#reportsResponse");
-  if (reportsLeadMix) reportsLeadMix.innerHTML = $("#temperatureDistribution")?.innerHTML || "";
-  if (reportsResponse) reportsResponse.innerHTML = $("#responsePerformance")?.innerHTML || "";
+  if (reportsLeadMix) setHtmlIfChanged(reportsLeadMix, $("#temperatureDistribution")?.innerHTML || "");
+  if (reportsResponse) setHtmlIfChanged(reportsResponse, $("#responsePerformance")?.innerHTML || "");
 }
 
 function renderWorkspaceInsights(data = state.latestOverview) {
@@ -1110,11 +1229,14 @@ function renderHumanAttentionProfile(lead) {
   if (!card) return;
 
   const requiresHuman = Boolean(lead?.humanTakeoverRequired && !lead?.humanResolvedAt);
-  card.innerHTML = `
+  setHtmlIfChanged(
+    card,
+    `
     <span>Requires human: <strong>${requiresHuman ? "Yes" : "No"}</strong></span>
     <span>Priority: <strong>${escapeHtml(lead?.humanPriority ? pretty(lead.humanPriority) : "--")}</strong></span>
     <span>Reason: <strong>${escapeHtml(lead?.humanReason || "--")}</strong></span>
-  `;
+  `
+  );
 
   const button = $("#profileResolveHumanBtn");
   if (button) button.classList.toggle("hidden", !requiresHuman);
@@ -1124,7 +1246,9 @@ function renderOrderSummaryProfile(order) {
   const card = $("#orderSummaryCard");
   if (!card) return;
 
-  card.innerHTML = `
+  setHtmlIfChanged(
+    card,
+    `
     <span>Product: <strong>${escapeHtml(emptyValue(order?.productType))}</strong></span>
     <span>Quantity: <strong>${escapeHtml(emptyValue(order?.quantity))}</strong></span>
     <span>Size: <strong>${escapeHtml(emptyValue(order?.size))}</strong></span>
@@ -1134,7 +1258,8 @@ function renderOrderSummaryProfile(order) {
     <span>Location: <strong>${escapeHtml(emptyValue(order?.deliveryLocation))}</strong></span>
     <span>Status: <strong>${escapeHtml(order ? formatOrderStatus(order.status) : "--")}</strong></span>
     <span>Confidence: <strong>${order ? confidenceLabel(order.confidenceScore) : "--"}</strong></span>
-  `;
+  `
+  );
 
   document.querySelectorAll("[data-order-action]").forEach((button) => {
     button.toggleAttribute("disabled", !order?.id);
@@ -1214,7 +1339,8 @@ async function loadOverview() {
     renderOverview(data);
   } catch (error) {
     logDashboardError("Overview load failed", error);
-    showNotice("Dashboard data could not load. Check browser console for details.", true);
+    setConnectionStatus("error", "Reconnecting...");
+    showNotice("Dashboard data could not load. Existing data will stay visible while we reconnect.", true);
   }
 }
 
@@ -1271,7 +1397,8 @@ async function loadConversation(leadId, options = {}) {
     );
   } catch (error) {
     logDashboardError("Conversation load failed", error, { leadId });
-    showNotice(error.message, true);
+    setConnectionStatus("error", "Reconnecting...");
+    showNotice("Could not refresh this chat yet. Keeping the current conversation visible.", true);
   }
 }
 
@@ -1299,7 +1426,7 @@ function connectChatEvents() {
     try {
       data = JSON.parse(event.data);
     } catch (error) {
-      logDashboardError("Invalid chat event payload", error, { payload: event.data });
+      logDashboardError("Invalid chat event payload", error, { type: "eventsource" });
       return;
     }
 
@@ -1351,9 +1478,11 @@ function connectChatEvents() {
   events.addEventListener("lead.updated", handleChatEvent);
   events.addEventListener("message.status", handleChatEvent);
   events.addEventListener("order.updated", handleChatEvent);
+  events.addEventListener("open", () => setConnectionStatus("connected"));
 
   events.addEventListener("error", (error) => {
     logDashboardError("Chat event stream error", error);
+    setConnectionStatus("error", "Reconnecting...");
   });
 }
 
@@ -1427,8 +1556,10 @@ async function pollDashboardData() {
     } else {
       await loadOperationalData();
     }
+    setConnectionStatus("connected");
   } catch (error) {
     logDashboardError("Dashboard polling failed", error);
+    setConnectionStatus("error", "Reconnecting...");
   } finally {
     state.isPolling = false;
   }
@@ -1517,7 +1648,7 @@ function bindEvents() {
         };
       }
       showNotice("Human takeover enabled for this thread.");
-      $("#aiStatusIndicator").innerHTML = `<i data-lucide="user-round-check"></i>Human in control`;
+      setHtmlIfChanged($("#aiStatusIndicator"), `<i data-lucide="user-round-check"></i>Human in control`);
       renderHumanActionQueue();
       renderLeadProfile(state.selectedConversation?.lead);
       refreshIcons();
@@ -1550,11 +1681,21 @@ function bindEvents() {
 
 async function sendManualReply(event) {
   event.preventDefault();
-  if (!state.selectedLeadId) return;
+  if (!state.selectedLeadId || state.isSendingReply) return;
 
   const input = $("#chatReplyText");
-  const text = input.value.trim();
+  const sendButton = event.submitter || $("#chatReplyForm button[type='submit']");
+  const text = input?.value.trim() || "";
+  if (!input) return;
   if (!text) return;
+
+  state.isSendingReply = true;
+  if (sendButton) {
+    sendButton.disabled = true;
+    sendButton.dataset.originalHtml = sendButton.innerHTML;
+    sendButton.innerHTML = `<i data-lucide="loader-circle"></i>Sending`;
+    refreshIcons();
+  }
 
   const optimisticMessage = normalizeMessage({
     id: `optimistic-${Date.now()}`,
@@ -1601,6 +1742,14 @@ async function sendManualReply(event) {
     input.value = text;
     logDashboardError("Manual reply failed", error);
     showNotice("Message could not be sent. Check WhatsApp settings and try again.", true);
+  } finally {
+    state.isSendingReply = false;
+    if (sendButton) {
+      sendButton.disabled = false;
+      sendButton.innerHTML = sendButton.dataset.originalHtml || `<i data-lucide="send-horizontal"></i>Send`;
+      delete sendButton.dataset.originalHtml;
+      refreshIcons();
+    }
   }
 }
 
