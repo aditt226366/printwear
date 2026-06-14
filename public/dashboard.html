@@ -329,16 +329,31 @@
       </section>
 
       <section id="humanView" class="view">
-        <div class="page-heading-row">
-          <div>
-            <p class="eyebrow">Human Queue</p>
-            <h1>Manual Takeover</h1>
-            <span>Priority customer conversations that need a person.</span>
+        <div class="human-command-shell">
+          <div class="page-heading-row human-page-heading">
+            <div>
+              <p class="eyebrow">Human Queue</p>
+              <h1>Manual Takeover</h1>
+              <span>Priority customer conversations that need a person.</span>
+            </div>
           </div>
+
+          <section id="humanQueueSummaryCards" class="human-summary-grid" aria-label="Manual takeover summary"></section>
+
+          <section class="human-queue-panel premium-card">
+            <div class="human-queue-toolbar">
+              <div>
+                <p class="eyebrow">Queue List</p>
+                <h2 id="humanQueueListCount">0 Conversations</h2>
+              </div>
+              <div class="human-filter-controls" aria-label="Human queue filters">
+                <button type="button"><i data-lucide="sliders-horizontal"></i>All Priority</button>
+                <button type="button"><i data-lucide="arrow-up-down"></i>Oldest First</button>
+              </div>
+            </div>
+            <div id="humanQueueFullList" class="human-queue-list"></div>
+          </section>
         </div>
-        <section class="panel premium-card scroll-panel human-desk-panel">
-          <div id="humanQueueFullList" class="intel-list scroll-panel-body"></div>
-        </section>
       </section>
 
       <section id="reportsView" class="view">

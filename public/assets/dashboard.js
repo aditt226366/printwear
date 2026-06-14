@@ -87,6 +87,14 @@ function relativeTime(value) {
   return `${Math.round(hours / 24)}d ago`;
 }
 
+function durationLabel(minutes) {
+  const safeMinutes = Math.max(0, Math.round(Number(minutes || 0)));
+  if (safeMinutes < 60) return `${safeMinutes}m`;
+  const hours = Math.round(safeMinutes / 60);
+  if (hours < 24) return `${hours}h`;
+  return `${Math.round(hours / 24)}d`;
+}
+
 function messageCountLabel(lead) {
   const count = Number(lead?.messageCount || 0);
   return `${count} msg${count === 1 ? "" : "s"}`;
@@ -489,9 +497,63 @@ function humanQueueItems() {
   );
 }
 
+function fullHumanQueueItems() {
+  return humanQueueItems().sort(
+    (a, b) => new Date(a.time || 0).getTime() - new Date(b.time || 0).getTime() || priorityRank(a.priority) - priorityRank(b.priority)
+  );
+}
+
+function humanQueueStats() {
+  const items = humanQueueItems();
+  const waitMinutes = items
+    .map((item) => (item.time ? (Date.now() - new Date(item.time).getTime()) / 60000 : 0))
+    .filter((minutes) => Number.isFinite(minutes) && minutes >= 0);
+  const averageWait = waitMinutes.length ? waitMinutes.reduce((sum, minutes) => sum + minutes, 0) / waitMinutes.length : 0;
+  const today = new Date().toDateString();
+  const resolvedToday = state.leads.filter((lead) => lead.humanResolvedAt && new Date(lead.humanResolvedAt).toDateString() === today).length;
+  const inProgress = items.filter((item) => /progress|assigned|working/i.test(`${item.status || ""} ${item.reason || ""}`)).length;
+
+  return {
+    pending: items.length,
+    averageWait,
+    highPriority: items.filter((item) => String(item.priority || "").toUpperCase() === "HIGH").length,
+    inProgress,
+    resolvedToday
+  };
+}
+
+function renderHumanSummaryCards() {
+  const target = $("#humanQueueSummaryCards");
+  if (!target) return;
+  const stats = humanQueueStats();
+  const cards = [
+    { key: "pending", label: "Pending Takeover", value: stats.pending, icon: "user-round-check", accent: "purple" },
+    { key: "wait", label: "Avg Wait Time", value: durationLabel(stats.averageWait), icon: "clock-3", accent: "amber" },
+    { key: "high", label: "High Priority", value: stats.highPriority, icon: "flame", accent: "red" },
+    { key: "progress", label: "In Progress", value: stats.inProgress, icon: "messages-square", accent: "blue" },
+    { key: "resolved", label: "Resolved Today", value: stats.resolvedToday, icon: "circle-check-big", accent: "green" }
+  ];
+
+  renderKeyedChildren(
+    target,
+    cards,
+    (card) => card.key,
+    (card) => `
+      <article class="human-summary-card ${card.accent}">
+        <span><i data-lucide="${card.icon}"></i></span>
+        <div>
+          <strong>${escapeHtml(card.value)}</strong>
+          <small>${escapeHtml(card.label)}</small>
+        </div>
+      </article>
+    `,
+    ""
+  );
+}
+
 function humanActionRow(item) {
   return `
-    <article class="human-action-row compact-human-row">
+    <article class="human-action-row compact-human-row takeover-row">
       <span class="lead-avatar">${escapeHtml(item.name).slice(0, 1).toUpperCase()}</span>
       <span class="human-main">
         <span class="human-top">
@@ -801,16 +863,19 @@ function renderWorkspaceInsights(data = state.latestOverview) {
 function renderHumanQueueViews() {
   renderHumanActionQueue();
   const fullList = $("#humanQueueFullList");
+  renderHumanSummaryCards();
   if (!fullList) return;
-  const items = humanQueueItems();
+  const items = fullHumanQueueItems();
+  setText("humanQueueListCount", `${items.length} Conversation${items.length === 1 ? "" : "s"}`);
   renderKeyedChildren(
     fullList,
     items,
     (item) => item.leadId,
     humanActionRow,
-    emptyState("No human takeover needed right now.", "Priority handoffs will appear here automatically.")
+    emptyState("No conversations need human takeover.", "Priority handoffs will appear here automatically.")
   );
   bindDelegatedClick(fullList, "humanFullOpenChat", "[data-open-chat]", (button) => openLeadChat(button.dataset.openChat));
+  refreshIcons();
 }
 
 function renderOrdersView() {
