@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&display=swap" rel="stylesheet" />
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/assets/styles.css?v=20260615-topnav" />
+    <link rel="stylesheet" href="/assets/styles.css?v=20260615-refined" />
   </head>
   <body class="app-shell">
     <header class="topbar">
@@ -23,8 +23,7 @@
       <nav class="top-nav" aria-label="CRM sections">
         <button class="nav-item active" data-view="overview"><i data-lucide="layout-dashboard"></i>Dashboard</button>
         <button class="nav-item" data-view="chats"><i data-lucide="messages-square"></i>Chats</button>
-        <button class="nav-item" data-view="contacts"><i data-lucide="contact-round"></i>Contacts</button>
-        <button class="nav-item" data-view="bulk"><i data-lucide="send"></i>Bulk Messaging</button>
+        <button class="nav-item" data-view="contacts"><i data-lucide="contact-round"></i>Contacts &amp; Broadcasts</button>
         <button class="nav-item" data-view="campaigns"><i data-lucide="calendar-clock"></i>Campaigns</button>
         <button class="nav-item" data-view="ads"><i data-lucide="megaphone"></i>Ads</button>
         <button class="nav-item" data-view="flows"><i data-lucide="workflow"></i>AI Flows</button>
@@ -170,11 +169,11 @@
       </section>
 
       <section id="chatsView" class="view">
-        <div class="page-heading-row chat-page-heading">
+        <div class="page-heading-row chat-page-heading premium-heading">
           <div>
             <p class="eyebrow">WhatsApp control room</p>
-            <h1>Chats</h1>
-            <span>AI-assisted conversations with human takeover when the deal needs a closer.</span>
+            <h1>Live Conversations</h1>
+            <span>AI-assisted WhatsApp conversations with human takeover.</span>
           </div>
           <span class="status-pill connected"><i data-lucide="bot"></i>AI drafting replies</span>
         </div>
@@ -320,24 +319,25 @@
       </section>
 
       <section id="contactsView" class="view">
-        <div class="page-heading-row compact-heading">
+        <div class="page-heading-row compact-heading premium-heading">
           <div>
-            <p class="eyebrow">Contacts</p>
-            <h1>Contacts</h1>
-            <span>Import, segment, and prepare WhatsApp-safe audiences.</span>
+            <p class="eyebrow">Audience Operations</p>
+            <h1>Contacts &amp; Broadcasts</h1>
+            <span>Import audiences and send approved WhatsApp messages at scale.</span>
           </div>
           <div class="lead-controls">
             <button id="addContactBtn" class="secondary-button" type="button"><i data-lucide="user-plus"></i>Add Contact</button>
+            <button id="csvImportShortcutBtn" class="secondary-button" type="button"><i data-lucide="upload"></i>Import CSV</button>
             <button id="importSheetsContactsBtn" class="secondary-button" type="button"><i data-lucide="file-spreadsheet"></i>Google Sheets</button>
           </div>
         </div>
 
-        <section class="automation-grid">
+        <section class="broadcast-command-grid">
           <article class="panel premium-card automation-panel">
             <div class="panel-heading">
               <div>
-                <p class="eyebrow">CSV Import</p>
-                <h2>Upload contacts</h2>
+                <p class="eyebrow">Import &amp; Segment</p>
+                <h2>Contact intake</h2>
               </div>
             </div>
             <form id="csvImportForm" class="automation-form">
@@ -348,21 +348,55 @@
               <textarea id="csvTextInput" rows="6" placeholder="name,phone,tags,source"></textarea>
               <button class="primary-button" type="submit"><i data-lucide="upload"></i>Import CSV</button>
             </form>
-          </article>
-
-          <article class="panel premium-card automation-panel">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">Segments</p>
-                <h2>Search and filter</h2>
-              </div>
-            </div>
-            <div class="automation-filters">
+            <div class="automation-filters broadcast-filters">
               <div class="panel-search"><i data-lucide="search"></i><input id="contactSearch" placeholder="Search name or phone" /></div>
               <div class="input-shell"><i data-lucide="tag"></i><select id="contactTagFilter"><option value="">All tags</option></select></div>
               <div class="input-shell"><i data-lucide="activity"></i><select id="contactStatusFilter"><option value="">All statuses</option></select></div>
               <div class="input-shell"><i data-lucide="radio"></i><select id="contactSourceFilter"><option value="">All sources</option></select></div>
             </div>
+          </article>
+
+          <article class="panel premium-card automation-panel broadcast-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Broadcast Composer</p>
+                <h2>Approved WhatsApp template</h2>
+              </div>
+            </div>
+            <form id="bulkSendForm" class="automation-form broadcast-form">
+              <label>Broadcast name<input id="bulkName" placeholder="June catalog outreach" /></label>
+              <div class="form-row">
+                <label>Template selector<input id="bulkTemplateName" placeholder="approved_template_name" /></label>
+                <label>Language<input id="bulkTemplateLanguage" placeholder="en_US" /></label>
+              </div>
+              <div class="form-row">
+                <label>Audience tag<input id="bulkAudienceTag" placeholder="optional tag" /></label>
+                <label>Source<input id="bulkAudienceSource" placeholder="optional source" /></label>
+              </div>
+              <div class="broadcast-preview">
+                <span><i data-lucide="message-square-text"></i>Broadcast preview</span>
+                <p id="broadcastPreviewText">Selected contacts will receive the approved WhatsApp template. Each sent message is stored in CRM chat history and reflected in WABA history when coexistence is enabled.</p>
+              </div>
+              <button id="sendSelectedBulkBtn" class="primary-button" type="submit"><i data-lucide="send-horizontal"></i>Send broadcast</button>
+            </form>
+          </article>
+
+          <article class="panel premium-card automation-panel broadcast-progress-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Progress Tracker</p>
+                <h2>Broadcast delivery</h2>
+              </div>
+              <button id="refreshBulkJobsBtn" class="secondary-button icon-button" type="button" aria-label="Refresh broadcast jobs"><i data-lucide="refresh-cw"></i></button>
+            </div>
+            <div class="broadcast-stat-grid">
+              <span><strong id="broadcastSentCount">0</strong><small>Sent</small></span>
+              <span><strong id="broadcastFailedCount">0</strong><small>Failed</small></span>
+              <span><strong id="broadcastDeliveredCount">0</strong><small>Delivered</small></span>
+              <span><strong id="broadcastReadCount">0</strong><small>Read</small></span>
+              <span><strong id="broadcastQueuedCount">0</strong><small>Queued</small></span>
+            </div>
+            <div id="bulkJobsList" class="automation-list"></div>
           </article>
         </section>
 
@@ -374,63 +408,19 @@
             </div>
             <div class="lead-controls">
               <button id="selectAllContactsBtn" class="secondary-button" type="button"><i data-lucide="check-square"></i>Select all</button>
-              <button id="sendSelectedBulkBtn" class="primary-button" type="button"><i data-lucide="send"></i>Send template</button>
+              <button id="focusBroadcastBtn" class="primary-button" type="button"><i data-lucide="send"></i>Prepare broadcast</button>
             </div>
           </div>
           <div id="contactsTable" class="data-table"></div>
         </section>
       </section>
 
-      <section id="bulkView" class="view">
-        <div class="page-heading-row compact-heading">
-          <div>
-            <p class="eyebrow">Bulk Messaging</p>
-            <h1>Bulk Messaging</h1>
-            <span>Send approved WhatsApp templates with backend throttling and CRM history.</span>
-          </div>
-        </div>
-
-        <section class="automation-grid">
-          <article class="panel premium-card automation-panel">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">Template Send</p>
-                <h2>Create bulk send</h2>
-              </div>
-            </div>
-            <form id="bulkSendForm" class="automation-form">
-              <label>Send name<input id="bulkName" placeholder="June catalog outreach" /></label>
-              <div class="form-row">
-                <label>Template name<input id="bulkTemplateName" placeholder="approved_template_name" /></label>
-                <label>Language<input id="bulkTemplateLanguage" placeholder="en_US" /></label>
-              </div>
-              <div class="form-row">
-                <label>Audience tag<input id="bulkAudienceTag" placeholder="optional tag" /></label>
-                <label>Source<input id="bulkAudienceSource" placeholder="optional source" /></label>
-              </div>
-              <button class="primary-button" type="submit"><i data-lucide="send-horizontal"></i>Queue bulk send</button>
-            </form>
-          </article>
-
-          <article class="panel premium-card automation-panel">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">Progress</p>
-                <h2>Latest sending jobs</h2>
-              </div>
-              <button id="refreshBulkJobsBtn" class="secondary-button icon-button" type="button" aria-label="Refresh bulk jobs"><i data-lucide="refresh-cw"></i></button>
-            </div>
-            <div id="bulkJobsList" class="automation-list"></div>
-          </article>
-        </section>
-      </section>
-
       <section id="campaignsView" class="view">
-        <div class="page-heading-row compact-heading">
+        <div class="page-heading-row compact-heading premium-heading">
           <div>
             <p class="eyebrow">Campaigns</p>
-            <h1>Campaigns</h1>
-            <span>Schedule WhatsApp template campaigns that run from the backend worker.</span>
+            <h1>Campaign Studio</h1>
+            <span>Schedule, launch, and track WhatsApp outreach.</span>
           </div>
         </div>
 
@@ -483,11 +473,11 @@
       </section>
 
       <section id="adsView" class="view">
-        <div class="page-heading-row compact-heading">
+        <div class="page-heading-row compact-heading premium-heading">
           <div>
             <p class="eyebrow">Ads</p>
-            <h1>Ads Manager</h1>
-            <span>Plan click-to-WhatsApp ad drafts and preserve lead source attribution.</span>
+            <h1>WhatsApp Ads Planner</h1>
+            <span>Plan click-to-WhatsApp ads and preview opening messages.</span>
           </div>
           <span id="metaAdsStatus" class="status-pill"><i data-lucide="plug-zap"></i>Meta Ads not connected</span>
         </div>
@@ -534,44 +524,67 @@
       </section>
 
       <section id="flowsView" class="view">
-        <div class="page-heading-row compact-heading">
+        <div class="page-heading-row compact-heading premium-heading">
           <div>
             <p class="eyebrow">AI Flows</p>
-            <h1>AI Workflow Builder</h1>
-            <span>Build original WhatsApp automations that execute on inbound webhooks.</span>
+            <h1>AI Flow Builder</h1>
+            <span>Design automated WhatsApp journeys with triggers, actions, and human fallback.</span>
           </div>
           <div class="lead-controls">
+            <button id="createWorkflowBtn" class="secondary-button" type="button"><i data-lucide="plus"></i>Create Flow</button>
+            <button id="testWorkflowBtn" class="secondary-button" type="button"><i data-lucide="flask-conical"></i>Test Flow</button>
             <button id="saveWorkflowBtn" class="primary-button" type="button"><i data-lucide="save"></i>Save workflow</button>
             <button id="toggleWorkflowActiveBtn" class="secondary-button" type="button"><i data-lucide="power"></i>Inactive</button>
           </div>
         </div>
 
+        <section class="flow-command-grid">
+          <article class="panel premium-card flow-list-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Flow List</p>
+                <h2>Automation library</h2>
+                <span id="workflowListSummary">Saved WhatsApp journeys and trigger status.</span>
+              </div>
+            </div>
+            <div id="workflowList" class="automation-list flow-list"></div>
+          </article>
+          <article class="panel premium-card flow-logs-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Workflow Logs</p>
+                <h2>Recent execution signals</h2>
+              </div>
+            </div>
+            <div id="workflowLogs" class="workflow-logs">
+              <article><strong>Setup monitor</strong><span>Flow execution logs appear here after active triggers run.</span></article>
+              <article><strong>Fallback ready</strong><span>Failed workflow steps request human takeover.</span></article>
+            </div>
+          </article>
+        </section>
+
         <section class="flow-builder premium-card">
           <aside class="flow-block-panel">
             <div>
               <p class="eyebrow">Flow Start</p>
-              <button draggable="true" data-flow-block="start" data-flow-label="Start"><i data-lucide="play"></i>Start trigger</button>
+              <button draggable="true" data-flow-block="start" data-flow-label="Start trigger"><i data-lucide="play"></i>Start trigger</button>
             </div>
             <div>
               <p class="eyebrow">Messages</p>
-              <button draggable="true" data-flow-block="text" data-flow-label="Text message"><i data-lucide="message-square"></i>Text message</button>
-              <button draggable="true" data-flow-block="template" data-flow-label="Template message"><i data-lucide="badge-check"></i>Template message</button>
-              <button draggable="true" data-flow-block="media" data-flow-label="Image/media"><i data-lucide="image"></i>Image/media</button>
-              <button draggable="true" data-flow-block="button" data-flow-label="Button message"><i data-lucide="square-mouse-pointer"></i>Button message</button>
-              <button draggable="true" data-flow-block="list" data-flow-label="List message"><i data-lucide="list"></i>List message</button>
+              <button draggable="true" data-flow-block="text" data-flow-label="Send message"><i data-lucide="message-square"></i>Send message</button>
+              <button draggable="true" data-flow-block="question" data-flow-label="Ask question"><i data-lucide="circle-help"></i>Ask question</button>
+              <button draggable="true" data-flow-block="template" data-flow-label="Send template"><i data-lucide="badge-check"></i>Send template</button>
             </div>
             <div>
               <p class="eyebrow">Actions</p>
-              <button draggable="true" data-flow-block="question" data-flow-label="Ask question"><i data-lucide="circle-help"></i>Ask question</button>
-              <button draggable="true" data-flow-block="location" data-flow-label="Ask location"><i data-lucide="map-pin"></i>Ask location</button>
-              <button draggable="true" data-flow-block="address" data-flow-label="Ask address"><i data-lucide="map"></i>Ask address</button>
-              <button draggable="true" data-flow-block="add_tag" data-flow-label="Add tag"><i data-lucide="tag"></i>Add tag</button>
-              <button draggable="true" data-flow-block="set_attribute" data-flow-label="Set attribute"><i data-lucide="braces"></i>Set attribute</button>
-              <button draggable="true" data-flow-block="human_takeover" data-flow-label="Human takeover"><i data-lucide="user-round-check"></i>Human takeover</button>
-              <button draggable="true" data-flow-block="api_request" data-flow-label="API request"><i data-lucide="cloud-cog"></i>API request</button>
+              <button draggable="true" data-flow-block="delay" data-flow-label="Wait for reply"><i data-lucide="timer"></i>Wait for reply</button>
               <button draggable="true" data-flow-block="condition" data-flow-label="Condition"><i data-lucide="git-branch"></i>Condition</button>
-              <button draggable="true" data-flow-block="delay" data-flow-label="Delay"><i data-lucide="timer"></i>Delay/wait</button>
-              <button draggable="true" data-flow-block="connect" data-flow-label="Connect flow"><i data-lucide="waypoints"></i>Connect flow</button>
+              <button draggable="true" data-flow-block="add_tag" data-flow-label="Add tag"><i data-lucide="tag"></i>Add tag</button>
+              <button draggable="true" data-flow-block="set_status" data-flow-label="Set lead status"><i data-lucide="activity"></i>Set lead status</button>
+              <button draggable="true" data-flow-block="human_takeover" data-flow-label="Request human takeover"><i data-lucide="user-round-check"></i>Human takeover</button>
+              <button draggable="true" data-flow-block="order_draft" data-flow-label="Create order draft"><i data-lucide="package-plus"></i>Create order draft</button>
+              <button draggable="true" data-flow-block="api_request" data-flow-label="API request"><i data-lucide="cloud-cog"></i>API request</button>
+              <button draggable="true" data-flow-block="end" data-flow-label="End flow"><i data-lucide="circle-stop"></i>End flow</button>
             </div>
           </aside>
 
@@ -579,10 +592,11 @@
             <div class="flow-toolbar">
               <input id="workflowName" placeholder="Workflow name" />
               <select id="workflowTriggerType" aria-label="Trigger type">
-                <option value="KEYWORD">Keyword trigger</option>
-                <option value="REGEX">Regex trigger</option>
-                <option value="TEMPLATE">Template trigger</option>
-                <option value="AD">Ad trigger</option>
+                <option value="KEYWORD">Keyword</option>
+                <option value="TEMPLATE">Template reply</option>
+                <option value="AD">Ad source</option>
+                <option value="REGEX">Tag</option>
+                <option value="KEYWORD">Manual</option>
               </select>
               <input id="workflowTriggerValue" placeholder="Trigger value" />
               <button id="flowZoomOutBtn" class="secondary-button icon-button" type="button" aria-label="Zoom out"><i data-lucide="zoom-out"></i></button>
@@ -595,18 +609,17 @@
             <p class="eyebrow">Configuration</p>
             <h2 id="flowConfigTitle">Select a block</h2>
             <form id="flowConfigForm" class="automation-form"></form>
-            <div id="workflowList" class="automation-list"></div>
           </aside>
         </section>
       </section>
 
       <section id="ordersView" class="view">
         <div class="order-command-shell">
-          <div class="page-heading-row order-page-heading">
+          <div class="page-heading-row order-page-heading premium-heading">
             <div>
               <p class="eyebrow">Orders</p>
-              <h1>Order Desk</h1>
-              <span>Confirmed, pending, and dispatch-ready customer orders.</span>
+              <h1>Order Command Center</h1>
+              <span>Review confirmed orders, quantities, delivery locations, and dispatch status.</span>
             </div>
           </div>
 
@@ -630,11 +643,11 @@
 
       <section id="humanView" class="view">
         <div class="human-command-shell">
-          <div class="page-heading-row human-page-heading">
+          <div class="page-heading-row human-page-heading premium-heading">
             <div>
               <p class="eyebrow">Human Queue</p>
-              <h1>Manual Takeover</h1>
-              <span>Priority customer conversations that need a person.</span>
+              <h1>Human Takeover Queue</h1>
+              <span>Priority conversations that need manual attention.</span>
             </div>
           </div>
 
@@ -657,11 +670,11 @@
       </section>
 
       <section id="reportsView" class="view">
-        <div class="page-heading-row">
+        <div class="page-heading-row premium-heading">
           <div>
             <p class="eyebrow">Reports</p>
-            <h1>Performance Reports</h1>
-            <span>High-level CRM reporting based on live WhatsApp and order data.</span>
+            <h1>Performance Intelligence</h1>
+            <span>Track WhatsApp response quality, lead mix, and operational momentum.</span>
           </div>
         </div>
         <section class="analytics-grid">
@@ -671,11 +684,11 @@
       </section>
 
       <section id="settingsView" class="view">
-        <div class="page-heading-row">
+        <div class="page-heading-row premium-heading">
           <div>
             <p class="eyebrow">Settings</p>
             <h1>Workspace Settings</h1>
-            <span>Operational controls for the Printwear CRM workspace.</span>
+            <span>Configure connected systems, lead rules, and operating defaults.</span>
           </div>
         </div>
         <section class="settings-grid">
@@ -695,6 +708,6 @@
       </section>
     </main>
 
-    <script src="/assets/dashboard.js?v=20260615-topnav"></script>
+    <script src="/assets/dashboard.js?v=20260615-refined"></script>
   </body>
 </html>

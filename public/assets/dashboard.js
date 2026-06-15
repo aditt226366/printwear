@@ -54,7 +54,6 @@ const views = {
   chats: document.querySelector("#chatsView"),
   leads: document.querySelector("#leadsView"),
   contacts: document.querySelector("#contactsView"),
-  bulk: document.querySelector("#bulkView"),
   campaigns: document.querySelector("#campaignsView"),
   ads: document.querySelector("#adsView"),
   flows: document.querySelector("#flowsView"),
@@ -1528,10 +1527,14 @@ async function loadContacts() {
     state.contacts = data.contacts || [];
     state.contactFacets = data.facets || state.contactFacets;
     renderContacts();
+    loadBulkJobs().catch((error) => {
+      if (!error.setupRequired) showNotice(error.message, true);
+    });
   } catch (error) {
     if (error.setupRequired) {
       state.contacts = [];
-      renderSetupRequired(["#contactsTable"], error);
+      state.bulkJobs = [];
+      renderSetupRequired(["#contactsTable", "#bulkJobsList"], error);
       setText("contactTableTitle", "Setup Required");
       return;
     }
@@ -1613,6 +1616,21 @@ async function loadBulkJobs() {
 function renderBulkJobs() {
   const target = $("#bulkJobsList");
   if (!target) return;
+  const totals = state.bulkJobs.reduce(
+    (result, job) => ({
+      sent: result.sent + Number(job.sentCount || 0),
+      failed: result.failed + Number(job.failedCount || 0),
+      queued: result.queued + Number(job.queuedCount || 0),
+      delivered: result.delivered + (job.recipients || []).filter((recipient) => String(recipient.status).toUpperCase() === "DELIVERED").length,
+      read: result.read + (job.recipients || []).filter((recipient) => String(recipient.status).toUpperCase() === "READ").length
+    }),
+    { sent: 0, failed: 0, queued: 0, delivered: 0, read: 0 }
+  );
+  setText("broadcastSentCount", totals.sent);
+  setText("broadcastFailedCount", totals.failed);
+  setText("broadcastQueuedCount", totals.queued);
+  setText("broadcastDeliveredCount", totals.delivered);
+  setText("broadcastReadCount", totals.read);
   renderKeyedChildren(
     target,
     state.bulkJobs,
@@ -1789,22 +1807,18 @@ function renderAdPreview() {
 }
 
 const flowDefaults = {
-  start: { label: "Start", config: {} },
-  text: { label: "Text message", config: { text: "Thanks for reaching out. How can we help with your printwear order?" } },
-  template: { label: "Template message", config: { templateName: "", templateLanguage: "en_US" } },
-  media: { label: "Image/media", config: { url: "", caption: "" } },
-  button: { label: "Button message", config: { text: "Choose an option", buttons: "Pricing, Catalog, Talk to team" } },
-  list: { label: "List message", config: { text: "Select a category", items: "T-shirts, Uniforms, Hoodies" } },
+  start: { label: "Start trigger", config: { trigger: "keyword" } },
+  text: { label: "Send message", config: { text: "Thanks for reaching out. How can we help with your printwear order?" } },
+  template: { label: "Send template", config: { templateName: "", templateLanguage: "en_US" } },
   question: { label: "Ask question", config: { text: "What quantity do you need?" } },
-  location: { label: "Ask location", config: { text: "Please share your delivery location." } },
-  address: { label: "Ask address", config: { text: "Please share your delivery address." } },
-  add_tag: { label: "Add tag", config: { tag: "workflow" } },
-  set_attribute: { label: "Set attribute", config: { key: "interest", value: "printwear" } },
-  human_takeover: { label: "Human takeover", config: { reason: "Workflow requested human follow-up" } },
-  api_request: { label: "API request", config: { url: "", method: "POST" } },
+  delay: { label: "Wait for reply", config: { seconds: 2 } },
   condition: { label: "Condition", config: { field: "message", contains: "quote" } },
-  delay: { label: "Delay", config: { seconds: 2 } },
-  connect: { label: "Connect flow", config: { flowId: "" } }
+  add_tag: { label: "Add tag", config: { tag: "workflow" } },
+  set_status: { label: "Set lead status", config: { status: "WARM" } },
+  human_takeover: { label: "Request human takeover", config: { reason: "Workflow requested human follow-up" } },
+  order_draft: { label: "Create order draft", config: { productType: "Custom uniforms", confidence: "draft" } },
+  api_request: { label: "API request", config: { url: "", method: "POST" } },
+  end: { label: "End flow", config: { outcome: "completed" } }
 };
 
 async function loadWorkflows() {
@@ -1848,19 +1862,25 @@ function loadWorkflowIntoDraft(workflow) {
 function renderWorkflowList() {
   const target = $("#workflowList");
   if (!target) return;
+  setText("workflowListSummary", `${state.workflows.length} saved flow${state.workflows.length === 1 ? "" : "s"} in this workspace.`);
   setHtmlIfChanged($("#toggleWorkflowActiveBtn"), `<i data-lucide="power"></i>${state.workflowDraft.isActive ? "Active" : "Inactive"}`);
   renderKeyedChildren(
     target,
     state.workflows,
     (workflow) => workflow.id,
     (workflow) => `
-      <article class="automation-row ${workflow.id === state.activeWorkflowId ? "active" : ""}" data-load-workflow="${escapeHtml(workflow.id)}">
-        <div><strong>${escapeHtml(workflow.name)}</strong><small>${escapeHtml(pretty(workflow.triggerType))}: ${escapeHtml(workflow.triggerValue)}</small></div>
+      <article class="flow-list-row ${workflow.id === state.activeWorkflowId ? "active" : ""}" data-load-workflow="${escapeHtml(workflow.id)}">
+        <span class="flow-list-icon"><i data-lucide="${workflow.isActive ? "zap" : "pause"}"></i></span>
+        <div>
+          <strong>${escapeHtml(workflow.name)}</strong>
+          <small>${escapeHtml(pretty(workflow.triggerType))}: ${escapeHtml(workflow.triggerValue)} - ${workflow.definition?.nodes?.length || 0} blocks</small>
+        </div>
         <mark class="${workflow.isActive ? "green" : "neutral"}">${workflow.isActive ? "Active" : "Inactive"}</mark>
       </article>
     `,
     emptyState("No saved workflows yet.", "Save this canvas to create your first flow.")
   );
+  renderWorkflowLogs();
   bindDelegatedClick(target, "loadWorkflow", "[data-load-workflow]", (row) => {
     const workflow = state.workflows.find((item) => item.id === row.dataset.loadWorkflow);
     if (workflow) loadWorkflowIntoDraft(workflow);
@@ -1868,10 +1888,53 @@ function renderWorkflowList() {
   refreshIcons();
 }
 
+function renderWorkflowLogs() {
+  const target = $("#workflowLogs");
+  if (!target) return;
+  const logs = state.workflows.flatMap((workflow) =>
+    (workflow.executionLogs || []).map((log) => ({
+      ...log,
+      workflowName: workflow.name
+    }))
+  );
+
+  if (!logs.length) {
+    target.innerHTML = `
+      <article><strong>No workflow runs yet</strong><span>Execution logs appear after active triggers match inbound WhatsApp messages.</span></article>
+      <article><strong>Human fallback ready</strong><span>Failed workflow steps request human takeover automatically.</span></article>
+    `;
+    return;
+  }
+
+  target.innerHTML = logs
+    .slice(0, 6)
+    .map((log) => `
+      <article>
+        <strong>${escapeHtml(log.workflowName)}</strong>
+        <span>${escapeHtml(pretty(log.status))}${log.stepKey ? ` - ${escapeHtml(log.stepKey)}` : ""}</span>
+      </article>
+    `)
+    .join("");
+}
+
 function flowNodeHtml(node) {
+  const icon = {
+    start: "play",
+    text: "message-square",
+    template: "badge-check",
+    question: "circle-help",
+    delay: "timer",
+    condition: "git-branch",
+    add_tag: "tag",
+    set_status: "activity",
+    human_takeover: "user-round-check",
+    order_draft: "package-plus",
+    api_request: "cloud-cog",
+    end: "circle-stop"
+  }[node.type] || "workflow";
   return `
     <article class="flow-node ${state.workflowDraft.selectedNodeId === node.id ? "selected" : ""}" data-flow-node="${escapeHtml(node.id)}" style="left:${node.x || 80}px; top:${node.y || 80}px">
-      <span><i data-lucide="${node.type === "start" ? "play" : node.type === "template" ? "badge-check" : node.type === "delay" ? "timer" : "message-square"}"></i>${escapeHtml(node.label || pretty(node.type))}</span>
+      <span><i data-lucide="${icon}"></i>${escapeHtml(node.label || pretty(node.type))}</span>
       <small>${escapeHtml(pretty(node.type))}</small>
       <button class="flow-connect" type="button" data-flow-connect="${escapeHtml(node.id)}" aria-label="Connect block"><i data-lucide="waypoints"></i></button>
     </article>
@@ -1937,6 +2000,30 @@ function addFlowNode(type, x = 180, y = 180) {
   state.workflowDraft.definition.nodes.push(node);
   state.workflowDraft.selectedNodeId = node.id;
   renderFlowCanvas();
+}
+
+function resetWorkflowDraft() {
+  const id = `start-${Date.now()}`;
+  state.activeWorkflowId = null;
+  state.workflowDraft = {
+    ...state.workflowDraft,
+    id: null,
+    name: "",
+    triggerType: "KEYWORD",
+    triggerValue: "",
+    isActive: false,
+    selectedNodeId: id,
+    pendingConnectionId: null,
+    definition: {
+      nodes: [{ id, type: "start", label: "Start trigger", x: 90, y: 120, config: { trigger: "keyword" } }],
+      edges: []
+    }
+  };
+  if ($("#workflowName")) $("#workflowName").value = "";
+  if ($("#workflowTriggerType")) $("#workflowTriggerType").value = "KEYWORD";
+  if ($("#workflowTriggerValue")) $("#workflowTriggerValue").value = "";
+  renderFlowCanvas();
+  renderWorkflowList();
 }
 
 async function saveWorkflow() {
@@ -2055,7 +2142,6 @@ function switchView(name) {
   if (name === "overview") loadOverview();
   if (name === "leads" || name === "chats") loadLeads().catch((error) => showNotice(error.message, true));
   if (name === "contacts") loadContacts().catch((error) => showNotice(error.message, true));
-  if (name === "bulk") Promise.all([loadContacts(), loadBulkJobs()]).catch((error) => showNotice(error.message, true));
   if (name === "campaigns") loadCampaigns().catch((error) => showNotice(error.message, true));
   if (name === "ads") loadAds().catch((error) => showNotice(error.message, true));
   if (name === "flows") loadWorkflows().catch((error) => showNotice(error.message, true));
@@ -2222,9 +2308,14 @@ function bindEvents() {
     renderContacts();
   });
 
-  $("#sendSelectedBulkBtn")?.addEventListener("click", () => {
-    switchView("bulk");
+  $("#focusBroadcastBtn")?.addEventListener("click", () => {
+    $("#bulkName")?.scrollIntoView({ behavior: "smooth", block: "center" });
     $("#bulkName")?.focus();
+  });
+
+  $("#csvImportShortcutBtn")?.addEventListener("click", () => {
+    $("#csvFileInput")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    $("#csvFileInput")?.focus();
   });
 
   $("#bulkSendForm")?.addEventListener("submit", async (event) => {
@@ -2384,6 +2475,16 @@ function bindEvents() {
   $("#flowZoomOutBtn")?.addEventListener("click", () => {
     state.workflowDraft.zoom = Math.max(0.6, state.workflowDraft.zoom - 0.1);
     renderFlowCanvas();
+  });
+
+  $("#createWorkflowBtn")?.addEventListener("click", () => {
+    resetWorkflowDraft();
+    showNotice("New flow canvas ready.");
+  });
+
+  $("#testWorkflowBtn")?.addEventListener("click", () => {
+    const blocks = state.workflowDraft.definition.nodes.length;
+    showNotice(`Test prepared for ${blocks} block${blocks === 1 ? "" : "s"}. Save and activate to run from inbound WhatsApp triggers.`);
   });
 
   $("#saveWorkflowBtn")?.addEventListener("click", () => {
