@@ -14,7 +14,36 @@ const state = {
   dashboardLoaded: false,
   isPolling: false,
   isSendingReply: false,
-  connectionState: "connected"
+  connectionState: "connected",
+  contacts: [],
+  contactFacets: { tags: [], sources: [], statuses: [] },
+  selectedContactIds: new Set(),
+  contactFilters: { search: "", tag: "", status: "", source: "" },
+  bulkJobs: [],
+  campaigns: [],
+  selectedCampaignId: null,
+  adDrafts: [],
+  metaAdsConnected: false,
+  workflows: [],
+  activeWorkflowId: null,
+  workflowDraft: {
+    id: null,
+    name: "",
+    triggerType: "KEYWORD",
+    triggerValue: "hi",
+    isActive: false,
+    zoom: 1,
+    panX: 0,
+    panY: 0,
+    selectedNodeId: null,
+    pendingConnectionId: null,
+    definition: {
+      nodes: [
+        { id: "start-1", type: "start", label: "Start", x: 80, y: 120, config: {} }
+      ],
+      edges: []
+    }
+  }
 };
 
 const DASHBOARD_POLL_INTERVAL_MS = 4000;
@@ -24,6 +53,11 @@ const views = {
   overview: document.querySelector("#overviewView"),
   chats: document.querySelector("#chatsView"),
   leads: document.querySelector("#leadsView"),
+  contacts: document.querySelector("#contactsView"),
+  bulk: document.querySelector("#bulkView"),
+  campaigns: document.querySelector("#campaignsView"),
+  ads: document.querySelector("#adsView"),
+  flows: document.querySelector("#flowsView"),
   orders: document.querySelector("#ordersView"),
   human: document.querySelector("#humanView"),
   reports: document.querySelector("#reportsView"),
@@ -1414,6 +1448,425 @@ async function refreshChatStateForLead(leadId, options = {}) {
   }
 }
 
+function commaList(value) {
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function selectedAudienceFromContacts(extra = {}) {
+  const leadIds = [...state.selectedContactIds];
+  return {
+    ...(leadIds.length ? { leadIds } : {}),
+    ...(extra.tag ? { tag: extra.tag } : {}),
+    ...(extra.source ? { source: extra.source } : {}),
+    ...(extra.status ? { status: extra.status } : {}),
+    ...(!leadIds.length && state.contactFilters.tag ? { tag: state.contactFilters.tag } : {}),
+    ...(!leadIds.length && state.contactFilters.source ? { source: state.contactFilters.source } : {}),
+    ...(!leadIds.length && state.contactFilters.status ? { status: state.contactFilters.status } : {})
+  };
+}
+
+function statusTone(status) {
+  const value = String(status || "").toLowerCase();
+  if (["sent", "completed", "read", "delivered", "running"].includes(value)) return "green";
+  if (["failed", "cancelled"].includes(value)) return "red";
+  if (["scheduled", "queued", "draft", "paused"].includes(value)) return "amber";
+  return "neutral";
+}
+
+function renderSelectOptions(select, values, currentValue, label) {
+  if (!select) return;
+  select.innerHTML = [`<option value="">${escapeHtml(label)}</option>`, ...values.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(pretty(value))}</option>`)].join("");
+  select.value = currentValue || "";
+}
+
+async function loadContacts() {
+  const query = buildQuery(state.contactFilters);
+  const data = await publicApi(`/contacts${query}`);
+  state.contacts = data.contacts || [];
+  state.contactFacets = data.facets || state.contactFacets;
+  renderContacts();
+}
+
+function renderContacts() {
+  setText("contactTableTitle", `${state.contacts.length} contact${state.contacts.length === 1 ? "" : "s"}`);
+  renderSelectOptions($("#contactTagFilter"), state.contactFacets.tags || [], state.contactFilters.tag, "All tags");
+  renderSelectOptions($("#contactStatusFilter"), state.contactFacets.statuses || [], state.contactFilters.status, "All statuses");
+  renderSelectOptions($("#contactSourceFilter"), state.contactFacets.sources || [], state.contactFilters.source, "All sources");
+
+  const table = $("#contactsTable");
+  if (!table) return;
+  if (!state.contacts.length) {
+    table.innerHTML = emptyState("No contacts yet.", "Import a CSV, sync Google Sheets, or add a contact manually.");
+    return;
+  }
+
+  table.innerHTML = `
+    <div class="data-row data-head">
+      <span></span><span>Name</span><span>Phone</span><span>Tags</span><span>Source</span><span>Status</span><span>Last contacted</span><span>Actions</span>
+    </div>
+    ${state.contacts
+      .map((contact) => `
+        <div class="data-row contact-row" data-contact-id="${escapeHtml(contact.id)}">
+          <span><input type="checkbox" data-contact-check="${escapeHtml(contact.id)}" ${state.selectedContactIds.has(contact.id) ? "checked" : ""} /></span>
+          <span><strong>${escapeHtml(contact.name)}</strong></span>
+          <span>${escapeHtml(contact.phone)}</span>
+          <span class="tag-list">${(contact.tags || []).map((tag) => `<b>${escapeHtml(tag)}</b>`).join("") || "--"}</span>
+          <span>${escapeHtml(contact.source || "--")}</span>
+          <span><mark class="${statusTone(contact.status)}">${escapeHtml(pretty(contact.status))}</mark></span>
+          <span>${contact.lastContacted ? formatDate(contact.lastContacted) : "--"}</span>
+          <span><button class="ghost-action" type="button" data-open-chat="${escapeHtml(contact.id)}"><i data-lucide="messages-square"></i>Chat</button></span>
+        </div>
+      `)
+      .join("")}
+  `;
+
+  bindDelegatedClick(table, "contactCheck", "[data-contact-check]", (checkbox) => {
+    if (checkbox.checked) state.selectedContactIds.add(checkbox.dataset.contactCheck);
+    else state.selectedContactIds.delete(checkbox.dataset.contactCheck);
+    renderContacts();
+  });
+  bindDelegatedClick(table, "contactChat", "[data-open-chat]", (button) => openLeadChat(button.dataset.openChat));
+  refreshIcons();
+}
+
+async function addContactFromPrompt() {
+  const name = window.prompt("Contact name");
+  if (!name) return;
+  const phone = window.prompt("WhatsApp phone number");
+  if (!phone) return;
+  const tags = commaList(window.prompt("Tags separated by commas") || "");
+  await publicApi("/contacts", {
+    method: "POST",
+    body: JSON.stringify({ name, phone, tags, source: "manual" })
+  });
+  showNotice("Contact saved.");
+  await loadContacts();
+}
+
+async function loadBulkJobs() {
+  const data = await publicApi("/bulk-messages");
+  state.bulkJobs = data.jobs || [];
+  renderBulkJobs();
+}
+
+function renderBulkJobs() {
+  const target = $("#bulkJobsList");
+  if (!target) return;
+  renderKeyedChildren(
+    target,
+    state.bulkJobs,
+    (job) => job.id,
+    (job) => `
+      <article class="automation-row">
+        <div>
+          <strong>${escapeHtml(job.name)}</strong>
+          <small>${escapeHtml(job.templateName)} - ${formatDate(job.createdAt)}</small>
+        </div>
+        <span class="progress-stack">
+          <mark class="${statusTone(job.status)}">${escapeHtml(pretty(job.status))}</mark>
+          <small>${job.sentCount || 0} sent / ${job.failedCount || 0} failed / ${job.queuedCount || 0} queued</small>
+          <i style="width:${Math.round(((job.sentCount || 0) + (job.failedCount || 0)) / Math.max(1, job.totalCount || 1) * 100)}%"></i>
+        </span>
+      </article>
+    `,
+    emptyState("No bulk sends yet.", "Queue an approved template send to see progress.")
+  );
+  refreshIcons();
+}
+
+async function loadCampaigns() {
+  const data = await publicApi("/campaigns");
+  state.campaigns = data.campaigns || [];
+  renderCampaigns();
+}
+
+function renderCampaigns() {
+  const table = $("#campaignsTable");
+  if (!table) return;
+  if (!state.campaigns.length) {
+    table.innerHTML = emptyState("No campaigns yet.", "Create a scheduled or immediate WhatsApp template campaign.");
+    return;
+  }
+
+  table.innerHTML = `
+    <div class="data-row campaign-head">
+      <span>Name</span><span>Type</span><span>Created</span><span>Scheduled</span><span>Status</span><span>Audience</span><span>Sent</span><span>Failed</span><span>Replies</span><span>Actions</span>
+    </div>
+    ${state.campaigns.map((campaign) => `
+      <div class="data-row campaign-row" data-campaign-id="${escapeHtml(campaign.id)}">
+        <span><strong>${escapeHtml(campaign.name)}</strong></span>
+        <span>${escapeHtml(pretty(campaign.type))}</span>
+        <span>${formatDate(campaign.createdAt)}</span>
+        <span>${campaign.scheduledAt ? formatDate(campaign.scheduledAt) : "--"}</span>
+        <span><mark class="${statusTone(campaign.status)}">${escapeHtml(pretty(campaign.status))}</mark></span>
+        <span>${escapeHtml(campaign.audienceCount || 0)}</span>
+        <span>${escapeHtml(campaign.sent || 0)}</span>
+        <span>${escapeHtml(campaign.failed || 0)}</span>
+        <span>${escapeHtml(campaign.replies || 0)}</span>
+        <span class="row-actions">
+          <button class="secondary-button" type="button" data-pause-campaign="${escapeHtml(campaign.id)}">Pause</button>
+          <button class="danger-button" type="button" data-cancel-campaign="${escapeHtml(campaign.id)}">Cancel</button>
+        </span>
+      </div>
+    `).join("")}
+  `;
+
+  bindDelegatedClick(table, "campaignDetail", "[data-campaign-id]", (button, event) => {
+    if (event.target.closest("[data-pause-campaign], [data-cancel-campaign]")) return;
+    loadCampaignDetail(button.dataset.campaignId).catch((error) => showNotice(error.message, true));
+  });
+  bindDelegatedClick(table, "campaignPause", "[data-pause-campaign]", async (button) => {
+    await publicApi(`/campaigns/${button.dataset.pauseCampaign}/pause`, { method: "POST" });
+    showNotice("Campaign paused.");
+    await loadCampaigns();
+  });
+  bindDelegatedClick(table, "campaignCancel", "[data-cancel-campaign]", async (button) => {
+    await publicApi(`/campaigns/${button.dataset.cancelCampaign}/cancel`, { method: "POST" });
+    showNotice("Campaign cancelled.");
+    await loadCampaigns();
+  });
+}
+
+async function loadCampaignDetail(campaignId) {
+  const data = await publicApi(`/campaigns/${campaignId}`);
+  state.selectedCampaignId = campaignId;
+  const campaign = data.campaign;
+  setText("campaignDetailTitle", campaign.name);
+  const target = $("#campaignDetail");
+  if (!target) return;
+  target.classList.remove("empty-state");
+  target.innerHTML = `
+    <div class="metric-mini-grid">
+      <span><strong>${campaign.audienceCount}</strong><small>Audience</small></span>
+      <span><strong>${campaign.sent}</strong><small>Sent</small></span>
+      <span><strong>${campaign.failed}</strong><small>Failed</small></span>
+      <span><strong>${campaign.replies}</strong><small>Replies</small></span>
+    </div>
+    <div class="message-preview">${escapeHtml(campaign.messagePreview || `[Template: ${campaign.templateName}]`)}</div>
+    <div class="automation-list compact">
+      ${(campaign.recipients || []).map((recipient) => `
+        <article class="automation-row">
+          <div><strong>${escapeHtml(recipient.name)}</strong><small>${escapeHtml(recipient.phone)}</small></div>
+          <mark class="${statusTone(recipient.status)}">${escapeHtml(pretty(recipient.status))}</mark>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+async function loadAds() {
+  const data = await publicApi("/ads");
+  state.metaAdsConnected = Boolean(data.metaConnected);
+  state.adDrafts = data.drafts || [];
+  renderAds();
+}
+
+function renderAds() {
+  setHtmlIfChanged($("#metaAdsStatus"), `<i data-lucide="${state.metaAdsConnected ? "plug-zap" : "plug"}"></i>${state.metaAdsConnected ? "Meta Ads connected" : "Meta Ads not connected"}`);
+  $("#metaAdsStatus")?.classList.toggle("connected", state.metaAdsConnected);
+  renderAdPreview();
+  const list = $("#adDraftsList");
+  if (!list) return;
+  renderKeyedChildren(
+    list,
+    state.adDrafts,
+    (draft) => draft.id,
+    (draft) => `
+      <article class="automation-row">
+        <div>
+          <strong>${escapeHtml(draft.name)}</strong>
+          <small>${escapeHtml(draft.objective)} - ${escapeHtml(draft.audience)}</small>
+        </div>
+        <mark class="amber">${escapeHtml(pretty(draft.status))}</mark>
+      </article>
+    `,
+    emptyState("No ad drafts yet.", "Saved click-to-chat drafts will appear here.")
+  );
+  refreshIcons();
+}
+
+function renderAdPreview() {
+  const target = $("#adPreview");
+  if (!target) return;
+  const headline = $("#adHeadline")?.value || "Custom printwear for your team";
+  const body = $("#adBodyText")?.value || "Launch a WhatsApp enquiry from this ad.";
+  const cta = $("#adCta")?.value || "Send WhatsApp";
+  const opening = $("#adTemplatePreview")?.value || "Hi, I am interested in custom uniforms.";
+  target.innerHTML = `
+    <article class="ad-card-preview">
+      <span class="ad-media"><i data-lucide="shirt"></i></span>
+      <strong>${escapeHtml(headline)}</strong>
+      <p>${escapeHtml(body)}</p>
+      <button type="button">${escapeHtml(cta)}</button>
+    </article>
+    <article class="phone-preview">
+      <span>WhatsApp opening message</span>
+      <p>${escapeHtml(opening)}</p>
+    </article>
+  `;
+  refreshIcons();
+}
+
+const flowDefaults = {
+  start: { label: "Start", config: {} },
+  text: { label: "Text message", config: { text: "Thanks for reaching out. How can we help with your printwear order?" } },
+  template: { label: "Template message", config: { templateName: "", templateLanguage: "en_US" } },
+  media: { label: "Image/media", config: { url: "", caption: "" } },
+  button: { label: "Button message", config: { text: "Choose an option", buttons: "Pricing, Catalog, Talk to team" } },
+  list: { label: "List message", config: { text: "Select a category", items: "T-shirts, Uniforms, Hoodies" } },
+  question: { label: "Ask question", config: { text: "What quantity do you need?" } },
+  location: { label: "Ask location", config: { text: "Please share your delivery location." } },
+  address: { label: "Ask address", config: { text: "Please share your delivery address." } },
+  add_tag: { label: "Add tag", config: { tag: "workflow" } },
+  set_attribute: { label: "Set attribute", config: { key: "interest", value: "printwear" } },
+  human_takeover: { label: "Human takeover", config: { reason: "Workflow requested human follow-up" } },
+  api_request: { label: "API request", config: { url: "", method: "POST" } },
+  condition: { label: "Condition", config: { field: "message", contains: "quote" } },
+  delay: { label: "Delay", config: { seconds: 2 } },
+  connect: { label: "Connect flow", config: { flowId: "" } }
+};
+
+async function loadWorkflows() {
+  const data = await publicApi("/ai-flows");
+  state.workflows = data.workflows || [];
+  if (!state.activeWorkflowId && state.workflows[0]) loadWorkflowIntoDraft(state.workflows[0]);
+  renderWorkflowList();
+  renderFlowCanvas();
+}
+
+function loadWorkflowIntoDraft(workflow) {
+  state.activeWorkflowId = workflow.id;
+  state.workflowDraft = {
+    ...state.workflowDraft,
+    id: workflow.id,
+    name: workflow.name,
+    triggerType: workflow.triggerType,
+    triggerValue: workflow.triggerValue,
+    isActive: workflow.isActive,
+    selectedNodeId: null,
+    pendingConnectionId: null,
+    definition: workflow.definition || { nodes: [], edges: [] }
+  };
+  if ($("#workflowName")) $("#workflowName").value = workflow.name;
+  if ($("#workflowTriggerType")) $("#workflowTriggerType").value = workflow.triggerType;
+  if ($("#workflowTriggerValue")) $("#workflowTriggerValue").value = workflow.triggerValue;
+  renderFlowCanvas();
+  renderWorkflowList();
+}
+
+function renderWorkflowList() {
+  const target = $("#workflowList");
+  if (!target) return;
+  setHtmlIfChanged($("#toggleWorkflowActiveBtn"), `<i data-lucide="power"></i>${state.workflowDraft.isActive ? "Active" : "Inactive"}`);
+  renderKeyedChildren(
+    target,
+    state.workflows,
+    (workflow) => workflow.id,
+    (workflow) => `
+      <article class="automation-row ${workflow.id === state.activeWorkflowId ? "active" : ""}" data-load-workflow="${escapeHtml(workflow.id)}">
+        <div><strong>${escapeHtml(workflow.name)}</strong><small>${escapeHtml(pretty(workflow.triggerType))}: ${escapeHtml(workflow.triggerValue)}</small></div>
+        <mark class="${workflow.isActive ? "green" : "neutral"}">${workflow.isActive ? "Active" : "Inactive"}</mark>
+      </article>
+    `,
+    emptyState("No saved workflows yet.", "Save this canvas to create your first flow.")
+  );
+  bindDelegatedClick(target, "loadWorkflow", "[data-load-workflow]", (row) => {
+    const workflow = state.workflows.find((item) => item.id === row.dataset.loadWorkflow);
+    if (workflow) loadWorkflowIntoDraft(workflow);
+  });
+  refreshIcons();
+}
+
+function flowNodeHtml(node) {
+  return `
+    <article class="flow-node ${state.workflowDraft.selectedNodeId === node.id ? "selected" : ""}" data-flow-node="${escapeHtml(node.id)}" style="left:${node.x || 80}px; top:${node.y || 80}px">
+      <span><i data-lucide="${node.type === "start" ? "play" : node.type === "template" ? "badge-check" : node.type === "delay" ? "timer" : "message-square"}"></i>${escapeHtml(node.label || pretty(node.type))}</span>
+      <small>${escapeHtml(pretty(node.type))}</small>
+      <button class="flow-connect" type="button" data-flow-connect="${escapeHtml(node.id)}" aria-label="Connect block"><i data-lucide="waypoints"></i></button>
+    </article>
+  `;
+}
+
+function renderFlowCanvas() {
+  const canvas = $("#flowCanvas");
+  if (!canvas) return;
+  const draft = state.workflowDraft;
+  const nodes = draft.definition.nodes || [];
+  const edges = draft.definition.edges || [];
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const lines = edges
+    .map((edge) => {
+      const from = nodeById.get(edge.from);
+      const to = nodeById.get(edge.to);
+      if (!from || !to) return "";
+      return `<line x1="${(from.x || 0) + 120}" y1="${(from.y || 0) + 36}" x2="${to.x || 0}" y2="${(to.y || 0) + 36}" />`;
+    })
+    .join("");
+  canvas.innerHTML = `
+    <div class="flow-canvas-content" style="transform: translate(${draft.panX}px, ${draft.panY}px) scale(${draft.zoom})">
+      <svg class="flow-lines">${lines}</svg>
+      ${nodes.map(flowNodeHtml).join("")}
+    </div>
+  `;
+  renderFlowConfig();
+  refreshIcons();
+}
+
+function renderFlowConfig() {
+  const form = $("#flowConfigForm");
+  if (!form) return;
+  const node = state.workflowDraft.definition.nodes.find((item) => item.id === state.workflowDraft.selectedNodeId);
+  if (!node) {
+    setText("flowConfigTitle", "Select a block");
+    form.innerHTML = "";
+    return;
+  }
+
+  setText("flowConfigTitle", node.label || pretty(node.type));
+  const config = node.config || {};
+  const fields = [["label", node.label || ""]];
+  Object.entries(config).forEach(([key, value]) => fields.push([key, value]));
+  form.innerHTML = fields.map(([key, value]) => `
+    <label>${escapeHtml(pretty(key))}
+      <input data-flow-config="${escapeHtml(key)}" value="${escapeHtml(value)}" />
+    </label>
+  `).join("");
+}
+
+function addFlowNode(type, x = 180, y = 180) {
+  const defaults = flowDefaults[type] || { label: pretty(type), config: {} };
+  const node = {
+    id: `${type}-${Date.now()}`,
+    type,
+    label: defaults.label,
+    x,
+    y,
+    config: { ...defaults.config }
+  };
+  state.workflowDraft.definition.nodes.push(node);
+  state.workflowDraft.selectedNodeId = node.id;
+  renderFlowCanvas();
+}
+
+async function saveWorkflow() {
+  const body = {
+    name: $("#workflowName")?.value.trim() || "Untitled workflow",
+    triggerType: $("#workflowTriggerType")?.value || "KEYWORD",
+    triggerValue: $("#workflowTriggerValue")?.value.trim() || "hi",
+    isActive: state.workflowDraft.isActive,
+    definition: state.workflowDraft.definition
+  };
+  const path = state.workflowDraft.id ? `/ai-flows/${state.workflowDraft.id}` : "/ai-flows";
+  const method = state.workflowDraft.id ? "PATCH" : "POST";
+  const data = await publicApi(path, { method, body: JSON.stringify(body) });
+  showNotice("Workflow saved.");
+  await loadWorkflows();
+  loadWorkflowIntoDraft(data.workflow);
+}
+
 function connectChatEvents() {
   if (!window.EventSource) {
     console.warn("[Dashboard] EventSource is not supported in this browser.");
@@ -1513,6 +1966,11 @@ function switchView(name) {
   runMotion(name === "overview" ? ".premium-card, .metric-tile" : ".premium-card, .lead-card, .chat-list-row");
   if (name === "overview") loadOverview();
   if (name === "leads" || name === "chats") loadLeads().catch((error) => showNotice(error.message, true));
+  if (name === "contacts") loadContacts().catch((error) => showNotice(error.message, true));
+  if (name === "bulk") Promise.all([loadContacts(), loadBulkJobs()]).catch((error) => showNotice(error.message, true));
+  if (name === "campaigns") loadCampaigns().catch((error) => showNotice(error.message, true));
+  if (name === "ads") loadAds().catch((error) => showNotice(error.message, true));
+  if (name === "flows") loadWorkflows().catch((error) => showNotice(error.message, true));
   if (name === "orders") loadOrderData().catch((error) => showNotice(error.message, true));
   if (name === "human") loadOperationalData().catch((error) => showNotice(error.message, true));
   if (name === "reports") {
@@ -1614,6 +2072,239 @@ function bindEvents() {
   $("#temperatureFilter")?.addEventListener("change", (event) => {
     setTemperatureFilter(event.target.value);
     loadLeads().catch((error) => showNotice(error.message, true));
+  });
+
+  let contactSearchTimer;
+  $("#contactSearch")?.addEventListener("input", (event) => {
+    state.contactFilters.search = event.target.value.trim();
+    window.clearTimeout(contactSearchTimer);
+    contactSearchTimer = window.setTimeout(() => loadContacts().catch((error) => showNotice(error.message, true)), 180);
+  });
+
+  ["contactTagFilter", "contactStatusFilter", "contactSourceFilter"].forEach((id) => {
+    $(`#${id}`)?.addEventListener("change", (event) => {
+      const key = id === "contactTagFilter" ? "tag" : id === "contactStatusFilter" ? "status" : "source";
+      state.contactFilters[key] = event.target.value;
+      loadContacts().catch((error) => showNotice(error.message, true));
+    });
+  });
+
+  $("#addContactBtn")?.addEventListener("click", () => {
+    addContactFromPrompt().catch((error) => showNotice(error.message, true));
+  });
+
+  $("#importSheetsContactsBtn")?.addEventListener("click", async () => {
+    try {
+      const result = await publicApi("/contacts/import/google-sheets", { method: "POST" });
+      showNotice(`Imported ${result.imported || 0} contacts from Google Sheets.`);
+      await loadContacts();
+    } catch (error) {
+      showNotice(error.message, true);
+    }
+  });
+
+  $("#csvFileInput")?.addEventListener("change", async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    $("#csvTextInput").value = await file.text();
+  });
+
+  $("#csvImportForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    try {
+      const result = await publicApi("/contacts/import/csv", {
+        method: "POST",
+        body: JSON.stringify({
+          csvText: $("#csvTextInput")?.value || "",
+          defaultTags: commaList($("#csvDefaultTags")?.value || ""),
+          source: "csv"
+        })
+      });
+      showNotice(`Imported ${result.imported} contacts. ${result.skipped} skipped.`);
+      await loadContacts();
+    } catch (error) {
+      showNotice(error.message, true);
+    }
+  });
+
+  $("#selectAllContactsBtn")?.addEventListener("click", () => {
+    const allSelected = state.contacts.every((contact) => state.selectedContactIds.has(contact.id));
+    if (allSelected) state.contacts.forEach((contact) => state.selectedContactIds.delete(contact.id));
+    else state.contacts.forEach((contact) => state.selectedContactIds.add(contact.id));
+    renderContacts();
+  });
+
+  $("#sendSelectedBulkBtn")?.addEventListener("click", () => {
+    switchView("bulk");
+    $("#bulkName")?.focus();
+  });
+
+  $("#bulkSendForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    try {
+      const body = {
+        name: $("#bulkName")?.value.trim() || "Bulk WhatsApp template send",
+        templateName: $("#bulkTemplateName")?.value.trim(),
+        templateLanguage: $("#bulkTemplateLanguage")?.value.trim() || "en_US",
+        audience: selectedAudienceFromContacts({
+          tag: $("#bulkAudienceTag")?.value.trim(),
+          source: $("#bulkAudienceSource")?.value.trim()
+        })
+      };
+      await publicApi("/bulk-messages", { method: "POST", body: JSON.stringify(body) });
+      showNotice("Bulk send queued.");
+      await loadBulkJobs();
+    } catch (error) {
+      showNotice(error.message, true);
+    }
+  });
+
+  $("#refreshBulkJobsBtn")?.addEventListener("click", () => {
+    loadBulkJobs().catch((error) => showNotice(error.message, true));
+  });
+
+  $("#campaignForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const submitter = event.submitter;
+    const scheduleNow = submitter?.dataset.campaignSubmit === "now";
+    const localValue = $("#campaignScheduledAt")?.value;
+    try {
+      await publicApi("/campaigns", {
+        method: "POST",
+        body: JSON.stringify({
+          name: $("#campaignName")?.value.trim(),
+          audience: selectedAudienceFromContacts({
+            tag: $("#campaignAudienceTag")?.value.trim(),
+            source: $("#campaignAudienceSource")?.value.trim()
+          }),
+          templateName: $("#campaignTemplateName")?.value.trim(),
+          messagePreview: $("#campaignPreview")?.value.trim(),
+          scheduledAt: !scheduleNow && localValue ? new Date(localValue).toISOString() : null,
+          scheduleNow
+        })
+      });
+      showNotice(scheduleNow ? "Campaign is running." : "Campaign scheduled.");
+      await loadCampaigns();
+    } catch (error) {
+      showNotice(error.message, true);
+    }
+  });
+
+  ["adHeadline", "adBodyText", "adCta", "adTemplatePreview"].forEach((id) => {
+    $(`#${id}`)?.addEventListener("input", renderAdPreview);
+  });
+
+  $("#adDraftForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    try {
+      await publicApi("/ads", {
+        method: "POST",
+        body: JSON.stringify({
+          name: $("#adName")?.value.trim(),
+          objective: $("#adObjective")?.value.trim(),
+          audience: $("#adAudience")?.value.trim(),
+          headline: $("#adHeadline")?.value.trim(),
+          bodyText: $("#adBodyText")?.value.trim(),
+          cta: $("#adCta")?.value.trim(),
+          destinationWhatsAppNumber: $("#adDestination")?.value.trim(),
+          templatePreview: $("#adTemplatePreview")?.value.trim()
+        })
+      });
+      showNotice("Ad draft saved.");
+      await loadAds();
+    } catch (error) {
+      showNotice(error.message, true);
+    }
+  });
+
+  document.querySelectorAll("[data-flow-block]").forEach((button) => {
+    button.addEventListener("dragstart", (event) => {
+      event.dataTransfer.setData("text/plain", button.dataset.flowBlock);
+    });
+  });
+
+  $("#flowCanvas")?.addEventListener("dragover", (event) => event.preventDefault());
+  $("#flowCanvas")?.addEventListener("drop", (event) => {
+    event.preventDefault();
+    const type = event.dataTransfer.getData("text/plain");
+    const rect = event.currentTarget.getBoundingClientRect();
+    addFlowNode(
+      type,
+      (event.clientX - rect.left - state.workflowDraft.panX) / state.workflowDraft.zoom,
+      (event.clientY - rect.top - state.workflowDraft.panY) / state.workflowDraft.zoom
+    );
+  });
+
+  let draggingNode = null;
+  let dragOffset = null;
+  $("#flowCanvas")?.addEventListener("mousedown", (event) => {
+    const nodeElement = event.target.closest("[data-flow-node]");
+    if (!nodeElement || event.target.closest("[data-flow-connect]")) return;
+    const node = state.workflowDraft.definition.nodes.find((item) => item.id === nodeElement.dataset.flowNode);
+    if (!node) return;
+    state.workflowDraft.selectedNodeId = node.id;
+    draggingNode = node;
+    dragOffset = {
+      x: event.clientX / state.workflowDraft.zoom - (node.x || 0),
+      y: event.clientY / state.workflowDraft.zoom - (node.y || 0)
+    };
+    renderFlowCanvas();
+  });
+
+  window.addEventListener("mousemove", (event) => {
+    if (!draggingNode || !dragOffset) return;
+    draggingNode.x = Math.max(0, event.clientX / state.workflowDraft.zoom - dragOffset.x);
+    draggingNode.y = Math.max(0, event.clientY / state.workflowDraft.zoom - dragOffset.y);
+    renderFlowCanvas();
+  });
+
+  window.addEventListener("mouseup", () => {
+    draggingNode = null;
+    dragOffset = null;
+  });
+
+  bindDelegatedClick($("#flowCanvas"), "flowConnect", "[data-flow-connect]", (button, event) => {
+    event.stopPropagation();
+    const nodeId = button.dataset.flowConnect;
+    if (!state.workflowDraft.pendingConnectionId) {
+      state.workflowDraft.pendingConnectionId = nodeId;
+      showNotice("Select another block connector.");
+      return;
+    }
+    if (state.workflowDraft.pendingConnectionId !== nodeId) {
+      state.workflowDraft.definition.edges.push({ from: state.workflowDraft.pendingConnectionId, to: nodeId });
+    }
+    state.workflowDraft.pendingConnectionId = null;
+    renderFlowCanvas();
+  });
+
+  $("#flowConfigForm")?.addEventListener("input", (event) => {
+    const key = event.target.dataset.flowConfig;
+    if (!key) return;
+    const node = state.workflowDraft.definition.nodes.find((item) => item.id === state.workflowDraft.selectedNodeId);
+    if (!node) return;
+    if (key === "label") node.label = event.target.value;
+    else node.config = { ...(node.config || {}), [key]: event.target.value };
+    renderFlowCanvas();
+  });
+
+  $("#flowZoomInBtn")?.addEventListener("click", () => {
+    state.workflowDraft.zoom = Math.min(1.6, state.workflowDraft.zoom + 0.1);
+    renderFlowCanvas();
+  });
+
+  $("#flowZoomOutBtn")?.addEventListener("click", () => {
+    state.workflowDraft.zoom = Math.max(0.6, state.workflowDraft.zoom - 0.1);
+    renderFlowCanvas();
+  });
+
+  $("#saveWorkflowBtn")?.addEventListener("click", () => {
+    saveWorkflow().catch((error) => showNotice(error.message, true));
+  });
+
+  $("#toggleWorkflowActiveBtn")?.addEventListener("click", () => {
+    state.workflowDraft.isActive = !state.workflowDraft.isActive;
+    renderWorkflowList();
   });
 
   $("#importLeadsBtn")?.addEventListener("click", async () => {

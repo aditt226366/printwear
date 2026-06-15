@@ -1,4 +1,5 @@
 import {
+  AutomationSendStatus,
   MessageDirection,
   MessageStatus,
   MessageType,
@@ -17,6 +18,14 @@ type MessageStatusKey = keyof typeof MessageStatus;
 function asJson(value: unknown): Prisma.InputJsonValue | undefined {
   if (value === undefined) return undefined;
   return value as Prisma.InputJsonValue;
+}
+
+function automationStatusFromMessageStatus(status: MessageStatusKey) {
+  if (status === "DELIVERED") return AutomationSendStatus.DELIVERED;
+  if (status === "READ") return AutomationSendStatus.READ;
+  if (status === "FAILED") return AutomationSendStatus.FAILED;
+  if (status === "SENT") return AutomationSendStatus.SENT;
+  return null;
 }
 
 export const messageService = {
@@ -139,6 +148,20 @@ export const messageService = {
       where: { whatsappMessageId },
       data
     });
+
+    const automationStatus = automationStatusFromMessageStatus(status);
+    if (automationStatus) {
+      await Promise.all([
+        prisma.bulkMessageRecipient.updateMany({
+          where: { whatsappMessageId },
+          data: { status: automationStatus }
+        }),
+        prisma.campaignRecipient.updateMany({
+          where: { whatsappMessageId },
+          data: { status: automationStatus }
+        })
+      ]);
+    }
 
     chatEventsService.publish({
       type: "message.status",

@@ -12,6 +12,11 @@ type WhatsAppSendResponse = {
   };
 };
 
+type TemplateParameter = {
+  type: "text";
+  text: string;
+};
+
 export type ParsedIncomingMessage = {
   messageId: string;
   from: string;
@@ -176,32 +181,53 @@ async function postToWhatsApp(body: unknown, attempt = 1): Promise<{ messageId?:
 }
 
 export const whatsappService = {
-  async sendTemplateMessage(phone: string, name: string) {
+  async sendNamedTemplateMessage(input: {
+    phone: string;
+    templateName: string;
+    templateLanguage?: string;
+    parameters?: TemplateParameter[];
+  }) {
     const config = validateWhatsAppConfig();
-    const body = {
+    const body: Record<string, unknown> = {
       messaging_product: "whatsapp",
-      to: phone,
+      to: input.phone,
       type: "template",
       template: {
-        name: config.templateName,
+        name: input.templateName.trim() || config.templateName,
         language: {
-          code: config.templateLanguage
-        },
-        components: [
-          {
-            type: "body",
-            parameters: [
-              {
-                type: "text",
-                text: name
-              }
-            ]
-          }
-        ]
+          code: input.templateLanguage?.trim() || config.templateLanguage
+        }
       }
     };
 
+    if (input.parameters?.length) {
+      body.template = {
+        ...(body.template as Record<string, unknown>),
+        components: [
+          {
+            type: "body",
+            parameters: input.parameters
+          }
+        ]
+      };
+    }
+
     return postToWhatsApp(body);
+  },
+
+  async sendTemplateMessage(phone: string, name: string) {
+    const config = validateWhatsAppConfig();
+    return this.sendNamedTemplateMessage({
+      phone,
+      templateName: config.templateName,
+      templateLanguage: config.templateLanguage,
+      parameters: [
+        {
+          type: "text",
+          text: name
+        }
+      ]
+    });
   },
 
   async sendTextMessage(phone: string, text: string) {

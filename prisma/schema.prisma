@@ -59,6 +59,52 @@ enum MessageStatus {
   RECEIVED   @map("received")
 }
 
+enum AutomationSendStatus {
+  QUEUED     @map("queued")
+  SENT       @map("sent")
+  FAILED     @map("failed")
+  DELIVERED  @map("delivered")
+  READ       @map("read")
+}
+
+enum BulkJobStatus {
+  QUEUED     @map("queued")
+  RUNNING    @map("running")
+  COMPLETED  @map("completed")
+  FAILED     @map("failed")
+}
+
+enum CampaignStatus {
+  DRAFT      @map("draft")
+  SCHEDULED  @map("scheduled")
+  RUNNING    @map("running")
+  COMPLETED  @map("completed")
+  FAILED     @map("failed")
+  PAUSED     @map("paused")
+  CANCELLED  @map("cancelled")
+}
+
+enum CampaignType {
+  WHATSAPP_TEMPLATE  @map("whatsapp_template")
+}
+
+enum AdDraftStatus {
+  DRAFT  @map("draft")
+}
+
+enum WorkflowTriggerType {
+  KEYWORD   @map("keyword")
+  REGEX     @map("regex")
+  TEMPLATE  @map("template")
+  AD        @map("ad")
+}
+
+enum WorkflowRunStatus {
+  STARTED   @map("started")
+  EXECUTED  @map("executed")
+  FAILED    @map("failed")
+}
+
 enum KnowledgeSourceType {
   MANUAL   @map("manual")
   WEBSITE  @map("website")
@@ -79,17 +125,23 @@ model Lead {
   humanPriority        HumanPriority?
   humanReason          String?
   humanResolvedAt      DateTime?
+  tags                 String[]         @default([])
+  attributes           Json             @default("{}")
   googleSheetRowNumber Int?             @unique
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
 
-  messages     Message[]
-  sendLogs     SendLog[]
-  orderSummary OrderSummary?
+  messages              Message[]
+  sendLogs              SendLog[]
+  orderSummary          OrderSummary?
+  bulkRecipients        BulkMessageRecipient[]
+  campaignRecipients    CampaignRecipient[]
+  workflowExecutionLogs WorkflowExecutionLog[]
 
   @@index([status])
   @@index([leadTemperature])
   @@index([humanTakeoverRequired, humanResolvedAt])
+  @@index([source])
 }
 
 model Message {
@@ -139,6 +191,134 @@ model SendLog {
 
   @@index([leadId])
   @@index([action, status])
+}
+
+model BulkMessageJob {
+  id               String        @id @default(cuid())
+  name             String
+  templateName     String
+  templateLanguage String        @default("en_US")
+  status           BulkJobStatus @default(QUEUED)
+  totalCount       Int           @default(0)
+  sentCount        Int           @default(0)
+  failedCount      Int           @default(0)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  recipients BulkMessageRecipient[]
+
+  @@index([status, createdAt])
+}
+
+model BulkMessageRecipient {
+  id                String               @id @default(cuid())
+  bulkMessageJobId  String
+  leadId            String
+  phone             String
+  status            AutomationSendStatus @default(QUEUED)
+  whatsappMessageId String?
+  errorMessage      String?
+  sentAt            DateTime?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  bulkMessageJob BulkMessageJob @relation(fields: [bulkMessageJobId], references: [id], onDelete: Cascade)
+  lead           Lead           @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([bulkMessageJobId, leadId])
+  @@index([status])
+  @@index([whatsappMessageId])
+}
+
+model Campaign {
+  id               String         @id @default(cuid())
+  name             String
+  type             CampaignType   @default(WHATSAPP_TEMPLATE)
+  audience         Json
+  templateName     String
+  templateLanguage String         @default("en_US")
+  messagePreview   String?
+  scheduledAt      DateTime?
+  status           CampaignStatus @default(DRAFT)
+  totalCount       Int            @default(0)
+  sentCount        Int            @default(0)
+  failedCount      Int            @default(0)
+  repliesCount     Int            @default(0)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  recipients CampaignRecipient[]
+
+  @@index([status, scheduledAt])
+  @@index([createdAt])
+}
+
+model CampaignRecipient {
+  id                String               @id @default(cuid())
+  campaignId        String
+  leadId            String
+  phone             String
+  status            AutomationSendStatus @default(QUEUED)
+  whatsappMessageId String?
+  errorMessage      String?
+  sentAt            DateTime?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  lead     Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, leadId])
+  @@index([status])
+  @@index([whatsappMessageId])
+}
+
+model AdDraft {
+  id                         String        @id @default(cuid())
+  name                       String
+  objective                  String
+  audience                   String
+  headline                   String
+  bodyText                   String
+  cta                        String
+  destinationWhatsAppNumber  String
+  templatePreview            String
+  status                     AdDraftStatus @default(DRAFT)
+  createdAt                  DateTime      @default(now())
+  updatedAt                  DateTime      @updatedAt
+
+  @@index([createdAt])
+}
+
+model AiWorkflow {
+  id           String              @id @default(cuid())
+  name         String
+  isActive     Boolean             @default(false)
+  triggerType  WorkflowTriggerType
+  triggerValue String
+  definition   Json
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  executionLogs WorkflowExecutionLog[]
+
+  @@index([isActive, triggerType])
+}
+
+model WorkflowExecutionLog {
+  id           String            @id @default(cuid())
+  workflowId   String
+  leadId       String?
+  status       WorkflowRunStatus
+  stepKey      String?
+  errorMessage String?
+  createdAt    DateTime          @default(now())
+
+  workflow AiWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  lead     Lead?      @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@index([workflowId, createdAt])
+  @@index([leadId])
 }
 
 model OrderSummary {
