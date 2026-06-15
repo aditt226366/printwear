@@ -6206,30 +6206,119 @@ body.app-shell #chatsView.active-view {
 }
 
 .feature-toggle {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 14px;
+  gap: 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.045);
+  border-radius: 14px;
+  padding: 14px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.065), rgba(255, 255, 255, 0.028)),
+    rgba(13, 14, 20, 0.92);
+  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
 }
 
-.feature-toggle strong,
-.feature-toggle small {
+.feature-toggle.active {
+  border-color: rgba(45, 212, 191, 0.26);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 14px 38px rgba(20, 184, 166, 0.08);
+}
+
+.feature-toggle-copy {
+  min-width: 0;
+}
+
+.feature-toggle-copy strong,
+.feature-toggle-copy small {
   display: block;
 }
 
-.feature-toggle small {
-  margin-top: 4px;
-  color: var(--muted);
+.feature-toggle-copy strong {
+  color: #f8fafc;
+  font-size: 14px;
+  letter-spacing: 0;
 }
 
-.feature-toggle input {
-  width: 46px;
-  height: 24px;
-  accent-color: #8b5cf6;
+.feature-toggle-copy small {
+  margin-top: 4px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.toggle-switch {
+  width: 92px;
+  min-width: 92px;
+  height: 42px;
+  display: inline-grid;
+  grid-template-columns: 1fr;
+  place-items: center;
+  position: relative;
+  border: 0;
+  border-radius: 999px;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.toggle-switch:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.toggle-track {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #34343d, #202028);
+  box-shadow: inset 0 1px 6px rgba(0, 0, 0, 0.35);
+  transition: background 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+}
+
+.toggle-track i {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #f8fafc, #cbd5e1);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.32);
+  transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1), background 0.22s ease;
+}
+
+.toggle-switch b {
+  position: relative;
+  z-index: 1;
+  justify-self: end;
+  padding-right: 12px;
+  color: #cbd5e1;
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 0;
+  transition: color 0.22s ease, justify-self 0.22s ease, padding 0.22s ease;
+}
+
+.toggle-switch.is-on .toggle-track {
+  border-color: rgba(103, 232, 249, 0.42);
+  background: linear-gradient(100deg, #10b981, #06b6d4 52%, #8b5cf6);
+  box-shadow: 0 0 24px rgba(34, 211, 238, 0.24), inset 0 1px 5px rgba(255, 255, 255, 0.18);
+}
+
+.toggle-switch.is-on .toggle-track i {
+  transform: translateX(50px);
+  background: #ffffff;
+}
+
+.toggle-switch.is-on b {
+  justify-self: start;
+  padding: 0 0 0 14px;
+  color: #ecfeff;
+}
+
+.toggle-switch:hover .toggle-track {
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 .feature-disabled-card {
@@ -6241,4 +6330,15 @@ body.app-shell #chatsView.active-view {
 .feature-disabled-card h1 {
   margin: 4px 0 8px;
   font-size: clamp(28px, 4vw, 48px);
+}
+
+@media (max-width: 720px) {
+  .feature-toggle {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .toggle-switch {
+    justify-self: start;
+  }
 }

@@ -79,6 +79,19 @@ const viewFeatureMap = {
   settings: "settings"
 };
 
+const featureDescriptions = {
+  overview: "Command metrics, import leads, and welcome sends.",
+  chats: "Live WhatsApp conversations and manual replies.",
+  contacts: "Audience imports, contact management, and broadcasts.",
+  campaigns: "Scheduled WhatsApp outreach and campaign reporting.",
+  ads: "Click-to-WhatsApp ad drafts and creative previews.",
+  flows: "AI workflow builder, triggers, and automation logs.",
+  human: "Manual takeover queue and priority follow-ups.",
+  orders: "Order summaries, dispatch status, and customer updates.",
+  reports: "Performance dashboards and CRM analytics.",
+  settings: "Connected systems, knowledge, and workspace controls."
+};
+
 const premiumLibrariesReady = loadPremiumLibraries();
 
 async function loadPremiumLibraries() {
@@ -1623,13 +1636,23 @@ function renderFeatureToggles() {
   if (!target || !isAdmin()) return;
   target.innerHTML = state.features
     .map((feature) => `
-      <label class="feature-toggle">
-        <span>
+      <article class="feature-toggle ${feature.enabled ? "active" : "inactive"}">
+        <div class="feature-toggle-copy">
           <strong>${escapeHtml(feature.label)}</strong>
-          <small>${feature.enabled ? "Enabled for User panel" : "Hidden from User panel"}</small>
-        </span>
-        <input type="checkbox" data-feature-toggle="${escapeHtml(feature.key)}" ${feature.enabled ? "checked" : ""} />
-      </label>
+          <small>${escapeHtml(featureDescriptions[feature.key] || "Controls User panel access for this module.")}</small>
+        </div>
+        <mark class="${feature.enabled ? "green" : "neutral"}">${feature.enabled ? "Active" : "Inactive"}</mark>
+        <button
+          class="toggle-switch ${feature.enabled ? "is-on" : "is-off"}"
+          type="button"
+          role="switch"
+          aria-checked="${feature.enabled ? "true" : "false"}"
+          data-feature-toggle="${escapeHtml(feature.key)}"
+        >
+          <span class="toggle-track" aria-hidden="true"><i></i></span>
+          <b>${feature.enabled ? "ON" : "OFF"}</b>
+        </button>
+      </article>
     `)
     .join("");
 }
@@ -2392,20 +2415,22 @@ function bindEvents() {
     button.addEventListener("click", () => switchView(button.dataset.view));
   });
 
-  $("#featureToggleList")?.addEventListener("change", async (event) => {
-    const input = event.target.closest("[data-feature-toggle]");
-    if (!input) return;
+  $("#featureToggleList")?.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-feature-toggle]");
+    if (!button) return;
     try {
-      const data = await publicApi(`/admin/features/${input.dataset.featureToggle}`, {
+      const enabled = button.getAttribute("aria-checked") !== "true";
+      button.disabled = true;
+      const data = await publicApi(`/admin/features/${button.dataset.featureToggle}`, {
         method: "PATCH",
-        body: JSON.stringify({ enabled: input.checked })
+        body: JSON.stringify({ enabled })
       });
       state.features = data.features || state.features;
       state.enabledFeatureKeys = new Set(state.features.map((feature) => feature.key));
       applyFeatureVisibility();
       showNotice("Feature access updated.");
     } catch (error) {
-      input.checked = !input.checked;
+      button.disabled = false;
       showNotice(error.message, true);
     }
   });
