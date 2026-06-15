@@ -723,7 +723,7 @@
           <div>
             <p class="eyebrow">Settings</p>
             <h1>Workspace Settings</h1>
-            <span>Configure connected systems, lead rules, and operating defaults.</span>
+            <span>Manage role access, account session controls, and required workspace configuration.</span>
           </div>
         </div>
         <section class="settings-grid">
@@ -738,16 +738,20 @@
             <div id="featureToggleList" class="feature-toggle-list"></div>
           </article>
           <article class="panel premium-card">
-            <h2>Connected Systems</h2>
-            <div class="tiny-status"><span><i></i>WhatsApp</span><span><i></i>Claude</span><span><i></i>Supabase</span></div>
-          </article>
-          <article class="panel premium-card">
-            <h2>Lead Rules</h2>
-            <div class="profile-detail-list">
-              <span>Hot: <strong>6+ messages</strong></span>
-              <span>Warm: <strong>2-5 messages</strong></span>
-              <span>Scrap: <strong>&lt;2 messages</strong></span>
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Account</p>
+                <h2>Session controls</h2>
+                <span>Review your current role and sign out of this browser session.</span>
+              </div>
             </div>
+            <div class="profile-detail-list">
+              <span>Email: <strong id="settingsAccountEmail">--</strong></span>
+              <span>Role: <strong id="settingsAccountRole">--</strong></span>
+            </div>
+            <form action="/logout" method="post">
+              <button class="secondary-button" type="submit"><i data-lucide="log-out"></i>Sign out</button>
+            </form>
           </article>
         </section>
       </section>

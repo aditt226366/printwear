@@ -1618,6 +1618,8 @@ function applyFeatureVisibility() {
     .slice(0, 2)
     .toUpperCase();
   setText("profileInitials", initials || "AD");
+  setText("settingsAccountEmail", state.session?.email || "--");
+  setText("settingsAccountRole", pretty(state.session?.role || "--"));
 
   document.querySelectorAll("[data-view]").forEach((button) => {
     if (button.dataset.temperatureTab !== undefined) return;
@@ -1951,7 +1953,7 @@ function renderAds() {
     "metaAdsStatusText",
     state.metaAdsConnected
       ? "Meta Ads API credentials are configured. Draft launch controls can be enabled once account review is complete."
-      : "Meta Ads API not connected yet. You can still create ad drafts and previews. Launch controls stay disabled until valid credentials exist."
+      : "Meta Ads API not connected yet. Set META_ADS_ACCESS_TOKEN and META_AD_ACCOUNT_ID to enable future launch controls. You can still create ad drafts and previews."
   );
   renderAdPreview();
   const list = $("#adDraftsList");
