@@ -5790,9 +5790,13 @@ body.app-shell #chatsView.active-view {
 
 .broadcast-command-grid {
   display: grid;
-  grid-template-columns: minmax(320px, 0.9fr) minmax(380px, 1fr) minmax(280px, 0.72fr);
+  grid-template-columns: minmax(360px, 0.95fr) minmax(420px, 1.05fr);
   gap: 14px;
   margin-bottom: 16px;
+}
+
+.broadcast-progress-panel {
+  grid-column: 1 / -1;
 }
 
 .broadcast-panel {
@@ -5837,6 +5841,145 @@ body.app-shell #chatsView.active-view {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
   margin-bottom: 12px;
+}
+
+.bulk-job-card {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.025)),
+    rgba(12, 13, 20, 0.9);
+}
+
+.bulk-job-main,
+.bulk-job-footer,
+.bulk-job-meta {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.bulk-job-main strong,
+.bulk-job-main small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bulk-job-main small,
+.bulk-job-footer small,
+.bulk-job-meta span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.bulk-job-meta {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.bulk-job-meta span {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.bulk-progress {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.bulk-progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #7c3aed, #22d3ee);
+}
+
+.csv-preview-card,
+.meta-status-card {
+  border: 1px solid rgba(167, 139, 250, 0.16);
+  border-radius: 12px;
+  padding: 12px;
+  background: rgba(139, 92, 246, 0.09);
+}
+
+.csv-preview-card {
+  display: grid;
+  gap: 4px;
+}
+
+.csv-preview-card strong,
+.csv-preview-card span,
+.csv-preview-card small {
+  color: #ddd6fe;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.meta-status-card {
+  margin: 0 0 16px;
+}
+
+.meta-status-card h2 {
+  margin: 4px 0;
+}
+
+.meta-status-card span {
+  color: var(--muted-strong);
+}
+
+.campaign-guide-grid,
+.campaign-detail-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.campaign-guide-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.campaign-guide-grid span {
+  display: grid;
+  gap: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.campaign-guide-grid svg {
+  color: #a78bfa;
+}
+
+.campaign-guide-grid small,
+.message-preview p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.campaign-detail-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 12px;
+}
+
+.ad-platform {
+  color: #a7f3d0;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
 }
 
 .broadcast-stat-grid span {
@@ -5959,6 +6102,35 @@ body.app-shell #chatsView.active-view {
   background: rgba(255, 255, 255, 0.028);
 }
 
+.automation-form select,
+.flow-toolbar select,
+.input-shell select {
+  color-scheme: dark;
+  border-color: rgba(167, 139, 250, 0.2);
+  background-color: #24242c;
+  color: #f8fafc;
+}
+
+.automation-form select option,
+.flow-toolbar select option,
+.input-shell select option {
+  background: #1f2028;
+  color: #f8fafc;
+}
+
+.automation-form select option:disabled,
+.flow-toolbar select option:disabled,
+.input-shell select option:disabled {
+  color: #777384;
+  background: #1a1a21;
+}
+
+.automation-form select:hover,
+.flow-toolbar select:hover,
+.input-shell select:hover {
+  border-color: rgba(167, 139, 250, 0.48);
+}
+
 .flow-canvas {
   min-height: 620px;
   background-color: rgba(6, 8, 16, 0.36);
@@ -5996,4 +6168,77 @@ body.app-shell #chatsView.active-view {
   .broadcast-stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .campaign-guide-grid,
+  .campaign-detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.login-role-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 16px 0 0;
+  padding: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.login-role-tabs button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted-strong);
+  font-weight: 900;
+}
+
+.login-role-tabs button.active {
+  background: #fff;
+  color: #111118;
+}
+
+.feature-toggle-list {
+  display: grid;
+  gap: 10px;
+}
+
+.feature-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.feature-toggle strong,
+.feature-toggle small {
+  display: block;
+}
+
+.feature-toggle small {
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+.feature-toggle input {
+  width: 46px;
+  height: 24px;
+  accent-color: #8b5cf6;
+}
+
+.feature-disabled-card {
+  max-width: 720px;
+  margin: 36px auto;
+  padding: 28px;
+}
+
+.feature-disabled-card h1 {
+  margin: 4px 0 8px;
+  font-size: clamp(28px, 4vw, 48px);
 }

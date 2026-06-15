@@ -2,11 +2,14 @@ import crypto from "node:crypto";
 import type { Request, Response } from "express";
 import { env } from "../config/env.js";
 
-const COOKIE_NAME = "admin_session";
+const COOKIE_NAME = "crm_session";
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 
-type SessionPayload = {
+export type SessionRole = "admin" | "user";
+
+export type SessionPayload = {
   email: string;
+  role: SessionRole;
   exp: number;
 };
 
@@ -57,17 +60,30 @@ export const authService = {
     return Boolean(env.ADMIN_EMAIL && env.ADMIN_PASSWORD && env.SESSION_SECRET);
   },
 
+  isUserConfigured() {
+    return Boolean(env.USER_EMAIL && env.USER_PASSWORD && env.SESSION_SECRET);
+  },
+
   verifyCredentials(email: string, password: string) {
     if (!this.isConfigured()) {
       throw new Error("Admin login is not configured. Set ADMIN_EMAIL, ADMIN_PASSWORD, and SESSION_SECRET.");
     }
 
-    return safeEqual(email, env.ADMIN_EMAIL ?? "") && safeEqual(password, env.ADMIN_PASSWORD ?? "");
+    if (safeEqual(email, env.ADMIN_EMAIL ?? "") && safeEqual(password, env.ADMIN_PASSWORD ?? "")) {
+      return "admin" as const;
+    }
+
+    if (this.isUserConfigured() && safeEqual(email, env.USER_EMAIL ?? "") && safeEqual(password, env.USER_PASSWORD ?? "")) {
+      return "user" as const;
+    }
+
+    return null;
   },
 
-  createSession(email: string) {
+  createSession(email: string, role: SessionRole) {
     const payload: SessionPayload = {
       email,
+      role,
       exp: Date.now() + SESSION_TTL_MS
     };
     const encodedPayload = base64Url(JSON.stringify(payload));
@@ -87,7 +103,7 @@ export const authService = {
       }
 
       const payload = JSON.parse(fromBase64Url(encodedPayload)) as SessionPayload;
-      if (!payload.email || payload.exp < Date.now()) {
+      if (!payload.email || !["admin", "user"].includes(payload.role) || payload.exp < Date.now()) {
         return null;
       }
 

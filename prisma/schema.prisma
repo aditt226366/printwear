@@ -319,6 +319,14 @@ model WorkflowExecutionLog {
   @@index([leadId])
 }
 
+model FeatureFlag {
+  key       String   @id
+  label     String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model OrderSummary {
   id               String      @id @default(cuid())
   leadId           String      @unique

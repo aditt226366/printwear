@@ -92,12 +92,14 @@ function setupRequiredDetails(status: AutomationSetupStatus) {
 }
 
 function setupRequiredResponse(status: AutomationSetupStatus) {
+  const setupRequired = !status.ready;
+
   return {
-    setupRequired: true,
+    setupRequired,
     migrationName: status.migrationName,
     missingTables: status.missingTables,
     missingLeadColumns: status.missingLeadColumns,
-    message: "Setup Required"
+    message: setupRequired ? "Setup Required" : "Ready"
   };
 }
 

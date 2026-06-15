@@ -27,13 +27,14 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     throw new AppError("Admin login is not configured. Set ADMIN_EMAIL, ADMIN_PASSWORD, and SESSION_SECRET.", 500);
   }
 
-  if (!authService.verifyCredentials(email, password)) {
-    throw new AppError("Invalid admin email or password", 401);
+  const role = authService.verifyCredentials(email, password);
+  if (!role) {
+    throw new AppError("Invalid email or password", 401);
   }
 
-  const session = authService.createSession(email);
+  const session = authService.createSession(email, role);
   authService.setSessionCookie(res, session);
-  res.json({ ok: true });
+  res.json({ ok: true, role });
 });
 
 export const logout = asyncHandler(async (_req: Request, res: Response) => {

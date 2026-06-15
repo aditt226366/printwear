@@ -1,5 +1,13 @@
 const form = document.querySelector("#loginForm");
 const error = document.querySelector("#loginError");
+const roleButtons = document.querySelectorAll("[data-login-role]");
+
+roleButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    roleButtons.forEach((item) => item.classList.toggle("active", item === button));
+    form.email.placeholder = button.dataset.loginRole === "user" ? "User email" : "Admin email";
+  });
+});
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();

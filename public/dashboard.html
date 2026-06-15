@@ -42,7 +42,7 @@
           <i data-lucide="bell"></i>
         </button>
         <button class="profile-button" type="button" aria-label="Profile menu">
-          <span>AD</span>
+          <span id="profileInitials">AD</span>
         </button>
       </div>
     </header>
@@ -346,6 +346,7 @@
                 <label>Tags<input id="csvDefaultTags" placeholder="vip, summer-drop" /></label>
               </div>
               <textarea id="csvTextInput" rows="6" placeholder="name,phone,tags,source"></textarea>
+              <div id="csvPreview" class="csv-preview-card hidden"></div>
               <button class="primary-button" type="submit"><i data-lucide="upload"></i>Import CSV</button>
             </form>
             <div class="automation-filters broadcast-filters">
@@ -435,12 +436,26 @@
             <form id="campaignForm" class="automation-form">
               <label>Campaign name<input id="campaignName" placeholder="Repeat buyers reactivation" /></label>
               <div class="form-row">
-                <label>Audience tag<input id="campaignAudienceTag" placeholder="vip" /></label>
+                <label>Audience source<select id="campaignAudienceSourceType">
+                  <option value="all">All contacts</option>
+                  <option value="tag">Tag based</option>
+                  <option value="csv">CSV upload</option>
+                  <option value="sheets">Google Sheet import</option>
+                  <option value="manual">Manual selection</option>
+                </select></label>
+                <label>Audience tag<input id="campaignAudienceTag" placeholder="vip, repeat buyers" /></label>
+              </div>
+              <div class="form-row">
                 <label>Source<input id="campaignAudienceSource" placeholder="ads, csv, whatsapp" /></label>
+                <label>Audience CSV<input id="campaignCsvFile" type="file" accept=".csv,text/csv" /></label>
               </div>
               <div class="form-row">
                 <label>Template name<input id="campaignTemplateName" placeholder="approved_template_name" /></label>
                 <label>Schedule time<input id="campaignScheduledAt" type="datetime-local" /></label>
+              </div>
+              <div class="broadcast-preview">
+                <span><i data-lucide="users"></i>Audience selection</span>
+                <p id="campaignAudienceSummary">Use all contacts, a tag/source segment, a CSV upload, Google Sheets import, or manually selected contacts from Contacts &amp; Broadcasts.</p>
               </div>
               <textarea id="campaignPreview" rows="4" placeholder="Internal message preview"></textarea>
               <div class="form-actions">
@@ -482,6 +497,14 @@
           <span id="metaAdsStatus" class="status-pill"><i data-lucide="plug-zap"></i>Meta Ads not connected</span>
         </div>
 
+        <section class="panel premium-card meta-status-card">
+          <div>
+            <p class="eyebrow">Connection Status</p>
+            <h2>Draft now, launch later</h2>
+            <span id="metaAdsStatusText">Meta Ads API not connected yet. You can still create ad drafts and previews. Launch controls stay disabled until valid credentials exist.</span>
+          </div>
+        </section>
+
         <section class="automation-grid">
           <article class="panel premium-card automation-panel">
             <div class="panel-heading">
@@ -494,15 +517,27 @@
               <label>Ad name<input id="adName" placeholder="Dubai uniforms lead ad" /></label>
               <div class="form-row">
                 <label>Objective<input id="adObjective" placeholder="WhatsApp enquiries" /></label>
-                <label>Audience<input id="adAudience" placeholder="UAE small businesses" /></label>
+                <label>Audience / segment<input id="adAudience" placeholder="VIP contacts, UAE small businesses" /></label>
               </div>
-              <label>Headline<input id="adHeadline" placeholder="Custom uniforms for your team" /></label>
-              <textarea id="adBodyText" rows="3" placeholder="Ad body text"></textarea>
               <div class="form-row">
-                <label>CTA<input id="adCta" placeholder="Send WhatsApp" /></label>
+                <label>Platform<select id="adPlatform">
+                  <option>Facebook + Instagram</option>
+                  <option>Facebook</option>
+                  <option>Instagram</option>
+                </select></label>
+                <label>Budget<input id="adBudget" placeholder="AED 500" /></label>
+              </div>
+              <div class="form-row">
+                <label>Location<input id="adLocation" placeholder="Dubai, UAE" /></label>
                 <label>WhatsApp number<input id="adDestination" placeholder="+971..." /></label>
               </div>
-              <textarea id="adTemplatePreview" rows="3" placeholder="Opening WhatsApp message preview"></textarea>
+              <label>Headline<input id="adHeadline" placeholder="Custom uniforms for your team" /></label>
+              <textarea id="adBodyText" rows="3" placeholder="Primary text"></textarea>
+              <div class="form-row">
+                <label>CTA<input id="adCta" placeholder="Send WhatsApp" /></label>
+                <label>Template preview<input id="adTemplateName" placeholder="printwear_business_intro" /></label>
+              </div>
+              <textarea id="adTemplatePreview" rows="3" placeholder="WhatsApp opening message"></textarea>
               <button class="primary-button" type="submit"><i data-lucide="save"></i>Save ad draft</button>
             </form>
           </article>
@@ -692,6 +727,16 @@
           </div>
         </div>
         <section class="settings-grid">
+          <article id="adminFeaturePanel" class="panel premium-card admin-feature-panel hidden">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Admin Feature Management</p>
+                <h2>User panel access</h2>
+                <span>Toggle which CRM modules are visible and reachable for User role sessions.</span>
+              </div>
+            </div>
+            <div id="featureToggleList" class="feature-toggle-list"></div>
+          </article>
           <article class="panel premium-card">
             <h2>Connected Systems</h2>
             <div class="tiny-status"><span><i></i>WhatsApp</span><span><i></i>Claude</span><span><i></i>Supabase</span></div>

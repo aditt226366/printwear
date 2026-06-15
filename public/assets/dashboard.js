@@ -2,6 +2,9 @@ const state = {
   leads: [],
   selectedLeadId: null,
   selectedConversation: null,
+  session: null,
+  features: [],
+  enabledFeatureKeys: new Set(),
   leadSearch: "",
   chatSearch: "",
   temperatureFilter: "",
@@ -61,6 +64,19 @@ const views = {
   human: document.querySelector("#humanView"),
   reports: document.querySelector("#reportsView"),
   settings: document.querySelector("#settingsView")
+};
+
+const viewFeatureMap = {
+  overview: "overview",
+  chats: "chats",
+  contacts: "contacts",
+  campaigns: "campaigns",
+  ads: "ads",
+  flows: "flows",
+  human: "human",
+  orders: "orders",
+  reports: "reports",
+  settings: "settings"
 };
 
 const premiumLibrariesReady = loadPremiumLibraries();
@@ -349,7 +365,10 @@ async function publicApi(path, options = {}) {
       throw error;
     }
     if (response.status === 404) throw new Error(errorText || "That record could not be found.");
-    if (response.status === 401 || response.status === 403) throw new Error("Your session is not authorized for this action.");
+    if (response.status === 401) throw new Error("Your session has expired. Please sign in again.");
+    if (response.status === 403) {
+      throw new Error(errorDetails.feature ? "Feature disabled by admin." : "Your session is not authorized for this action.");
+    }
     if (errorText && !/internal server error/i.test(errorText)) {
       throw new Error(details && !/internal server error/i.test(details) ? `${errorText}: ${details}` : errorText);
     }
@@ -1468,6 +1487,38 @@ function commaList(value) {
     .filter(Boolean);
 }
 
+function csvPreviewRows(text) {
+  return String(text || "")
+    .split(/\r?\n/)
+    .map((line) => line.split(",").map((cell) => cell.trim()))
+    .filter((row) => row.some(Boolean));
+}
+
+function renderCsvPreview() {
+  const target = $("#csvPreview");
+  if (!target) return;
+  const rows = csvPreviewRows($("#csvTextInput")?.value || "");
+  if (!rows.length) {
+    target.classList.add("hidden");
+    target.innerHTML = "";
+    return;
+  }
+
+  const headers = rows[0].map((cell) => cell.toLowerCase().replace(/\s+/g, ""));
+  const hasHeader = ["name", "phone"].every((header) => headers.includes(header));
+  const phoneIndex = hasHeader ? headers.indexOf("phone") : 1;
+  const dataRows = hasHeader ? rows.slice(1) : rows;
+  const invalidPhones = dataRows.filter((row) => !/^\+?[0-9 ()-]{7,}$/.test(row[phoneIndex] || "")).length;
+  const tagText = commaList($("#csvDefaultTags")?.value || "").join(", ") || "No default tags";
+  target.classList.remove("hidden");
+  target.innerHTML = `
+    <strong>Preview: ${dataRows.length} row${dataRows.length === 1 ? "" : "s"}</strong>
+    <span>${hasHeader ? "Headers detected: name, phone, tags, source" : "No header row detected. Expected order: name, phone, tags, source."}</span>
+    <span>${invalidPhones ? `${invalidPhones} phone value${invalidPhones === 1 ? "" : "s"} need review.` : "Phone numbers look ready."}</span>
+    <small>Default tags: ${escapeHtml(tagText)}</small>
+  `;
+}
+
 function selectedAudienceFromContacts(extra = {}) {
   const leadIds = [...state.selectedContactIds];
   return {
@@ -1518,6 +1569,82 @@ function renderSelectOptions(select, values, currentValue, label) {
   if (!select) return;
   select.innerHTML = [`<option value="">${escapeHtml(label)}</option>`, ...values.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(pretty(value))}</option>`)].join("");
   select.value = currentValue || "";
+}
+
+async function loadSessionAndFeatures() {
+  const [sessionData, featureData] = await Promise.all([
+    publicApi("/session"),
+    publicApi("/features/enabled")
+  ]);
+  state.session = sessionData.session || null;
+  state.features = featureData.features || [];
+  state.enabledFeatureKeys = new Set(state.features.map((feature) => feature.key));
+  applyFeatureVisibility();
+}
+
+function isAdmin() {
+  return state.session?.role === "admin";
+}
+
+function featureEnabledForView(view) {
+  const key = viewFeatureMap[view];
+  return isAdmin() || !key || state.enabledFeatureKeys.has(key);
+}
+
+function firstAvailableView() {
+  return Object.keys(views).find((view) => featureEnabledForView(view)) || "overview";
+}
+
+function applyFeatureVisibility() {
+  document.body.dataset.role = state.session?.role || "user";
+  const initials = (state.session?.email || "AD")
+    .split("@")[0]
+    .split(/[.\-_]/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+  setText("profileInitials", initials || "AD");
+
+  document.querySelectorAll("[data-view]").forEach((button) => {
+    if (button.dataset.temperatureTab !== undefined) return;
+    const visible = featureEnabledForView(button.dataset.view);
+    button.hidden = !visible;
+    button.setAttribute("aria-hidden", String(!visible));
+  });
+
+  const panel = $("#adminFeaturePanel");
+  if (panel) panel.classList.toggle("hidden", !isAdmin());
+  renderFeatureToggles();
+}
+
+function renderFeatureToggles() {
+  const target = $("#featureToggleList");
+  if (!target || !isAdmin()) return;
+  target.innerHTML = state.features
+    .map((feature) => `
+      <label class="feature-toggle">
+        <span>
+          <strong>${escapeHtml(feature.label)}</strong>
+          <small>${feature.enabled ? "Enabled for User panel" : "Hidden from User panel"}</small>
+        </span>
+        <input type="checkbox" data-feature-toggle="${escapeHtml(feature.key)}" ${feature.enabled ? "checked" : ""} />
+      </label>
+    `)
+    .join("");
+}
+
+function renderFeatureDisabled(view) {
+  Object.entries(views).forEach(([key, element]) => element?.classList.toggle("active-view", key === view));
+  const target = views[view];
+  if (!target) return;
+  target.innerHTML = `
+    <section class="panel premium-card feature-disabled-card">
+      <p class="eyebrow">Access Control</p>
+      <h1>Feature disabled by admin.</h1>
+      <span>This module is not available for your user role right now.</span>
+    </section>
+  `;
 }
 
 async function loadContacts() {
@@ -1636,16 +1763,26 @@ function renderBulkJobs() {
     state.bulkJobs,
     (job) => job.id,
     (job) => `
-      <article class="automation-row">
-        <div>
-          <strong>${escapeHtml(job.name)}</strong>
-          <small>${escapeHtml(job.templateName)} - ${formatDate(job.createdAt)}</small>
-        </div>
-        <span class="progress-stack">
+      <article class="bulk-job-card">
+        <div class="bulk-job-main">
+          <div>
+            <strong>${escapeHtml(job.name)}</strong>
+            <small>${escapeHtml(job.templateName)} - ${formatDate(job.createdAt)}</small>
+          </div>
           <mark class="${statusTone(job.status)}">${escapeHtml(pretty(job.status))}</mark>
-          <small>${job.sentCount || 0} sent / ${job.failedCount || 0} failed / ${job.queuedCount || 0} queued</small>
+        </div>
+        <div class="bulk-job-meta">
+          <span>${job.sentCount || 0} sent</span>
+          <span>${job.failedCount || 0} failed</span>
+          <span>${job.queuedCount || 0} queued</span>
+        </div>
+        <div class="bulk-progress" aria-label="Broadcast progress">
           <i style="width:${Math.round(((job.sentCount || 0) + (job.failedCount || 0)) / Math.max(1, job.totalCount || 1) * 100)}%"></i>
-        </span>
+        </div>
+        <div class="bulk-job-footer">
+          <small>${escapeHtml(relativeTime(job.createdAt))}</small>
+          <button class="ghost-action" type="button" data-bulk-detail="${escapeHtml(job.id)}"><i data-lucide="list-checks"></i>View details</button>
+        </div>
       </article>
     `,
     emptyState("No bulk sends yet.", "Queue an approved template send to see progress.")
@@ -1674,6 +1811,19 @@ function renderCampaigns() {
   if (!table) return;
   if (!state.campaigns.length) {
     table.innerHTML = emptyState("No campaigns yet.", "Create a scheduled or immediate WhatsApp template campaign.");
+    setText("campaignDetailTitle", "Campaign setup guide");
+    const detail = $("#campaignDetail");
+    if (detail) {
+      detail.classList.add("empty-state");
+      detail.innerHTML = `
+        <div class="campaign-guide-grid">
+          <span><i data-lucide="users"></i><strong>Choose audience</strong><small>All contacts, tags, CSV, Google Sheets, or selected contacts.</small></span>
+          <span><i data-lucide="badge-check"></i><strong>Select template</strong><small>Use an approved WhatsApp template for outbound campaign sends.</small></span>
+          <span><i data-lucide="calendar-clock"></i><strong>Run or schedule</strong><small>Create a server-side campaign job that continues when the dashboard is closed.</small></span>
+        </div>
+      `;
+      refreshIcons();
+    }
     return;
   }
 
@@ -1714,6 +1864,10 @@ function renderCampaigns() {
     showNotice("Campaign cancelled.");
     await loadCampaigns();
   });
+
+  if (!state.selectedCampaignId || !state.campaigns.some((campaign) => campaign.id === state.selectedCampaignId)) {
+    loadCampaignDetail(state.campaigns[0].id).catch((error) => showNotice(error.message, true));
+  }
 }
 
 async function loadCampaignDetail(campaignId) {
@@ -1731,16 +1885,23 @@ async function loadCampaignDetail(campaignId) {
       <span><strong>${campaign.failed}</strong><small>Failed</small></span>
       <span><strong>${campaign.replies}</strong><small>Replies</small></span>
     </div>
-    <div class="message-preview">${escapeHtml(campaign.messagePreview || `[Template: ${campaign.templateName}]`)}</div>
+    <div class="campaign-detail-grid">
+      <div class="message-preview"><strong>Template preview</strong><p>${escapeHtml(campaign.messagePreview || `[Template: ${campaign.templateName}]`)}</p></div>
+      <div class="message-preview"><strong>Reply summary</strong><p>${campaign.replies ? `${campaign.replies} contacts have replied from this campaign.` : "Replies generated from this campaign will appear here."}</p></div>
+    </div>
     <div class="automation-list compact">
       ${(campaign.recipients || []).map((recipient) => `
         <article class="automation-row">
           <div><strong>${escapeHtml(recipient.name)}</strong><small>${escapeHtml(recipient.phone)}</small></div>
-          <mark class="${statusTone(recipient.status)}">${escapeHtml(pretty(recipient.status))}</mark>
+          <div class="row-actions">
+            <mark class="${statusTone(recipient.status)}">${escapeHtml(pretty(recipient.status))}</mark>
+            ${recipient.errorMessage ? `<small>${escapeHtml(recipient.errorMessage)}</small>` : ""}
+          </div>
         </article>
-      `).join("")}
+      `).join("") || emptyState("No audience recipients yet.", "Recipients are created when the campaign is saved.")}
     </div>
   `;
+  refreshIcons();
 }
 
 async function loadAds() {
@@ -1763,6 +1924,12 @@ async function loadAds() {
 function renderAds() {
   setHtmlIfChanged($("#metaAdsStatus"), `<i data-lucide="${state.metaAdsConnected ? "plug-zap" : "plug"}"></i>${state.metaAdsConnected ? "Meta Ads connected" : "Meta Ads not connected"}`);
   $("#metaAdsStatus")?.classList.toggle("connected", state.metaAdsConnected);
+  setText(
+    "metaAdsStatusText",
+    state.metaAdsConnected
+      ? "Meta Ads API credentials are configured. Draft launch controls can be enabled once account review is complete."
+      : "Meta Ads API not connected yet. You can still create ad drafts and previews. Launch controls stay disabled until valid credentials exist."
+  );
   renderAdPreview();
   const list = $("#adDraftsList");
   if (!list) return;
@@ -1791,8 +1958,12 @@ function renderAdPreview() {
   const body = $("#adBodyText")?.value || "Launch a WhatsApp enquiry from this ad.";
   const cta = $("#adCta")?.value || "Send WhatsApp";
   const opening = $("#adTemplatePreview")?.value || "Hi, I am interested in custom uniforms.";
+  const platform = $("#adPlatform")?.value || "Facebook + Instagram";
+  const budget = $("#adBudget")?.value || "Budget not set";
+  const location = $("#adLocation")?.value || "Location not set";
   target.innerHTML = `
     <article class="ad-card-preview">
+      <small class="ad-platform">${escapeHtml(platform)} - ${escapeHtml(location)} - ${escapeHtml(budget)}</small>
       <span class="ad-media"><i data-lucide="shirt"></i></span>
       <strong>${escapeHtml(headline)}</strong>
       <p>${escapeHtml(body)}</p>
@@ -2127,7 +2298,16 @@ function setTemperatureFilter(value) {
 }
 
 function switchView(name) {
+  if (!featureEnabledForView(name)) {
+    renderFeatureDisabled(name);
+    showNotice("Feature disabled by admin.", true);
+    return;
+  }
+
   state.currentView = name;
+  if (window.location.hash !== `#${name}`) {
+    window.history.replaceState(null, "", `#${name}`);
+  }
   document.body.classList.toggle("chat-mode", name === "chats");
   Object.entries(views).forEach(([key, element]) => {
     element.classList.toggle("active-view", key === name);
@@ -2158,8 +2338,12 @@ async function refreshCurrentView() {
   state.isRefreshing = true;
   const snapshot = captureUiState();
   try {
-    await Promise.all([loadOverview(), loadLeads(), loadOperationalData()]);
-    if (state.selectedLeadId) await loadConversation(state.selectedLeadId, { forceBottom: isNearBottom($("#chatThread")) });
+    await Promise.all([
+      featureEnabledForView("overview") ? loadOverview() : Promise.resolve(),
+      featureEnabledForView("chats") ? loadLeads() : Promise.resolve(),
+      featureEnabledForView("human") || featureEnabledForView("orders") ? loadOperationalData() : Promise.resolve()
+    ]);
+    if (featureEnabledForView("chats") && state.selectedLeadId) await loadConversation(state.selectedLeadId, { forceBottom: isNearBottom($("#chatThread")) });
   } finally {
     state.isRefreshing = false;
     restoreUiState(snapshot);
@@ -2173,19 +2357,19 @@ async function pollDashboardData() {
   const forceBottom = isNearBottom($("#chatThread"));
 
   try {
-    await loadLeads({ updateOverview: false });
-    if (selectedLeadId) {
+    if (featureEnabledForView("chats")) await loadLeads({ updateOverview: false });
+    if (featureEnabledForView("chats") && selectedLeadId) {
       await loadConversation(selectedLeadId, { forceBottom });
     }
-    if (state.currentView === "overview" || state.currentView === "reports") {
+    if ((state.currentView === "overview" && featureEnabledForView("overview")) || (state.currentView === "reports" && featureEnabledForView("reports"))) {
       const data = await dashboardApi();
       state.latestOverview = data;
       state.humanActionQueue = data.humanActionQueue || data.items || [];
       state.orderPipeline = data.orderPipeline || data.pipeline || {};
       renderDerivedOverview();
-    } else if (state.currentView === "orders") {
+    } else if (state.currentView === "orders" && featureEnabledForView("orders")) {
       await loadOrderData();
-    } else {
+    } else if (state.currentView === "human" && featureEnabledForView("human")) {
       await loadOperationalData();
     }
     setConnectionStatus("connected");
@@ -2206,6 +2390,24 @@ function startDashboardPolling() {
 function bindEvents() {
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => switchView(button.dataset.view));
+  });
+
+  $("#featureToggleList")?.addEventListener("change", async (event) => {
+    const input = event.target.closest("[data-feature-toggle]");
+    if (!input) return;
+    try {
+      const data = await publicApi(`/admin/features/${input.dataset.featureToggle}`, {
+        method: "PATCH",
+        body: JSON.stringify({ enabled: input.checked })
+      });
+      state.features = data.features || state.features;
+      state.enabledFeatureKeys = new Set(state.features.map((feature) => feature.key));
+      applyFeatureVisibility();
+      showNotice("Feature access updated.");
+    } catch (error) {
+      input.checked = !input.checked;
+      showNotice(error.message, true);
+    }
   });
 
   document.querySelectorAll("[data-temperature-tab]").forEach((tab) => {
@@ -2281,7 +2483,11 @@ function bindEvents() {
     const file = event.target.files?.[0];
     if (!file) return;
     $("#csvTextInput").value = await file.text();
+    renderCsvPreview();
   });
+
+  $("#csvTextInput")?.addEventListener("input", renderCsvPreview);
+  $("#csvDefaultTags")?.addEventListener("input", renderCsvPreview);
 
   $("#csvImportForm")?.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -2347,15 +2553,31 @@ function bindEvents() {
     const submitter = event.submitter;
     const scheduleNow = submitter?.dataset.campaignSubmit === "now";
     const localValue = $("#campaignScheduledAt")?.value;
+    const audienceSourceType = $("#campaignAudienceSourceType")?.value || "all";
     try {
+      if (audienceSourceType === "csv" && $("#campaignCsvFile")?.files?.[0]) {
+        const csvText = await $("#campaignCsvFile").files[0].text();
+        const result = await publicApi("/contacts/import/csv", {
+          method: "POST",
+          body: JSON.stringify({ csvText, source: "campaign_csv" })
+        });
+        showNotice(`Campaign CSV imported ${result.imported || 0} contacts. ${result.skipped || 0} skipped.`);
+      }
+      if (audienceSourceType === "sheets") {
+        const result = await publicApi("/contacts/import/google-sheets", { method: "POST" });
+        showNotice(`Google Sheets synced ${result.imported || 0} contacts for campaign audience.`);
+      }
+      const audience = audienceSourceType === "manual"
+        ? selectedAudienceFromContacts({})
+        : selectedAudienceFromContacts({
+            tag: audienceSourceType === "tag" ? $("#campaignAudienceTag")?.value.trim() : "",
+            source: audienceSourceType === "csv" ? "campaign_csv" : $("#campaignAudienceSource")?.value.trim()
+          });
       await publicApi("/campaigns", {
         method: "POST",
         body: JSON.stringify({
           name: $("#campaignName")?.value.trim(),
-          audience: selectedAudienceFromContacts({
-            tag: $("#campaignAudienceTag")?.value.trim(),
-            source: $("#campaignAudienceSource")?.value.trim()
-          }),
+          audience,
           templateName: $("#campaignTemplateName")?.value.trim(),
           messagePreview: $("#campaignPreview")?.value.trim(),
           scheduledAt: !scheduleNow && localValue ? new Date(localValue).toISOString() : null,
@@ -2369,8 +2591,20 @@ function bindEvents() {
     }
   });
 
-  ["adHeadline", "adBodyText", "adCta", "adTemplatePreview"].forEach((id) => {
+  $("#campaignAudienceSourceType")?.addEventListener("change", (event) => {
+    const label = {
+      all: "All contacts in the CRM will be eligible for this campaign.",
+      tag: "Contacts matching the audience tag will be selected.",
+      csv: "Upload a CSV with name, phone, tags, source. Contacts are imported safely before campaign creation.",
+      sheets: "Google Sheets contacts are synced before campaign creation.",
+      manual: "Contacts selected in Contacts & Broadcasts are used as the audience."
+    }[event.target.value] || "";
+    setText("campaignAudienceSummary", label);
+  });
+
+  ["adHeadline", "adBodyText", "adCta", "adTemplatePreview", "adPlatform", "adBudget", "adLocation"].forEach((id) => {
     $(`#${id}`)?.addEventListener("input", renderAdPreview);
+    $(`#${id}`)?.addEventListener("change", renderAdPreview);
   });
 
   $("#adDraftForm")?.addEventListener("submit", async (event) => {
@@ -2686,14 +2920,24 @@ async function performOrderAction(orderId, action, button) {
   }
 }
 
-bindEvents();
-refreshIcons();
-connectChatEvents();
-loadOverview();
-startDashboardPolling();
+async function startDashboard() {
+  try {
+    await loadSessionAndFeatures();
+    bindEvents();
+    refreshIcons();
+    if (featureEnabledForView("chats")) connectChatEvents();
+    const requestedView = window.location.hash.replace("#", "");
+    switchView(views[requestedView] ? requestedView : featureEnabledForView("overview") ? "overview" : firstAvailableView());
+    startDashboardPolling();
+  } catch (error) {
+    showNotice(error.message || "Dashboard could not start.", true);
+  }
 
-premiumLibrariesReady.then(() => {
-  refreshIcons();
-  if (state.latestOverview) renderDerivedOverview();
-  runMotion();
-});
+  premiumLibrariesReady.then(() => {
+    refreshIcons();
+    if (state.latestOverview) renderDerivedOverview();
+    runMotion();
+  });
+}
+
+startDashboard();
