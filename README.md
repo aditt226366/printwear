@@ -4,13 +4,17 @@ Phase 1 backend for importing leads from Google Sheets, sending WhatsApp templat
 
 ## Tech Stack
 
-- Node.js, Express.js, TypeScript
+- Node.js 20-23, Express.js, TypeScript
 - PostgreSQL with Prisma ORM
 - Google Sheets API
 - Meta WhatsApp Cloud API
 - Claude Messages API
 - PostgreSQL full-text search for Phase 1 knowledge retrieval
 - Pino structured logging
+
+## Runtime
+
+Use Node 22 for local preview and production. Do not use Node 24 because Prisma TLS connections to Supabase may fail in this environment.
 
 ## Setup
 

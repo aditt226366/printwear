@@ -50,10 +50,12 @@ import {
 } from "../controllers/automation.controller.js";
 import { requireAdmin, requireSession } from "../middleware/auth.middleware.js";
 import { requireFeature } from "../middleware/feature.middleware.js";
+import { getSystemStatus } from "../controllers/systemStatus.controller.js";
 
 export const apiRoutes = Router();
 
 apiRoutes.get("/automation/setup", getAutomationSetup);
+apiRoutes.get("/debug/system-status", getSystemStatus);
 
 apiRoutes.use(requireSession);
 
