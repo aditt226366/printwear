@@ -70,8 +70,8 @@ export const featureFlagService = {
   },
 
   async list(companyId?: string | null) {
+    if (!companyId) return DEFAULT_FEATURES;
     try {
-      if (!companyId) return DEFAULT_FEATURES;
       await this.ensureDefaultsForCompany(companyId);
       const rows = await prisma.companyFeature.findMany({
         where: { companyId },
@@ -80,7 +80,7 @@ export const featureFlagService = {
       return normalizeRows(rows);
     } catch (error) {
       logger.error({ error, companyId }, "Feature flag lookup failed");
-      return DEFAULT_FEATURES;
+      throw new AppError("Feature access unavailable. Please try again.", 503);
     }
   },
 
