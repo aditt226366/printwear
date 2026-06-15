@@ -47,10 +47,6 @@
               <label>Company name<input id="companyName" required placeholder="ABC Uniforms" /></label>
               <label>Slug<input id="companySlug" placeholder="abc-uniforms" /></label>
               <label>Status<select id="companyStatus"><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></label>
-              <label>Logo URL<input id="companyLogoUrl" placeholder="https://..." /></label>
-              <label>WhatsApp number<input id="companyWhatsappNumber" placeholder="+971..." /></label>
-              <div class="form-row"><label>Brand color<input id="companyBrandColor" placeholder="#7c3aed" /></label><label>Timezone<input id="companyTimezone" placeholder="Asia/Dubai" /></label></div>
-              <label>Business type<input id="companyBusinessType" placeholder="Uniforms, apparel, printwear" /></label>
               <button class="primary-button" type="submit"><i data-lucide="building-2"></i>Create company</button>
             </form>
           </article>
@@ -59,7 +55,6 @@
             <form id="userForm" class="automation-form">
               <label>Company<select id="userCompany" required></select></label>
               <div class="form-row"><label>Name<input id="userName" required /></label><label>Username<input id="userUsername" required /></label></div>
-              <label>Email optional<input id="userEmail" type="email" /></label>
               <div class="form-row"><label>Password<input id="userPassword" type="password" required /></label><label>Confirm password<input id="userConfirmPassword" type="password" required /></label></div>
               <label>Status<select id="userStatus"><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></label>
               <button class="primary-button" type="submit"><i data-lucide="user-plus"></i>Create user</button>
@@ -68,7 +63,21 @@
         </section>
         <section class="panel premium-card">
           <div class="panel-heading"><div><p class="eyebrow">User Table</p><h2>Provisioned accounts</h2></div></div>
-          <div id="adminUsersTable" class="data-table"></div>
+          <div class="admin-user-toolbar">
+            <label class="admin-search-field"><i data-lucide="search"></i><input id="userSearch" type="search" placeholder="Search users..." /></label>
+            <select id="userCompanyFilter" class="admin-select"></select>
+            <select id="userStatusFilter" class="admin-select">
+              <option value="">All statuses</option>
+              <option value="ACTIVE">Active</option>
+              <option value="INACTIVE">Inactive</option>
+            </select>
+            <select id="userRoleFilter" class="admin-select">
+              <option value="">All roles</option>
+              <option value="ADMIN">Admin</option>
+              <option value="USER">User</option>
+            </select>
+          </div>
+          <div id="adminUsersTable" class="data-table admin-users-table"></div>
         </section>
       </section>
 

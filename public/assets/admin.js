@@ -3,7 +3,13 @@ const adminState = {
   users: [],
   features: [],
   billing: { summary: {}, logs: [] },
-  currentView: "users"
+  currentView: "users",
+  userFilters: {
+    search: "",
+    companyId: "",
+    status: "",
+    role: ""
+  }
 };
 
 const featureDescriptions = {
@@ -101,11 +107,11 @@ function switchAdminView(view) {
 
 function fillCompanySelects() {
   const options = adminState.companies.map((company) => `<option value="${escapeHtml(company.id)}">${escapeHtml(company.name)}</option>`).join("");
-  ["userCompany", "featureCompanySelect", "billingCompanySelect"].forEach((id) => {
+  ["userCompany", "featureCompanySelect", "billingCompanySelect", "userCompanyFilter"].forEach((id) => {
     const select = $(`#${id}`);
     if (!select) return;
     const current = select.value;
-    select.innerHTML = id === "billingCompanySelect" ? `<option value="">All companies</option>${options}` : options;
+    select.innerHTML = ["billingCompanySelect", "userCompanyFilter"].includes(id) ? `<option value="">All companies</option>${options}` : options;
     if (current) select.value = current;
   });
 }
@@ -122,6 +128,19 @@ async function loadUsers() {
   renderUsers();
 }
 
+function filteredUsers() {
+  const search = adminState.userFilters.search.toLowerCase().trim();
+  return adminState.users.filter((user) => {
+    const companyName = user.company?.name || "Platform";
+    const searchable = `${user.name} ${user.username} ${companyName} ${user.role} ${user.status}`.toLowerCase();
+    const matchesSearch = !search || searchable.includes(search);
+    const matchesCompany = !adminState.userFilters.companyId || user.companyId === adminState.userFilters.companyId;
+    const matchesStatus = !adminState.userFilters.status || user.status === adminState.userFilters.status;
+    const matchesRole = !adminState.userFilters.role || user.role === adminState.userFilters.role;
+    return matchesSearch && matchesCompany && matchesStatus && matchesRole;
+  });
+}
+
 function renderUsers() {
   const table = $("#adminUsersTable");
   if (!table) return;
@@ -129,27 +148,34 @@ function renderUsers() {
     table.innerHTML = `<div class="empty-state"><strong>No users yet.</strong><span>Create a company and user to begin.</span></div>`;
     return;
   }
+  const users = filteredUsers();
+  if (!users.length) {
+    table.innerHTML = `<div class="empty-state"><strong>No users match these filters.</strong><span>Adjust search, company, role, or status to see more accounts.</span></div>`;
+    return;
+  }
   table.innerHTML = `
     <div class="data-row admin-users-head">
-      <span>Name</span><span>Username</span><span>Email</span><span>Company</span><span>Role</span><span>Status</span><span>Last Login</span><span>Created</span><span>Actions</span>
+      <span>User</span><span>Company</span><span>Role</span><span>Status</span><span>Last Login</span><span>Created</span><span>Actions</span>
     </div>
-    ${adminState.users.map((user) => `
+    ${users.map((user) => `
       <div class="data-row admin-users-row" data-user-id="${escapeHtml(user.id)}">
-        <span class="user-cell"><i>${escapeHtml(initials(user.name))}</i><strong>${escapeHtml(user.name)}</strong></span>
-        <span>${escapeHtml(user.username)}</span>
-        <span>${escapeHtml(user.email || "--")}</span>
-        <span><mark class="neutral">${escapeHtml(user.company?.name || "Platform")}</mark></span>
+        <span class="user-cell">
+          <i>${escapeHtml(initials(user.name))}</i>
+          <span><strong>${escapeHtml(user.name)}</strong><small>${escapeHtml(user.username)}</small></span>
+        </span>
+        <span><mark class="neutral company-badge" title="${escapeHtml(user.company?.name || "Platform")}">${escapeHtml(user.company?.name || "Platform")}</mark></span>
         <span><mark class="${user.role === "ADMIN" ? "green" : "neutral"}">${escapeHtml(pretty(user.role))}</mark></span>
         <span><mark class="${user.status === "ACTIVE" ? "green" : "red"}">${escapeHtml(pretty(user.status))}</mark></span>
         <span>${formatDate(user.lastLoginAt)}</span>
         <span>${formatDate(user.createdAt)}</span>
         <span class="row-actions">
-          <button class="secondary-button" type="button" data-user-reset="${escapeHtml(user.id)}">Reset Password</button>
-          ${user.role === "USER" ? `<button class="secondary-button" type="button" data-user-status="${escapeHtml(user.id)}">${user.status === "ACTIVE" ? "Deactivate" : "Activate"}</button>` : ""}
+          <button class="secondary-button compact-admin-action" type="button" data-user-reset="${escapeHtml(user.id)}">Reset</button>
+          ${user.role === "USER" ? `<button class="secondary-button compact-admin-action" type="button" data-user-status="${escapeHtml(user.id)}">${user.status === "ACTIVE" ? "Deactivate" : "Activate"}</button>` : ""}
         </span>
       </div>
     `).join("")}
   `;
+  refreshIcons();
 }
 
 async function loadFeatures() {
@@ -235,12 +261,7 @@ function bindEvents() {
       body: JSON.stringify({
         name: $("#companyName").value,
         slug: $("#companySlug").value,
-        status: $("#companyStatus").value,
-        logoUrl: $("#companyLogoUrl").value || null,
-        whatsappNumber: $("#companyWhatsappNumber").value || null,
-        brandColor: $("#companyBrandColor").value || null,
-        timezone: $("#companyTimezone").value || null,
-        businessType: $("#companyBusinessType").value || null
+        status: $("#companyStatus").value
       })
     });
     event.target.reset();
@@ -255,7 +276,6 @@ function bindEvents() {
         companyId: $("#userCompany").value,
         name: $("#userName").value,
         username: $("#userUsername").value,
-        email: $("#userEmail").value || null,
         password: $("#userPassword").value,
         confirmPassword: $("#userConfirmPassword").value,
         status: $("#userStatus").value
@@ -264,6 +284,22 @@ function bindEvents() {
     event.target.reset();
     showNotice("User created.");
     await loadUsers();
+  });
+  $("#userSearch")?.addEventListener("input", (event) => {
+    adminState.userFilters.search = event.target.value;
+    renderUsers();
+  });
+  $("#userCompanyFilter")?.addEventListener("change", (event) => {
+    adminState.userFilters.companyId = event.target.value;
+    renderUsers();
+  });
+  $("#userStatusFilter")?.addEventListener("change", (event) => {
+    adminState.userFilters.status = event.target.value;
+    renderUsers();
+  });
+  $("#userRoleFilter")?.addEventListener("change", (event) => {
+    adminState.userFilters.role = event.target.value;
+    renderUsers();
   });
   $("#adminUsersTable")?.addEventListener("click", async (event) => {
     const reset = event.target.closest("[data-user-reset]");

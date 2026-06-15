@@ -6363,19 +6363,76 @@ body.app-shell #chatsView.active-view {
   margin-bottom: 14px;
 }
 
+.admin-user-toolbar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(170px, 0.7fr) 140px 120px;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.admin-search-field {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(167, 139, 250, 0.2);
+  border-radius: 10px;
+  background: #24242c;
+  color: #f8fafc;
+  padding: 0 12px;
+}
+
+.admin-search-field svg {
+  width: 17px;
+  height: 17px;
+  color: var(--muted-strong);
+  flex: 0 0 auto;
+}
+
+.admin-search-field input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #f8fafc;
+  font-weight: 800;
+}
+
+.admin-users-table {
+  width: 100%;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
 .admin-users-row,
 .admin-users-head {
-  grid-template-columns: minmax(180px, 1.2fr) 120px 170px 150px 92px 104px 140px 140px minmax(210px, 1fr);
+  min-width: 1040px;
+  grid-template-columns: minmax(250px, 1.45fr) minmax(150px, 0.8fr) 86px 96px 148px 148px minmax(178px, 0.82fr);
+  gap: 14px;
 }
 
 .admin-users-row {
-  min-height: 58px;
+  min-height: 56px;
+  padding: 9px 12px;
+}
+
+.admin-users-head {
+  min-height: 36px;
+  background: rgba(255, 255, 255, 0.065);
+  color: var(--muted-strong);
+  font-size: 11px;
+  font-weight: 950;
+  text-transform: uppercase;
+  letter-spacing: 0;
 }
 
 .user-cell {
   display: inline-flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
 }
 
 .user-cell i {
@@ -6389,6 +6446,30 @@ body.app-shell #chatsView.active-view {
   font-size: 0.74rem;
   font-style: normal;
   font-weight: 900;
+  flex: 0 0 auto;
+}
+
+.user-cell span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.user-cell small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.company-badge {
+  max-width: 138px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .profile-menu {
@@ -6429,13 +6510,24 @@ body.app-shell #chatsView.active-view {
 
 .admin-shell .row-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.compact-admin-action {
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 @media (max-width: 1100px) {
   .admin-grid,
-  .admin-filter-row {
+  .admin-filter-row,
+  .admin-user-toolbar {
     grid-template-columns: 1fr;
   }
 }
