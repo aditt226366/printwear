@@ -10,7 +10,18 @@ const port = Number(process.env.PORT) || 3000;
 
 let server: ReturnType<typeof app.listen> | undefined;
 
+function assertSupportedRuntime() {
+  const majorVersion = Number(process.version.replace(/^v/, "").split(".")[0]);
+  logger.info({ nodeVersion: process.version }, "Runtime Node Version:");
+  if (majorVersion > 23) {
+    const message = "Unsupported Node version. Use Node 22.";
+    logger.fatal({ nodeVersion: process.version }, message);
+    throw new Error(message);
+  }
+}
+
 async function start() {
+  assertSupportedRuntime();
   await authService.ensureSeedUsers();
   server = app.listen(port, () => {
     logger.info({ port }, "Server started");
