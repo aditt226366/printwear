@@ -56,8 +56,99 @@ const activeBulkJobs = new Set<string>();
 const activeCampaigns = new Set<string>();
 let workersStarted = false;
 
+type AutomationSetupStatus = {
+  ready: boolean;
+  missingTables: string[];
+  missingLeadColumns: string[];
+  migrationName: string;
+};
+
+const AUTOMATION_MIGRATION_NAME = "20260615120000_printwear_automation_modules";
+const REQUIRED_TABLES = [
+  "BulkMessageJob",
+  "BulkMessageRecipient",
+  "Campaign",
+  "CampaignRecipient",
+  "AdDraft",
+  "AiWorkflow",
+  "WorkflowExecutionLog"
+];
+const REQUIRED_LEAD_COLUMNS = ["tags", "attributes"];
+
+let setupCache: { checkedAt: number; status: AutomationSetupStatus } | null = null;
+
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function setupRequiredDetails(status: AutomationSetupStatus) {
+  return {
+    setupRequired: true,
+    missingMigrations: [status.migrationName],
+    missingTables: status.missingTables,
+    missingLeadColumns: status.missingLeadColumns,
+    message: "Run the Printwear automation Prisma migration before using Contacts, Bulk Messaging, Campaigns, Ads, or AI Flows."
+  };
+}
+
+function setupRequiredResponse(status: AutomationSetupStatus) {
+  return {
+    setupRequired: true,
+    migrationName: status.migrationName,
+    missingTables: status.missingTables,
+    missingLeadColumns: status.missingLeadColumns,
+    message: "Setup Required"
+  };
+}
+
+async function automationSetupStatus(force = false): Promise<AutomationSetupStatus> {
+  if (!force && setupCache && Date.now() - setupCache.checkedAt < 30000) {
+    return setupCache.status;
+  }
+
+  try {
+    const tableRows = await prisma.$queryRaw<Array<{ table_name: string }>>`
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND table_name IN ('BulkMessageJob', 'BulkMessageRecipient', 'Campaign', 'CampaignRecipient', 'AdDraft', 'AiWorkflow', 'WorkflowExecutionLog')
+    `;
+    const columnRows = await prisma.$queryRaw<Array<{ column_name: string }>>`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'Lead'
+        AND column_name IN ('tags', 'attributes')
+    `;
+
+    const existingTables = new Set(tableRows.map((row) => row.table_name));
+    const existingColumns = new Set(columnRows.map((row) => row.column_name));
+    const status = {
+      ready: REQUIRED_TABLES.every((name) => existingTables.has(name)) && REQUIRED_LEAD_COLUMNS.every((name) => existingColumns.has(name)),
+      missingTables: REQUIRED_TABLES.filter((name) => !existingTables.has(name)),
+      missingLeadColumns: REQUIRED_LEAD_COLUMNS.filter((name) => !existingColumns.has(name)),
+      migrationName: AUTOMATION_MIGRATION_NAME
+    };
+    setupCache = { checkedAt: Date.now(), status };
+    return status;
+  } catch (error) {
+    logger.error({ error }, "Automation setup check failed");
+    const status = {
+      ready: false,
+      missingTables: REQUIRED_TABLES,
+      missingLeadColumns: REQUIRED_LEAD_COLUMNS,
+      migrationName: AUTOMATION_MIGRATION_NAME
+    };
+    setupCache = { checkedAt: Date.now(), status };
+    return status;
+  }
+}
+
+async function assertAutomationSetup() {
+  const status = await automationSetupStatus();
+  if (!status.ready) {
+    throw new AppError("Setup Required", 503, setupRequiredDetails(status));
+  }
 }
 
 function tagsFromValue(value: unknown) {
@@ -153,7 +244,6 @@ function stringConfig(node: WorkflowNode, key: string, fallback = "") {
 function audienceWhere(input: AudienceFilter = {}): Prisma.LeadWhereInput {
   return {
     ...(input.leadIds?.length ? { id: { in: input.leadIds } } : {}),
-    ...(input.tag ? { tags: { has: input.tag.toLowerCase() } } : {}),
     ...(input.status ? { status: LeadStatus[input.status] } : {}),
     ...(input.source ? { source: { equals: input.source, mode: "insensitive" } } : {}),
     ...(input.search
@@ -169,34 +259,45 @@ function audienceWhere(input: AudienceFilter = {}): Prisma.LeadWhereInput {
 }
 
 async function selectAudience(input: AudienceFilter = {}) {
+  await assertAutomationSetup();
+  let leadIds = input.leadIds ?? [];
+  if (input.tag) {
+    const tagRows = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM "Lead" WHERE ${input.tag.toLowerCase()} = ANY(tags)
+    `;
+    const tagLeadIds = tagRows.map((row) => row.id);
+    leadIds = leadIds.length ? leadIds.filter((id) => tagLeadIds.includes(id)) : tagLeadIds;
+  }
+
   return prisma.lead.findMany({
-    where: audienceWhere(input),
+    where: audienceWhere({ ...input, leadIds }),
     orderBy: { updatedAt: "desc" }
   });
 }
 
 async function updateLeadTags(leadId: string, nextTags: string[]) {
-  const lead = await prisma.lead.findUnique({ where: { id: leadId }, select: { tags: true } });
-  if (!lead) return null;
-  return prisma.lead.update({
-    where: { id: leadId },
-    data: { tags: uniqueTags([...lead.tags, ...nextTags]) }
-  });
+  await assertAutomationSetup();
+  const tags = uniqueTags(nextTags);
+  if (!tags.length) return null;
+  await prisma.$executeRaw`
+    UPDATE "Lead"
+    SET tags = (
+      SELECT ARRAY(SELECT DISTINCT unnest(tags || ${tags}::text[]))
+    )
+    WHERE id = ${leadId}
+  `;
+  return prisma.lead.findUnique({ where: { id: leadId } });
 }
 
 async function updateLeadAttribute(leadId: string, key: string, value: unknown) {
-  const lead = await prisma.lead.findUnique({ where: { id: leadId }, select: { attributes: true } });
-  if (!lead) return null;
-  const attributes =
-    lead.attributes && typeof lead.attributes === "object" && !Array.isArray(lead.attributes)
-      ? { ...(lead.attributes as Record<string, unknown>) }
-      : {};
-
-  attributes[key] = value;
-  return prisma.lead.update({
-    where: { id: leadId },
-    data: { attributes: attributes as Prisma.InputJsonObject }
-  });
+  await assertAutomationSetup();
+  if (!key) return null;
+  await prisma.$executeRaw`
+    UPDATE "Lead"
+    SET attributes = COALESCE(attributes, '{}'::jsonb) || ${JSON.stringify({ [key]: value })}::jsonb
+    WHERE id = ${leadId}
+  `;
+  return prisma.lead.findUnique({ where: { id: leadId } });
 }
 
 async function refreshBulkJobCounts(jobId: string) {
@@ -305,53 +406,72 @@ function campaignSummary(campaign: Prisma.CampaignGetPayload<{ include: { recipi
 }
 
 export const automationService = {
+  async setupStatus() {
+    const status = await automationSetupStatus(true);
+    return setupRequiredResponse(status);
+  },
+
   async listContacts(filters: ContactFilters = {}) {
-    const leads = await prisma.lead.findMany({
-      where: {
-        ...(filters.search
-          ? {
-              OR: [
-                { name: { contains: filters.search, mode: "insensitive" } },
-                { phone: { contains: filters.search, mode: "insensitive" } }
-              ]
-            }
-          : {}),
-        ...(filters.tag ? { tags: { has: filters.tag.toLowerCase() } } : {}),
-        ...(filters.status ? { status: LeadStatus[filters.status] } : {}),
-        ...(filters.source ? { source: { equals: filters.source, mode: "insensitive" } } : {})
-      },
-      include: {
-        messages: {
-          where: { direction: "OUTBOUND" },
-          orderBy: { createdAt: "desc" },
-          take: 1
-        }
-      },
-      orderBy: { updatedAt: "desc" }
+    await assertAutomationSetup();
+    const rows = await prisma.$queryRaw<Array<{
+      id: string;
+      name: string;
+      phone: string;
+      tags: string[];
+      source: string;
+      status: string;
+      last_contacted: Date | null;
+      updated_at: Date;
+    }>>`
+      SELECT
+        l.id,
+        l.name,
+        l.phone,
+        l.tags,
+        l.source,
+        l.status::text AS status,
+        (
+          SELECT m."createdAt"
+          FROM "Message" m
+          WHERE m."leadId" = l.id AND m.direction = 'outbound'
+          ORDER BY m."createdAt" DESC
+          LIMIT 1
+        ) AS last_contacted,
+        l."updatedAt" AS updated_at
+      FROM "Lead" l
+      ORDER BY l."updatedAt" DESC
+    `;
+
+    const search = filters.search?.toLowerCase();
+    const filtered = rows.filter((lead) => {
+      const matchesSearch = !search || `${lead.name} ${lead.phone}`.toLowerCase().includes(search);
+      const matchesTag = !filters.tag || (lead.tags ?? []).includes(filters.tag.toLowerCase());
+      const matchesStatus = !filters.status || lead.status === filters.status.toLowerCase();
+      const matchesSource = !filters.source || lead.source.toLowerCase() === filters.source.toLowerCase();
+      return matchesSearch && matchesTag && matchesStatus && matchesSource;
     });
 
-    const tags = await prisma.lead.findMany({ select: { tags: true, source: true, status: true } });
-
     return {
-      contacts: leads.map((lead) => ({
+      contacts: filtered.map((lead) => ({
         id: lead.id,
         name: lead.name,
         phone: lead.phone,
-        tags: lead.tags,
+        tags: lead.tags ?? [],
         source: lead.source,
-        status: lead.status,
-        lastContacted: lead.messages[0]?.createdAt ?? null,
-        updatedAt: lead.updatedAt
+        status: lead.status.toUpperCase(),
+        lastContacted: lead.last_contacted,
+        updatedAt: lead.updated_at
       })),
       facets: {
-        tags: uniqueTags(tags.flatMap((lead) => lead.tags)).sort(),
-        sources: [...new Set(tags.map((lead) => lead.source).filter(Boolean))].sort(),
+        tags: uniqueTags(rows.flatMap((lead) => lead.tags ?? [])).sort(),
+        sources: [...new Set(rows.map((lead) => lead.source).filter(Boolean))].sort(),
         statuses: Object.values(LeadStatus)
       }
     };
   },
 
   async createContact(input: { name: string; phone: string; tags?: string[]; source?: string }) {
+    await assertAutomationSetup();
     const phone = normalizePhoneNumber(input.phone);
     if (!phone) throw new AppError("Enter a valid WhatsApp phone number", 400);
 
@@ -361,21 +481,26 @@ export const automationService = {
       create: {
         name: input.name.trim() || phone,
         phone,
-        tags,
         source: input.source?.trim() || "manual",
         status: LeadStatus.NEW
       },
       update: {
         name: input.name.trim() || undefined,
-        tags,
         source: input.source?.trim() || undefined
       }
     });
+
+    await prisma.$executeRaw`
+      UPDATE "Lead"
+      SET tags = ${tags}::text[]
+      WHERE id = ${lead.id}
+    `;
 
     return lead;
   },
 
   async importContactsFromCsv(input: { csvText: string; source?: string; defaultTags?: string[] }) {
+    await assertAutomationSetup();
     const rows = csvRows(input.csvText);
     if (!rows.length) throw new AppError("Upload or paste a CSV with at least one contact", 400);
 
@@ -398,21 +523,24 @@ export const automationService = {
       }
 
       const tags = uniqueTags([...tagsFromValue(row[tagIndex]), ...(input.defaultTags ?? [])]);
-      await prisma.lead.upsert({
+      const lead = await prisma.lead.upsert({
         where: { phone },
         create: {
           name: row[nameIndex]?.trim() || phone,
           phone,
-          tags,
           source: row[sourceIndex]?.trim() || input.source?.trim() || "csv",
           status: LeadStatus.NEW
         },
         update: {
           name: row[nameIndex]?.trim() || undefined,
-          tags,
           source: row[sourceIndex]?.trim() || input.source?.trim() || undefined
         }
       });
+      await prisma.$executeRaw`
+        UPDATE "Lead"
+        SET tags = ${tags}::text[]
+        WHERE id = ${lead.id}
+      `;
       imported += 1;
     }
 
@@ -422,12 +550,14 @@ export const automationService = {
   },
 
   async importContactsFromGoogleSheets() {
+    await assertAutomationSetup();
     const result = await importLeadsJob();
     logger.info(result, "Contacts imported from Google Sheets");
     return result;
   },
 
   async listBulkJobs() {
+    await assertAutomationSetup();
     const jobs = await prisma.bulkMessageJob.findMany({
       orderBy: { createdAt: "desc" },
       take: 20,
@@ -457,6 +587,7 @@ export const automationService = {
   },
 
   async createBulkSend(input: { name: string; templateName: string; templateLanguage?: string; audience: AudienceFilter }) {
+    await assertAutomationSetup();
     const leads = await selectAudience(input.audience);
     if (!leads.length) throw new AppError("No contacts matched this bulk-send audience", 400);
 
@@ -536,6 +667,7 @@ export const automationService = {
   },
 
   async listCampaigns() {
+    await assertAutomationSetup();
     const campaigns = await prisma.campaign.findMany({
       orderBy: { createdAt: "desc" },
       include: { recipients: { include: { lead: true } } }
@@ -544,6 +676,7 @@ export const automationService = {
   },
 
   async campaignDetail(id: string) {
+    await assertAutomationSetup();
     const campaign = await prisma.campaign.findUnique({
       where: { id },
       include: {
@@ -589,6 +722,7 @@ export const automationService = {
     scheduledAt?: Date | null;
     scheduleNow?: boolean;
   }) {
+    await assertAutomationSetup();
     const leads = await selectAudience(input.audience);
     if (!leads.length) throw new AppError("No contacts matched this campaign audience", 400);
 
@@ -624,6 +758,7 @@ export const automationService = {
   },
 
   async pauseCampaign(id: string) {
+    await assertAutomationSetup();
     const campaign = await prisma.campaign.findUnique({ where: { id } });
     if (!campaign) throw new AppError("Campaign not found", 404);
     if (!( [CampaignStatus.SCHEDULED, CampaignStatus.RUNNING] as CampaignStatus[] ).includes(campaign.status)) {
@@ -633,6 +768,7 @@ export const automationService = {
   },
 
   async cancelCampaign(id: string) {
+    await assertAutomationSetup();
     const campaign = await prisma.campaign.findUnique({ where: { id } });
     if (!campaign) throw new AppError("Campaign not found", 404);
     if (!( [CampaignStatus.SCHEDULED, CampaignStatus.PAUSED, CampaignStatus.RUNNING] as CampaignStatus[] ).includes(campaign.status)) {
@@ -702,6 +838,12 @@ export const automationService = {
   },
 
   async processDueCampaigns() {
+    const setup = await automationSetupStatus();
+    if (!setup.ready) {
+      logger.warn(setupRequiredDetails(setup), "Automation workers paused until setup is complete");
+      return;
+    }
+
     const campaigns = await prisma.campaign.findMany({
       where: {
         status: CampaignStatus.SCHEDULED,
@@ -717,6 +859,7 @@ export const automationService = {
   },
 
   async listAdDrafts() {
+    await assertAutomationSetup();
     const drafts = await prisma.adDraft.findMany({ orderBy: { createdAt: "desc" } });
     return {
       metaConnected: Boolean(env.META_ADS_ACCESS_TOKEN && env.META_AD_ACCOUNT_ID),
@@ -734,10 +877,12 @@ export const automationService = {
     destinationWhatsAppNumber: string;
     templatePreview: string;
   }) {
+    await assertAutomationSetup();
     return prisma.adDraft.create({ data: input });
   },
 
   async listWorkflows() {
+    await assertAutomationSetup();
     return prisma.aiWorkflow.findMany({
       orderBy: { updatedAt: "desc" },
       include: {
@@ -756,6 +901,7 @@ export const automationService = {
     isActive?: boolean;
     definition: WorkflowDefinition;
   }) {
+    await assertAutomationSetup();
     return prisma.aiWorkflow.create({
       data: {
         name: input.name,
@@ -774,6 +920,7 @@ export const automationService = {
     isActive: boolean;
     definition: WorkflowDefinition;
   }>) {
+    await assertAutomationSetup();
     return prisma.aiWorkflow.update({
       where: { id },
       data: {
@@ -787,6 +934,12 @@ export const automationService = {
   },
 
   async executeMatchingWorkflows(input: { leadId: string; phone: string; text: string; source?: string }) {
+    const setup = await automationSetupStatus();
+    if (!setup.ready) {
+      logger.warn(setupRequiredDetails(setup), "AI workflow execution skipped until setup is complete");
+      return false;
+    }
+
     const workflows = await prisma.aiWorkflow.findMany({ where: { isActive: true } });
     let executed = false;
 
@@ -900,6 +1053,12 @@ export const automationService = {
     workersStarted = true;
 
     windowlessInterval(async () => {
+      const setup = await automationSetupStatus();
+      if (!setup.ready) {
+        logger.warn(setupRequiredDetails(setup), "Automation workers paused until setup is complete");
+        return;
+      }
+
       await this.processDueCampaigns();
       const queuedBulkJobs = await prisma.bulkMessageJob.findMany({
         where: { status: BulkJobStatus.QUEUED },

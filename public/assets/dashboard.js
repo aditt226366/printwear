@@ -335,6 +335,20 @@ async function publicApi(path, options = {}) {
   if (!response.ok) {
     const errorText = String(data.error || data.message || "").trim();
     const details = typeof data.details === "string" ? data.details.trim() : "";
+    const errorDetails = data.details && typeof data.details === "object" ? data.details : {};
+    const setupRequired = Boolean(errorDetails.setupRequired || data.setupRequired);
+    const setupMessage = errorDetails.message || data.message || "Run the automation database migration before using this section.";
+    if (setupRequired) {
+      const error = new Error("Setup Required");
+      error.setupRequired = true;
+      error.setupDetails = {
+        ...errorDetails,
+        missingTables: errorDetails.missingTables || data.missingTables || [],
+        missingLeadColumns: errorDetails.missingLeadColumns || data.missingLeadColumns || [],
+        message: setupMessage
+      };
+      throw error;
+    }
     if (response.status === 404) throw new Error(errorText || "That record could not be found.");
     if (response.status === 401 || response.status === 403) throw new Error("Your session is not authorized for this action.");
     if (errorText && !/internal server error/i.test(errorText)) {
@@ -1476,6 +1490,31 @@ function statusTone(status) {
   return "neutral";
 }
 
+function setupRequiredHtml(details = {}) {
+  const missingTables = details.missingTables || [];
+  const missingLeadColumns = details.missingLeadColumns || [];
+  const missing = [...missingTables, ...missingLeadColumns.map((column) => `Lead.${column}`)];
+  return `
+    <article class="setup-required-card">
+      <span><i data-lucide="database-zap"></i></span>
+      <div>
+        <strong>Setup Required</strong>
+        <p>${escapeHtml(details.message || "Run the automation database migration before using this section.")}</p>
+        <small>${missing.length ? `Missing: ${escapeHtml(missing.join(", "))}` : "Automation tables are not ready yet."}</small>
+      </div>
+    </article>
+  `;
+}
+
+function renderSetupRequired(targets, error) {
+  const details = error?.setupDetails || {};
+  targets.forEach((selector) => {
+    const target = $(selector);
+    if (target) target.innerHTML = setupRequiredHtml(details);
+  });
+  refreshIcons();
+}
+
 function renderSelectOptions(select, values, currentValue, label) {
   if (!select) return;
   select.innerHTML = [`<option value="">${escapeHtml(label)}</option>`, ...values.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(pretty(value))}</option>`)].join("");
@@ -1483,11 +1522,21 @@ function renderSelectOptions(select, values, currentValue, label) {
 }
 
 async function loadContacts() {
-  const query = buildQuery(state.contactFilters);
-  const data = await publicApi(`/contacts${query}`);
-  state.contacts = data.contacts || [];
-  state.contactFacets = data.facets || state.contactFacets;
-  renderContacts();
+  try {
+    const query = buildQuery(state.contactFilters);
+    const data = await publicApi(`/contacts${query}`);
+    state.contacts = data.contacts || [];
+    state.contactFacets = data.facets || state.contactFacets;
+    renderContacts();
+  } catch (error) {
+    if (error.setupRequired) {
+      state.contacts = [];
+      renderSetupRequired(["#contactsTable"], error);
+      setText("contactTableTitle", "Setup Required");
+      return;
+    }
+    throw error;
+  }
 }
 
 function renderContacts() {
@@ -1547,9 +1596,18 @@ async function addContactFromPrompt() {
 }
 
 async function loadBulkJobs() {
-  const data = await publicApi("/bulk-messages");
-  state.bulkJobs = data.jobs || [];
-  renderBulkJobs();
+  try {
+    const data = await publicApi("/bulk-messages");
+    state.bulkJobs = data.jobs || [];
+    renderBulkJobs();
+  } catch (error) {
+    if (error.setupRequired) {
+      state.bulkJobs = [];
+      renderSetupRequired(["#bulkJobsList"], error);
+      return;
+    }
+    throw error;
+  }
 }
 
 function renderBulkJobs() {
@@ -1578,9 +1636,19 @@ function renderBulkJobs() {
 }
 
 async function loadCampaigns() {
-  const data = await publicApi("/campaigns");
-  state.campaigns = data.campaigns || [];
-  renderCampaigns();
+  try {
+    const data = await publicApi("/campaigns");
+    state.campaigns = data.campaigns || [];
+    renderCampaigns();
+  } catch (error) {
+    if (error.setupRequired) {
+      state.campaigns = [];
+      renderSetupRequired(["#campaignsTable", "#campaignDetail"], error);
+      setText("campaignDetailTitle", "Setup Required");
+      return;
+    }
+    throw error;
+  }
 }
 
 function renderCampaigns() {
@@ -1658,10 +1726,20 @@ async function loadCampaignDetail(campaignId) {
 }
 
 async function loadAds() {
-  const data = await publicApi("/ads");
-  state.metaAdsConnected = Boolean(data.metaConnected);
-  state.adDrafts = data.drafts || [];
-  renderAds();
+  try {
+    const data = await publicApi("/ads");
+    state.metaAdsConnected = Boolean(data.metaConnected);
+    state.adDrafts = data.drafts || [];
+    renderAds();
+  } catch (error) {
+    if (error.setupRequired) {
+      state.adDrafts = [];
+      renderAdPreview();
+      renderSetupRequired(["#adDraftsList"], error);
+      return;
+    }
+    throw error;
+  }
 }
 
 function renderAds() {
@@ -1730,11 +1808,21 @@ const flowDefaults = {
 };
 
 async function loadWorkflows() {
-  const data = await publicApi("/ai-flows");
-  state.workflows = data.workflows || [];
-  if (!state.activeWorkflowId && state.workflows[0]) loadWorkflowIntoDraft(state.workflows[0]);
-  renderWorkflowList();
-  renderFlowCanvas();
+  try {
+    const data = await publicApi("/ai-flows");
+    state.workflows = data.workflows || [];
+    if (!state.activeWorkflowId && state.workflows[0]) loadWorkflowIntoDraft(state.workflows[0]);
+    renderWorkflowList();
+    renderFlowCanvas();
+  } catch (error) {
+    if (error.setupRequired) {
+      state.workflows = [];
+      renderFlowCanvas();
+      renderSetupRequired(["#workflowList"], error);
+      return;
+    }
+    throw error;
+  }
 }
 
 function loadWorkflowIntoDraft(workflow) {

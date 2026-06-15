@@ -151,16 +151,20 @@ export const messageService = {
 
     const automationStatus = automationStatusFromMessageStatus(status);
     if (automationStatus) {
-      await Promise.all([
-        prisma.bulkMessageRecipient.updateMany({
-          where: { whatsappMessageId },
-          data: { status: automationStatus }
-        }),
-        prisma.campaignRecipient.updateMany({
-          where: { whatsappMessageId },
-          data: { status: automationStatus }
-        })
-      ]);
+      try {
+        await Promise.all([
+          prisma.bulkMessageRecipient.updateMany({
+            where: { whatsappMessageId },
+            data: { status: automationStatus }
+          }),
+          prisma.campaignRecipient.updateMany({
+            where: { whatsappMessageId },
+            data: { status: automationStatus }
+          })
+        ]);
+      } catch (error) {
+        logger.warn({ error, whatsappMessageId }, "Automation status tables are not ready; CRM message status was still saved");
+      }
     }
 
     chatEventsService.publish({

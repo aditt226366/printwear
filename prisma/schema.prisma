@@ -125,8 +125,6 @@ model Lead {
   humanPriority        HumanPriority?
   humanReason          String?
   humanResolvedAt      DateTime?
-  tags                 String[]         @default([])
-  attributes           Json             @default("{}")
   googleSheetRowNumber Int?             @unique
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt

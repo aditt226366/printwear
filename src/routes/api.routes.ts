@@ -25,6 +25,7 @@ import {
   createContact,
   createWorkflow,
   getCampaign,
+  getAutomationSetup,
   importContactsCsv,
   importContactsSheets,
   listAdDrafts,
@@ -45,6 +46,7 @@ apiRoutes.get("/leads", getLeads);
 apiRoutes.get("/leads/:leadId/conversation", getConversation);
 apiRoutes.post("/leads/:leadId/messages", sendManualMessage);
 apiRoutes.post("/leads/import", importLeads);
+apiRoutes.get("/automation/setup", getAutomationSetup);
 apiRoutes.get("/contacts", listContacts);
 apiRoutes.post("/contacts", createContact);
 apiRoutes.post("/contacts/import/csv", importContactsCsv);

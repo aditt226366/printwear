@@ -85,6 +85,10 @@ const workflowSchema = z.object({
 
 const workflowUpdateSchema = workflowSchema.partial();
 
+export const getAutomationSetup = asyncHandler(async (_req: Request, res: Response) => {
+  res.json(await automationService.setupStatus());
+});
+
 export const listContacts = asyncHandler(async (req: Request, res: Response) => {
   const filters = contactQuerySchema.parse(req.query);
   res.json(await automationService.listContacts(filters));
