@@ -5500,3 +5500,232 @@ mark.amber {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Top pill navigation shell */
+body.app-shell {
+  display: block;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+body.app-shell .sidebar {
+  display: none !important;
+}
+
+body.app-shell .topbar {
+  position: sticky;
+  inset: 0 0 auto 0;
+  left: auto;
+  z-index: 50;
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  margin: 0;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.075);
+  background: rgba(7, 7, 8, 0.9);
+  backdrop-filter: blur(24px);
+}
+
+body.app-shell .workspace {
+  grid-column: auto;
+  width: 100%;
+  max-width: 1480px;
+  min-width: 0;
+  margin: 0 auto;
+  padding: 24px 24px 36px;
+}
+
+body.app-shell.chat-mode .workspace {
+  height: calc(100vh - 76px);
+  overflow: hidden;
+  padding-top: 18px;
+}
+
+body.app-shell .brand-block {
+  min-width: 188px;
+  gap: 11px;
+  padding: 0;
+  border: 0;
+}
+
+body.app-shell .brand-mark {
+  width: 40px;
+  height: 40px;
+}
+
+body.app-shell .brand-block strong {
+  color: #fff;
+  font-size: 15px;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+body.app-shell .brand-block span:not(.brand-mark) {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+body.app-shell .top-nav {
+  justify-self: center;
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 999px;
+  padding: 5px;
+  background: rgba(255, 255, 255, 0.045);
+  box-shadow: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+body.app-shell .top-nav::-webkit-scrollbar {
+  height: 6px;
+}
+
+body.app-shell .top-nav::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+body.app-shell .nav-item {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: max-content;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 13px;
+  background: transparent;
+  color: #9ca3af;
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+  box-shadow: none;
+  transform: none;
+}
+
+body.app-shell .nav-item svg {
+  width: 15px;
+  height: 15px;
+}
+
+body.app-shell .nav-item:hover {
+  transform: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: #e5e7eb;
+  box-shadow: none;
+}
+
+body.app-shell .nav-item.active {
+  transform: none;
+  background: #fff;
+  color: #111118;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
+}
+
+body.app-shell .nav-item.active::after {
+  display: none;
+}
+
+body.app-shell .topbar-right {
+  justify-self: end;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+body.app-shell .global-search {
+  width: clamp(190px, 19vw, 300px);
+  min-height: 40px;
+}
+
+body.app-shell .icon-button,
+body.app-shell .profile-button {
+  width: 40px;
+  min-width: 40px;
+  min-height: 40px;
+}
+
+body.app-shell #chatsView.active-view {
+  height: calc(100vh - 118px);
+}
+
+@media (max-width: 1320px) {
+  body.app-shell .topbar {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "brand actions"
+      "nav nav";
+    gap: 10px 14px;
+  }
+
+  body.app-shell .brand-block {
+    grid-area: brand;
+  }
+
+  body.app-shell .top-nav {
+    grid-area: nav;
+    justify-self: stretch;
+  }
+
+  body.app-shell .topbar-right {
+    grid-area: actions;
+  }
+
+  body.app-shell .workspace {
+    padding-top: 20px;
+  }
+
+  body.app-shell.chat-mode .workspace {
+    height: auto;
+    overflow: visible;
+  }
+}
+
+@media (max-width: 760px) {
+  body.app-shell .topbar {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "brand"
+      "nav"
+      "actions";
+    padding: 12px;
+  }
+
+  body.app-shell .brand-block,
+  body.app-shell .topbar-right,
+  body.app-shell .top-nav {
+    justify-self: stretch;
+  }
+
+  body.app-shell .topbar-right {
+    justify-content: stretch;
+  }
+
+  body.app-shell .global-search {
+    flex: 1 1 auto;
+    width: auto;
+  }
+
+  body.app-shell .workspace {
+    padding: 18px 14px 28px;
+  }
+}

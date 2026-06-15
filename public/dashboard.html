@@ -8,10 +8,10 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&display=swap" rel="stylesheet" />
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/assets/styles.css?v=20260615-stable" />
+    <link rel="stylesheet" href="/assets/styles.css?v=20260615-topnav" />
   </head>
   <body class="app-shell">
-    <aside class="sidebar">
+    <header class="topbar">
       <div class="brand-block">
         <span class="brand-mark">PW</span>
         <div>
@@ -20,8 +20,8 @@
         </div>
       </div>
 
-      <nav class="nav-list" aria-label="CRM sections">
-        <button class="nav-item active" data-view="overview"><i data-lucide="layout-dashboard"></i>Command Center</button>
+      <nav class="top-nav" aria-label="CRM sections">
+        <button class="nav-item active" data-view="overview"><i data-lucide="layout-dashboard"></i>Dashboard</button>
         <button class="nav-item" data-view="chats"><i data-lucide="messages-square"></i>Chats</button>
         <button class="nav-item" data-view="contacts"><i data-lucide="contact-round"></i>Contacts</button>
         <button class="nav-item" data-view="bulk"><i data-lucide="send"></i>Bulk Messaging</button>
@@ -34,17 +34,6 @@
         <button class="nav-item" data-view="settings"><i data-lucide="settings"></i>Settings</button>
       </nav>
 
-      <div class="sidebar-panel">
-        <div class="sidebar-panel-top">
-          <span class="pulse-dot"></span>
-          <strong>Local Preview</strong>
-        </div>
-        <span>Automation UI is available on localhost before deploy.</span>
-      </div>
-    </aside>
-
-    <header class="topbar">
-      <span class="status-pill connected"><i data-lucide="shield-check"></i>Preview mode</span>
       <div class="topbar-right">
         <div class="global-search">
           <i data-lucide="search"></i>
@@ -706,6 +695,6 @@
       </section>
     </main>
 
-    <script src="/assets/dashboard.js?v=20260615-stable"></script>
+    <script src="/assets/dashboard.js?v=20260615-topnav"></script>
   </body>
 </html>
