@@ -27,12 +27,12 @@ Reply with:
 3 - Kids Wear
 4 - Custom Bulk Order`;
 
-export async function sendInitialMessagesJob() {
+export async function sendInitialMessagesJob(companyId?: string) {
   logger.info("Validating WhatsApp environment for welcome sends");
   validateWhatsAppConfig();
   logger.info("WhatsApp environment validated for welcome sends");
 
-  const leads = await leadService.findNewLeadsForInitialMessages();
+  const leads = await leadService.findNewLeadsForInitialMessages(100, companyId);
   logger.info({ pendingLeadCount: leads.length }, "Loaded pending welcome leads from database");
   let sent = 0;
   let skipped = 0;

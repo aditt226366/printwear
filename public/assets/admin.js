@@ -44,6 +44,15 @@ function formatDate(value) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }
 
+function initials(value) {
+  return String(value || "User")
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
 function showNotice(message, isError = false) {
   const notice = $("#adminNotice");
   if (!notice) return;
@@ -122,17 +131,16 @@ function renderUsers() {
   }
   table.innerHTML = `
     <div class="data-row admin-users-head">
-      <span>Name</span><span>Username</span><span>Email</span><span>Company</span><span>Role</span><span>Status</span><span>Password</span><span>Last login</span><span>Created</span><span>Actions</span>
+      <span>Name</span><span>Username</span><span>Email</span><span>Company</span><span>Role</span><span>Status</span><span>Last Login</span><span>Created</span><span>Actions</span>
     </div>
     ${adminState.users.map((user) => `
       <div class="data-row admin-users-row" data-user-id="${escapeHtml(user.id)}">
-        <span><strong>${escapeHtml(user.name)}</strong></span>
+        <span class="user-cell"><i>${escapeHtml(initials(user.name))}</i><strong>${escapeHtml(user.name)}</strong></span>
         <span>${escapeHtml(user.username)}</span>
         <span>${escapeHtml(user.email || "--")}</span>
-        <span>${escapeHtml(user.company?.name || "Admin")}</span>
-        <span><mark class="${user.role === "ADMIN" ? "green" : "neutral"}">${escapeHtml(user.role)}</mark></span>
+        <span><mark class="neutral">${escapeHtml(user.company?.name || "Platform")}</mark></span>
+        <span><mark class="${user.role === "ADMIN" ? "green" : "neutral"}">${escapeHtml(pretty(user.role))}</mark></span>
         <span><mark class="${user.status === "ACTIVE" ? "green" : "red"}">${escapeHtml(pretty(user.status))}</mark></span>
-        <span>Password is hidden</span>
         <span>${formatDate(user.lastLoginAt)}</span>
         <span>${formatDate(user.createdAt)}</span>
         <span class="row-actions">
@@ -224,7 +232,16 @@ function bindEvents() {
     event.preventDefault();
     await api("/admin/companies", {
       method: "POST",
-      body: JSON.stringify({ name: $("#companyName").value, slug: $("#companySlug").value, status: $("#companyStatus").value })
+      body: JSON.stringify({
+        name: $("#companyName").value,
+        slug: $("#companySlug").value,
+        status: $("#companyStatus").value,
+        logoUrl: $("#companyLogoUrl").value || null,
+        whatsappNumber: $("#companyWhatsappNumber").value || null,
+        brandColor: $("#companyBrandColor").value || null,
+        timezone: $("#companyTimezone").value || null,
+        businessType: $("#companyBusinessType").value || null
+      })
     });
     event.target.reset();
     showNotice("Company created.");
@@ -273,14 +290,35 @@ function bindEvents() {
   $("#featureCompanySelect")?.addEventListener("change", () => loadFeatures().catch((error) => showNotice(error.message, true)));
   $("#adminFeatureList")?.addEventListener("click", async (event) => {
     const button = event.target.closest("[data-feature-toggle]");
-    if (!button) return;
+    if (!button || button.disabled) return;
     const enabled = button.getAttribute("aria-checked") !== "true";
-    await api(`/admin/features/${button.dataset.featureToggle}`, {
-      method: "PATCH",
-      body: JSON.stringify({ enabled })
-    });
-    await loadFeatures();
-    showNotice("Feature access updated.");
+    const row = button.closest(".feature-toggle");
+    const label = button.querySelector("b");
+    const status = row?.querySelector("mark");
+    button.disabled = true;
+    button.setAttribute("aria-checked", enabled ? "true" : "false");
+    button.classList.toggle("is-on", enabled);
+    button.classList.toggle("is-off", !enabled);
+    row?.classList.toggle("active", enabled);
+    row?.classList.toggle("inactive", !enabled);
+    if (label) label.textContent = enabled ? "ON" : "OFF";
+    if (status) {
+      status.textContent = enabled ? "Active" : "Inactive";
+      status.className = enabled ? "green" : "neutral";
+    }
+    try {
+      const data = await api(`/admin/features/${button.dataset.featureToggle}`, {
+        method: "PATCH",
+        body: JSON.stringify({ enabled })
+      });
+      adminState.features = adminState.features.map((feature) => feature.id === data.feature.id ? data.feature : feature);
+      showNotice("Feature access updated.");
+    } catch (error) {
+      await loadFeatures();
+      showNotice(error.message, true);
+    } finally {
+      button.disabled = false;
+    }
   });
   $("#refreshBillingBtn")?.addEventListener("click", () => loadBilling().catch((error) => showNotice(error.message, true)));
   $("#billingCompanySelect")?.addEventListener("change", () => loadBilling().catch((error) => showNotice(error.message, true)));

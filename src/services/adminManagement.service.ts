@@ -1,7 +1,9 @@
 import { ApiProvider, AppUserRole, AppUserStatus, CompanyStatus, Prisma } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
 import { AppError } from "../utils/errors.js";
+import { logger } from "../utils/logger.js";
 import { authService } from "./auth.service.js";
+import { DEFAULT_FEATURES } from "./featureFlag.service.js";
 import { featureFlagService } from "./featureFlag.service.js";
 
 function slugify(value: string) {
@@ -46,16 +48,43 @@ export const adminManagementService = {
     });
   },
 
-  async createCompany(input: { name: string; slug?: string; status?: keyof typeof CompanyStatus }) {
+  async createCompany(input: {
+    name: string;
+    slug?: string;
+    status?: keyof typeof CompanyStatus;
+    logoUrl?: string | null;
+    whatsappNumber?: string | null;
+    brandColor?: string | null;
+    timezone?: string | null;
+    businessType?: string | null;
+  }) {
+    const started = performance.now();
     const slug = slugify(input.slug || input.name);
-    const company = await prisma.company.create({
-      data: {
-        name: input.name,
-        slug,
-        status: input.status ? CompanyStatus[input.status] : CompanyStatus.ACTIVE
-      }
+    const company = await prisma.$transaction(async (tx) => {
+      const created = await tx.company.create({
+        data: {
+          name: input.name,
+          slug,
+          status: input.status ? CompanyStatus[input.status] : CompanyStatus.ACTIVE,
+          logoUrl: input.logoUrl || null,
+          whatsappNumber: input.whatsappNumber || null,
+          brandColor: input.brandColor || null,
+          timezone: input.timezone || null,
+          businessType: input.businessType || null
+        }
+      });
+      await tx.companyFeature.createMany({
+        data: DEFAULT_FEATURES.map((feature) => ({
+          companyId: created.id,
+          featureKey: feature.key,
+          featureName: feature.label,
+          enabled: feature.enabled
+        })),
+        skipDuplicates: true
+      });
+      return created;
     });
-    await featureFlagService.ensureDefaultsForCompany(company.id);
+    logger.info({ createCompanyMs: Math.round(performance.now() - started), companyId: company.id }, "Company created");
     return company;
   },
 
@@ -74,9 +103,10 @@ export const adminManagementService = {
     password: string;
     status?: keyof typeof AppUserStatus;
   }) {
+    const started = performance.now();
     if (input.password.length < 8) throw new AppError("Password must be at least 8 characters", 400);
     if (input.companyId) await featureFlagService.ensureDefaultsForCompany(input.companyId);
-    return prisma.appUser.create({
+    const user = await prisma.appUser.create({
       data: {
         companyId: input.companyId || null,
         name: input.name,
@@ -88,6 +118,8 @@ export const adminManagementService = {
       },
       select: userPublicSelect()
     });
+    logger.info({ createUserMs: Math.round(performance.now() - started), userId: user.id, companyId: user.companyId }, "User created");
+    return user;
   },
 
   async updateUser(id: string, input: { name?: string; email?: string | null; companyId?: string | null; status?: keyof typeof AppUserStatus }) {

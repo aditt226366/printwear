@@ -136,17 +136,28 @@ enum ApiProvider {
 }
 
 model Company {
-  id        String        @id @default(cuid())
-  name      String
-  slug      String        @unique
-  status    CompanyStatus @default(ACTIVE)
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  id             String        @id @default(cuid())
+  name           String
+  slug           String        @unique
+  status         CompanyStatus @default(ACTIVE)
+  logoUrl        String?
+  whatsappNumber String?
+  brandColor     String?
+  timezone       String?
+  businessType   String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
   users            AppUser[]
   features         CompanyFeature[]
   apiUsageLogs     ApiUsageLog[]
   billingSnapshots BillingSnapshot[]
+  leads            Lead[]
+  knowledgeBase    KnowledgeBase[]
+  bulkMessageJobs  BulkMessageJob[]
+  campaigns        Campaign[]
+  adDrafts         AdDraft[]
+  aiWorkflows      AiWorkflow[]
 
   @@index([status])
 }
@@ -231,8 +242,9 @@ model BillingSnapshot {
 
 model Lead {
   id                   String           @id @default(cuid())
+  companyId            String
   name                 String
-  phone                String           @unique
+  phone                String
   status               LeadStatus       @default(NEW)
   source               String           @default("google_sheets")
   messageCount         Int              @default(0)
@@ -242,7 +254,7 @@ model Lead {
   humanPriority        HumanPriority?
   humanReason          String?
   humanResolvedAt      DateTime?
-  googleSheetRowNumber Int?             @unique
+  googleSheetRowNumber Int?
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
 
@@ -252,7 +264,11 @@ model Lead {
   bulkRecipients        BulkMessageRecipient[]
   campaignRecipients    CampaignRecipient[]
   workflowExecutionLogs WorkflowExecutionLog[]
+  company               Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
+  @@unique([companyId, phone])
+  @@unique([companyId, googleSheetRowNumber])
+  @@index([companyId])
   @@index([status])
   @@index([leadTemperature])
   @@index([humanTakeoverRequired, humanResolvedAt])
@@ -278,6 +294,7 @@ model Message {
 
 model KnowledgeBase {
   id          String              @id @default(cuid())
+  companyId   String
   title       String
   content     String
   category    String
@@ -289,6 +306,9 @@ model KnowledgeBase {
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
 
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
   @@index([category])
   @@index([sourceType])
   @@index([sourceKey])
@@ -310,6 +330,7 @@ model SendLog {
 
 model BulkMessageJob {
   id               String        @id @default(cuid())
+  companyId        String
   name             String
   templateName     String
   templateLanguage String        @default("en_US")
@@ -321,7 +342,9 @@ model BulkMessageJob {
   updatedAt        DateTime      @updatedAt
 
   recipients BulkMessageRecipient[]
+  company    Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
+  @@index([companyId])
   @@index([status, createdAt])
 }
 
@@ -347,6 +370,7 @@ model BulkMessageRecipient {
 
 model Campaign {
   id               String         @id @default(cuid())
+  companyId        String
   name             String
   type             CampaignType   @default(WHATSAPP_TEMPLATE)
   audience         Json
@@ -363,7 +387,9 @@ model Campaign {
   updatedAt        DateTime       @updatedAt
 
   recipients CampaignRecipient[]
+  company    Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
+  @@index([companyId])
   @@index([status, scheduledAt])
   @@index([createdAt])
 }
@@ -390,6 +416,7 @@ model CampaignRecipient {
 
 model AdDraft {
   id                         String        @id @default(cuid())
+  companyId                  String
   name                       String
   objective                  String
   audience                   String
@@ -402,11 +429,15 @@ model AdDraft {
   createdAt                  DateTime      @default(now())
   updatedAt                  DateTime      @updatedAt
 
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
   @@index([createdAt])
 }
 
 model AiWorkflow {
   id           String              @id @default(cuid())
+  companyId    String
   name         String
   isActive     Boolean             @default(false)
   triggerType  WorkflowTriggerType
@@ -416,7 +447,9 @@ model AiWorkflow {
   updatedAt    DateTime            @updatedAt
 
   executionLogs WorkflowExecutionLog[]
+  company       Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
+  @@index([companyId])
   @@index([isActive, triggerType])
 }
 

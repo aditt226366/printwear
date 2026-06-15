@@ -1286,7 +1286,7 @@ function renderChatList() {
 }
 
 function renderLeadProfile(lead) {
-  const letter = lead?.name ? lead.name.slice(0, 1).toUpperCase() : "PW";
+  const letter = lead?.name ? lead.name.slice(0, 1).toUpperCase() : "--";
   setText("profileAvatar", letter);
   setText("profileName", lead?.name || "Lead profile");
   setText("profilePhone", lead?.phone || "Select a conversation");
@@ -1599,6 +1599,15 @@ function isAdmin() {
   return state.session?.role === "ADMIN";
 }
 
+function companyInitials(companyName) {
+  return String(companyName || "CRM")
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
 function featureEnabledForView(view) {
   const key = viewFeatureMap[view];
   return isAdmin() || !key || state.enabledFeatureKeys.has(key);
@@ -1610,7 +1619,14 @@ function firstAvailableView() {
 
 function applyFeatureVisibility() {
   document.body.dataset.role = state.session?.role || "USER";
-  const initials = (state.session?.email || state.session?.username || "AD")
+  const company = state.session?.company;
+  const companyName = company?.name || (isAdmin() ? "Platform" : "Company");
+  const companyMark = companyInitials(companyName);
+  setText("companyBrandMark", companyMark);
+  setText("companyBrandTitle", companyName);
+  setText("dashboardHeroTitle", `${companyName} CRM Command Center`);
+  if (company?.brandColor) document.documentElement.style.setProperty("--tenant-accent", company.brandColor);
+  const initials = (state.session?.email || state.session?.username || companyMark || "AD")
     .split("@")[0]
     .split(/[.\-_]/)
     .map((part) => part[0])
@@ -2413,6 +2429,14 @@ function startDashboardPolling() {
 }
 
 function bindEvents() {
+  $("#profileMenuButton")?.addEventListener("click", () => {
+    $("#profileLogoutMenu")?.classList.toggle("hidden");
+  });
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest("#profileMenuButton") && !event.target.closest("#profileLogoutMenu")) {
+      $("#profileLogoutMenu")?.classList.add("hidden");
+    }
+  });
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => switchView(button.dataset.view));
   });

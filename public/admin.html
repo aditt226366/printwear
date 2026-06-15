@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Printwear Admin Panel</title>
+    <title>Platform Administration</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&display=swap" rel="stylesheet" />
@@ -13,10 +13,10 @@
   <body class="app-shell admin-shell">
     <header class="topbar admin-topbar">
       <div class="brand-block">
-        <span class="brand-mark">PW</span>
+        <span class="brand-mark">SA</span>
         <div>
-          <strong>Printwear Admin</strong>
-          <span>User, feature, and billing control</span>
+          <strong>Platform Administration</strong>
+          <span>Users, companies, permissions, billing and feature controls.</span>
         </div>
       </div>
       <nav class="top-nav" aria-label="Admin sections">
@@ -44,9 +44,13 @@
           <article class="panel premium-card">
             <div class="panel-heading"><div><p class="eyebrow">Create Company</p><h2>Company profile</h2></div></div>
             <form id="companyForm" class="automation-form">
-              <label>Company name<input id="companyName" required placeholder="Printwear" /></label>
-              <label>Slug<input id="companySlug" placeholder="printwear" /></label>
+              <label>Company name<input id="companyName" required placeholder="ABC Uniforms" /></label>
+              <label>Slug<input id="companySlug" placeholder="abc-uniforms" /></label>
               <label>Status<select id="companyStatus"><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></label>
+              <label>Logo URL<input id="companyLogoUrl" placeholder="https://..." /></label>
+              <label>WhatsApp number<input id="companyWhatsappNumber" placeholder="+971..." /></label>
+              <div class="form-row"><label>Brand color<input id="companyBrandColor" placeholder="#7c3aed" /></label><label>Timezone<input id="companyTimezone" placeholder="Asia/Dubai" /></label></div>
+              <label>Business type<input id="companyBusinessType" placeholder="Uniforms, apparel, printwear" /></label>
               <button class="primary-button" type="submit"><i data-lucide="building-2"></i>Create company</button>
             </form>
           </article>

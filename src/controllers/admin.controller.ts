@@ -10,6 +10,7 @@ import { orderActionService } from "../services/orderAction.service.js";
 import { orderSummaryService } from "../services/orderSummary.service.js";
 import { asyncHandler, AppError } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
+import { companyScope, sessionCompanyId } from "../utils/tenant.js";
 
 const knowledgeSchema = z.object({
   title: z.string().trim().min(2),
@@ -51,7 +52,7 @@ const orderActionSchema = z.object({
 });
 
 export const getOverview = asyncHandler(async (_req: Request, res: Response) => {
-  res.json(await dashboardService.overview());
+  res.json(await dashboardService.overview(companyScope(res)));
 });
 
 function emptyDashboardResponse() {
@@ -82,11 +83,12 @@ function emptyDashboardResponse() {
 }
 
 export const getDashboard = asyncHandler(async (_req: Request, res: Response) => {
+  const companyId = companyScope(res);
   const fallback = emptyDashboardResponse();
   const [overviewResult, queueResult, pipelineResult] = await Promise.allSettled([
-    dashboardService.overview(),
-    humanActionService.listQueue(),
-    orderSummaryService.listPipeline()
+    dashboardService.overview(companyId),
+    humanActionService.listQueue(companyId),
+    orderSummaryService.listPipeline(companyId)
   ]);
 
   if (overviewResult.status === "rejected") {
@@ -128,11 +130,11 @@ export const streamChatEvents = asyncHandler(async (_req: Request, res: Response
 
 export const getLeads = asyncHandler(async (req: Request, res: Response) => {
   const filters = leadQuerySchema.parse(req.query);
-  res.json({ leads: await dashboardService.listLeads(filters) });
+  res.json({ leads: await dashboardService.listLeads(filters, companyScope(res)) });
 });
 
 export const getConversation = asyncHandler(async (req: Request, res: Response) => {
-  const conversation = await dashboardService.conversation(req.params.leadId);
+  const conversation = await dashboardService.conversation(req.params.leadId, companyScope(res));
   if (!conversation) {
     throw new AppError("Lead not found", 404);
   }
@@ -142,82 +144,82 @@ export const getConversation = asyncHandler(async (req: Request, res: Response) 
 
 export const sendManualMessage = asyncHandler(async (req: Request, res: Response) => {
   const body = manualMessageSchema.parse(req.body);
-  const message = await dashboardService.sendManualMessage(req.params.leadId, body.text);
+  const message = await dashboardService.sendManualMessage(req.params.leadId, body.text, companyScope(res));
   res.json({ message });
 });
 
 export const getHumanActionQueue = asyncHandler(async (_req: Request, res: Response) => {
-  res.json({ items: await humanActionService.listQueue() });
+  res.json({ items: await humanActionService.listQueue(companyScope(res)) });
 });
 
 export const requestHumanAction = asyncHandler(async (req: Request, res: Response) => {
-  const lead = await humanActionService.request(req.params.leadId);
+  const lead = await humanActionService.request(req.params.leadId, "Manual human takeover", companyScope(res));
   res.json({ lead });
 });
 
 export const resolveHumanAction = asyncHandler(async (req: Request, res: Response) => {
-  const lead = await humanActionService.resolve(req.params.leadId);
+  const lead = await humanActionService.resolve(req.params.leadId, companyScope(res));
   res.json({ lead });
 });
 
 export const getOrderPipeline = asyncHandler(async (_req: Request, res: Response) => {
-  res.json({ pipeline: await orderSummaryService.listPipeline() });
+  res.json({ pipeline: await orderSummaryService.listPipeline(companyScope(res)) });
 });
 
 export const updateOrderStatus = asyncHandler(async (req: Request, res: Response) => {
   const body = orderStatusSchema.parse(req.body);
-  const order = await orderSummaryService.updateStatus(req.params.orderId, body.status);
+  const order = await orderSummaryService.updateStatus(req.params.orderId, body.status, companyScope(res));
   res.json({ order });
 });
 
 export const updateOrder = asyncHandler(async (req: Request, res: Response) => {
   const body = orderUpdateSchema.parse(req.body);
-  const order = await orderSummaryService.updateOrder(req.params.orderId, body);
+  const order = await orderSummaryService.updateOrder(req.params.orderId, body, companyScope(res));
   res.json({ order });
 });
 
 export const performOrderAction = asyncHandler(async (req: Request, res: Response) => {
   const body = orderActionSchema.parse(req.body);
-  res.json(await orderActionService.perform(req.params.orderId, body.action));
+  res.json(await orderActionService.perform(req.params.orderId, body.action, companyScope(res)));
 });
 
 export const importLeads = asyncHandler(async (_req: Request, res: Response) => {
-  res.json(await importLeadsJob());
+  res.json(await importLeadsJob(sessionCompanyId(res)));
 });
 
 export const sendInitialMessages = asyncHandler(async (_req: Request, res: Response) => {
-  res.json(await sendInitialMessagesJob());
+  res.json(await sendInitialMessagesJob(sessionCompanyId(res)));
 });
 
 export const getKnowledge = asyncHandler(async (_req: Request, res: Response) => {
-  res.json({ entries: await dashboardService.listKnowledge() });
+  res.json({ entries: await dashboardService.listKnowledge(companyScope(res)) });
 });
 
 export const createKnowledge = asyncHandler(async (req: Request, res: Response) => {
   const body = knowledgeSchema.parse(req.body);
-  const entry = await dashboardService.createKnowledge(body);
+  const entry = await dashboardService.createKnowledge(body, sessionCompanyId(res));
   res.status(201).json({ entry });
 });
 
 export const updateKnowledge = asyncHandler(async (req: Request, res: Response) => {
   const body = knowledgeSchema.parse(req.body);
-  const entry = await dashboardService.updateKnowledge(req.params.id, body);
+  const entry = await dashboardService.updateKnowledge(req.params.id, body, companyScope(res));
   res.json({ entry });
 });
 
 export const deleteKnowledge = asyncHandler(async (req: Request, res: Response) => {
-  await dashboardService.deleteKnowledge(req.params.id);
+  await dashboardService.deleteKnowledge(req.params.id, companyScope(res));
   res.status(204).send();
 });
 
 export const ingestWebsiteKnowledge = asyncHandler(async (req: Request, res: Response) => {
   const body = websiteIngestSchema.parse(req.body);
-  const result = await dashboardService.ingestWebsite(body.url);
+  const result = await dashboardService.ingestWebsite(body.url, sessionCompanyId(res));
   res.json(result);
 });
 
 export const syncPrintwearWebsiteKnowledge = asyncHandler(async (_req: Request, res: Response) => {
-  const result = await dashboardService.syncPrintwearWebsite();
+  const result = await dashboardService.syncPrintwearWebsite(sessionCompanyId(res));
   res.json(result);
 });
 
@@ -230,6 +232,7 @@ export const uploadKnowledgeDocument = asyncHandler(async (req: Request, res: Re
     originalName: req.file.originalname,
     mimeType: req.file.mimetype,
     buffer: req.file.buffer,
+    companyId: sessionCompanyId(res),
     title: typeof req.body.title === "string" ? req.body.title : undefined,
     category: typeof req.body.category === "string" ? req.body.category : undefined
   });
@@ -238,7 +241,7 @@ export const uploadKnowledgeDocument = asyncHandler(async (req: Request, res: Re
 });
 
 export const getLogs = asyncHandler(async (_req: Request, res: Response) => {
-  res.json({ logs: await dashboardService.listLogs() });
+  res.json({ logs: await dashboardService.listLogs(companyScope(res)) });
 });
 
 export const getEnums = asyncHandler(async (_req: Request, res: Response) => {

@@ -2,7 +2,7 @@ import { googleSheetsService, validateGoogleSheetsConfig } from "../services/goo
 import { leadService } from "../services/lead.service.js";
 import { logger } from "../utils/logger.js";
 
-export async function importLeadsJob() {
+export async function importLeadsJob(companyId?: string) {
   logger.info("Validating Google Sheets environment for lead import");
   validateGoogleSheetsConfig();
   logger.info("Google Sheets environment validated for lead import");
@@ -22,7 +22,7 @@ export async function importLeadsJob() {
       name: sheetLead.name,
       phone: sheetLead.phone,
       rowNumber: sheetLead.rowNumber
-    });
+    }, companyId);
 
     if (result.imported) {
       imported += 1;

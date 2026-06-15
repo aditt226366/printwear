@@ -244,8 +244,9 @@ function stringConfig(node: WorkflowNode, key: string, fallback = "") {
   return typeof value === "string" ? value : fallback;
 }
 
-function audienceWhere(input: AudienceFilter = {}): Prisma.LeadWhereInput {
+function audienceWhere(input: AudienceFilter = {}, companyId?: string): Prisma.LeadWhereInput {
   return {
+    ...(companyId ? { companyId } : {}),
     ...(input.leadIds?.length ? { id: { in: input.leadIds } } : {}),
     ...(input.status ? { status: LeadStatus[input.status] } : {}),
     ...(input.source ? { source: { equals: input.source, mode: "insensitive" } } : {}),
@@ -261,19 +262,20 @@ function audienceWhere(input: AudienceFilter = {}): Prisma.LeadWhereInput {
   };
 }
 
-async function selectAudience(input: AudienceFilter = {}) {
+async function selectAudience(input: AudienceFilter = {}, companyId?: string) {
   await assertAutomationSetup();
+  const scopedCompanyId = companyId ?? null;
   let leadIds = input.leadIds ?? [];
   if (input.tag) {
     const tagRows = await prisma.$queryRaw<Array<{ id: string }>>`
-      SELECT id FROM "Lead" WHERE ${input.tag.toLowerCase()} = ANY(tags)
+      SELECT id FROM "Lead" WHERE ${input.tag.toLowerCase()} = ANY(tags) AND (${scopedCompanyId}::text IS NULL OR "companyId" = ${scopedCompanyId})
     `;
     const tagLeadIds = tagRows.map((row) => row.id);
     leadIds = leadIds.length ? leadIds.filter((id) => tagLeadIds.includes(id)) : tagLeadIds;
   }
 
   return prisma.lead.findMany({
-    where: audienceWhere({ ...input, leadIds }),
+    where: audienceWhere({ ...input, leadIds }, companyId),
     orderBy: { updatedAt: "desc" }
   });
 }
@@ -414,8 +416,9 @@ export const automationService = {
     return setupRequiredResponse(status);
   },
 
-  async listContacts(filters: ContactFilters = {}) {
+  async listContacts(filters: ContactFilters = {}, companyId?: string) {
     await assertAutomationSetup();
+    const scopedCompanyId = companyId ?? null;
     const rows = await prisma.$queryRaw<Array<{
       id: string;
       name: string;
@@ -442,6 +445,7 @@ export const automationService = {
         ) AS last_contacted,
         l."updatedAt" AS updated_at
       FROM "Lead" l
+      WHERE (${scopedCompanyId}::text IS NULL OR l."companyId" = ${scopedCompanyId})
       ORDER BY l."updatedAt" DESC
     `;
 
@@ -473,15 +477,16 @@ export const automationService = {
     };
   },
 
-  async createContact(input: { name: string; phone: string; tags?: string[]; source?: string }) {
+  async createContact(input: { name: string; phone: string; tags?: string[]; source?: string }, companyId: string) {
     await assertAutomationSetup();
     const phone = normalizePhoneNumber(input.phone);
     if (!phone) throw new AppError("Enter a valid WhatsApp phone number", 400);
 
     const tags = uniqueTags(input.tags ?? []);
     const lead = await prisma.lead.upsert({
-      where: { phone },
+      where: { companyId_phone: { companyId, phone } },
       create: {
+        companyId,
         name: input.name.trim() || phone,
         phone,
         source: input.source?.trim() || "manual",
@@ -502,7 +507,7 @@ export const automationService = {
     return lead;
   },
 
-  async importContactsFromCsv(input: { csvText: string; source?: string; defaultTags?: string[] }) {
+  async importContactsFromCsv(input: { csvText: string; source?: string; defaultTags?: string[] }, companyId: string) {
     await assertAutomationSetup();
     const rows = csvRows(input.csvText);
     if (!rows.length) throw new AppError("Upload or paste a CSV with at least one contact", 400);
@@ -527,8 +532,9 @@ export const automationService = {
 
       const tags = uniqueTags([...tagsFromValue(row[tagIndex]), ...(input.defaultTags ?? [])]);
       const lead = await prisma.lead.upsert({
-        where: { phone },
+        where: { companyId_phone: { companyId, phone } },
         create: {
+          companyId,
           name: row[nameIndex]?.trim() || phone,
           phone,
           source: row[sourceIndex]?.trim() || input.source?.trim() || "csv",
@@ -552,16 +558,17 @@ export const automationService = {
     return { imported, skipped };
   },
 
-  async importContactsFromGoogleSheets() {
+  async importContactsFromGoogleSheets(companyId?: string) {
     await assertAutomationSetup();
-    const result = await importLeadsJob();
+    const result = await importLeadsJob(companyId);
     logger.info(result, "Contacts imported from Google Sheets");
     return result;
   },
 
-  async listBulkJobs() {
+  async listBulkJobs(companyId?: string) {
     await assertAutomationSetup();
     const jobs = await prisma.bulkMessageJob.findMany({
+      where: companyId ? { companyId } : {},
       orderBy: { createdAt: "desc" },
       take: 20,
       include: { recipients: { take: 200, include: { lead: true }, orderBy: { createdAt: "asc" } } }
@@ -589,14 +596,15 @@ export const automationService = {
     }));
   },
 
-  async createBulkSend(input: { name: string; templateName: string; templateLanguage?: string; audience: AudienceFilter }) {
+  async createBulkSend(input: { name: string; templateName: string; templateLanguage?: string; audience: AudienceFilter }, companyId: string) {
     await assertAutomationSetup();
-    const leads = await selectAudience(input.audience);
+    const leads = await selectAudience(input.audience, companyId);
     if (!leads.length) throw new AppError("No contacts matched this bulk-send audience", 400);
 
     const job = await prisma.bulkMessageJob.create({
       data: {
         name: input.name,
+        companyId,
         templateName: input.templateName,
         templateLanguage: input.templateLanguage || env.WHATSAPP_TEMPLATE_LANGUAGE,
         totalCount: leads.length,
@@ -678,16 +686,17 @@ export const automationService = {
     }
   },
 
-  async listCampaigns() {
+  async listCampaigns(companyId?: string) {
     await assertAutomationSetup();
     const campaigns = await prisma.campaign.findMany({
+      where: companyId ? { companyId } : {},
       orderBy: { createdAt: "desc" },
       include: { recipients: { include: { lead: true } } }
     });
     return campaigns.map(campaignSummary);
   },
 
-  async campaignDetail(id: string) {
+  async campaignDetail(id: string, companyId?: string) {
     await assertAutomationSetup();
     const campaign = await prisma.campaign.findUnique({
       where: { id },
@@ -708,7 +717,7 @@ export const automationService = {
       }
     });
 
-    if (!campaign) throw new AppError("Campaign not found", 404);
+    if (!campaign || (companyId && campaign.companyId !== companyId)) throw new AppError("Campaign not found", 404);
 
     return {
       ...campaignSummary(campaign),
@@ -733,9 +742,9 @@ export const automationService = {
     messagePreview?: string;
     scheduledAt?: Date | null;
     scheduleNow?: boolean;
-  }) {
+  }, companyId: string) {
     await assertAutomationSetup();
-    const leads = await selectAudience(input.audience);
+    const leads = await selectAudience(input.audience, companyId);
     if (!leads.length) throw new AppError("No contacts matched this campaign audience", 400);
 
     const status = input.scheduleNow
@@ -747,6 +756,7 @@ export const automationService = {
     const campaign = await prisma.campaign.create({
       data: {
         name: input.name,
+        companyId,
         type: CampaignType.WHATSAPP_TEMPLATE,
         audience: input.audience as Prisma.InputJsonObject,
         templateName: input.templateName,
@@ -778,20 +788,20 @@ export const automationService = {
     return campaign;
   },
 
-  async pauseCampaign(id: string) {
+  async pauseCampaign(id: string, companyId?: string) {
     await assertAutomationSetup();
     const campaign = await prisma.campaign.findUnique({ where: { id } });
-    if (!campaign) throw new AppError("Campaign not found", 404);
+    if (!campaign || (companyId && campaign.companyId !== companyId)) throw new AppError("Campaign not found", 404);
     if (!( [CampaignStatus.SCHEDULED, CampaignStatus.RUNNING] as CampaignStatus[] ).includes(campaign.status)) {
       throw new AppError("Only scheduled or running campaigns can be paused", 400);
     }
     return prisma.campaign.update({ where: { id }, data: { status: CampaignStatus.PAUSED } });
   },
 
-  async cancelCampaign(id: string) {
+  async cancelCampaign(id: string, companyId?: string) {
     await assertAutomationSetup();
     const campaign = await prisma.campaign.findUnique({ where: { id } });
-    if (!campaign) throw new AppError("Campaign not found", 404);
+    if (!campaign || (companyId && campaign.companyId !== companyId)) throw new AppError("Campaign not found", 404);
     if (!( [CampaignStatus.SCHEDULED, CampaignStatus.PAUSED, CampaignStatus.RUNNING] as CampaignStatus[] ).includes(campaign.status)) {
       throw new AppError("Only pending campaigns can be cancelled", 400);
     }
@@ -888,9 +898,9 @@ export const automationService = {
     }
   },
 
-  async listAdDrafts() {
+  async listAdDrafts(companyId?: string) {
     await assertAutomationSetup();
-    const drafts = await prisma.adDraft.findMany({ orderBy: { createdAt: "desc" } });
+    const drafts = await prisma.adDraft.findMany({ where: companyId ? { companyId } : {}, orderBy: { createdAt: "desc" } });
     return {
       metaConnected: Boolean(env.META_ADS_ACCESS_TOKEN && env.META_AD_ACCOUNT_ID),
       drafts
@@ -981,14 +991,15 @@ export const automationService = {
     cta: string;
     destinationWhatsAppNumber: string;
     templatePreview: string;
-  }) {
+  }, companyId: string) {
     await assertAutomationSetup();
-    return prisma.adDraft.create({ data: input });
+    return prisma.adDraft.create({ data: { ...input, companyId } });
   },
 
-  async listWorkflows() {
+  async listWorkflows(companyId?: string) {
     await assertAutomationSetup();
     return prisma.aiWorkflow.findMany({
+      where: companyId ? { companyId } : {},
       orderBy: { updatedAt: "desc" },
       include: {
         executionLogs: {
@@ -1005,10 +1016,11 @@ export const automationService = {
     triggerValue: string;
     isActive?: boolean;
     definition: WorkflowDefinition;
-  }) {
+  }, companyId: string) {
     await assertAutomationSetup();
     return prisma.aiWorkflow.create({
       data: {
+        companyId,
         name: input.name,
         triggerType: WorkflowTriggerType[input.triggerType],
         triggerValue: input.triggerValue,
@@ -1024,8 +1036,12 @@ export const automationService = {
     triggerValue: string;
     isActive: boolean;
     definition: WorkflowDefinition;
-  }>) {
+  }>, companyId?: string) {
     await assertAutomationSetup();
+    if (companyId) {
+      const existing = await prisma.aiWorkflow.findFirst({ where: { id, companyId }, select: { id: true } });
+      if (!existing) throw new AppError("Workflow not found", 404);
+    }
     return prisma.aiWorkflow.update({
       where: { id },
       data: {
@@ -1045,7 +1061,9 @@ export const automationService = {
       return false;
     }
 
-    const workflows = await prisma.aiWorkflow.findMany({ where: { isActive: true } });
+    const lead = await prisma.lead.findUnique({ where: { id: input.leadId }, select: { companyId: true } });
+    if (!lead) return false;
+    const workflows = await prisma.aiWorkflow.findMany({ where: { isActive: true, companyId: lead.companyId } });
     let executed = false;
 
     for (const workflow of workflows) {

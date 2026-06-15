@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Printwear Sales Command Center</title>
+    <title>CRM Command Center</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&display=swap" rel="stylesheet" />
@@ -13,10 +13,10 @@
   <body class="app-shell">
     <header class="topbar">
       <div class="brand-block">
-        <span class="brand-mark">PW</span>
+        <span id="companyBrandMark" class="brand-mark">--</span>
         <div>
-          <strong>Printwear CRM</strong>
-          <span>Command center</span>
+          <strong id="companyBrandTitle">Company</strong>
+          <span>CRM Command Center</span>
         </div>
       </div>
 
@@ -41,9 +41,12 @@
         <button class="secondary-button icon-button" type="button" aria-label="Notifications">
           <i data-lucide="bell"></i>
         </button>
-        <button class="profile-button" type="button" aria-label="Profile menu">
+        <button id="profileMenuButton" class="profile-button" type="button" aria-label="Profile menu">
           <span id="profileInitials">AD</span>
         </button>
+        <form id="profileLogoutMenu" class="profile-menu hidden" action="/logout" method="post">
+          <button type="submit"><i data-lucide="log-out"></i>Logout</button>
+        </form>
       </div>
     </header>
 
@@ -64,7 +67,7 @@
           <section class="dashboard-hero premium-card">
             <div class="hero-copy">
               <p class="eyebrow">Live CRM Intelligence</p>
-              <h1>Printwear CRM Command Center</h1>
+              <h1 id="dashboardHeroTitle">CRM Command Center</h1>
               <span id="dashboardHeroSummary">Live WhatsApp sales, orders, and human takeover intelligence.</span>
               <div class="hero-actions">
                 <button id="importLeadsBtn" class="secondary-button compact-action">
@@ -227,7 +230,7 @@
 
           <aside class="lead-profile-panel">
             <div class="profile-card">
-              <span id="profileAvatar" class="lead-avatar large">PW</span>
+              <span id="profileAvatar" class="lead-avatar large">--</span>
               <h2 id="profileName">Lead profile</h2>
               <span id="profilePhone">Select a conversation</span>
               <span id="profileStatus" class="tag neutral">Not selected</span>

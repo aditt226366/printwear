@@ -6365,7 +6365,61 @@ body.app-shell #chatsView.active-view {
 
 .admin-users-row,
 .admin-users-head {
-  grid-template-columns: minmax(140px, 1fr) 120px 170px 150px 82px 95px 140px 140px 140px minmax(210px, 1fr);
+  grid-template-columns: minmax(180px, 1.2fr) 120px 170px 150px 92px 104px 140px 140px minmax(210px, 1fr);
+}
+
+.admin-users-row {
+  min-height: 58px;
+}
+
+.user-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.user-cell i {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.9), rgba(167, 139, 250, 0.95));
+  color: #fff;
+  font-size: 0.74rem;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.profile-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 18px;
+  z-index: 50;
+  min-width: 160px;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: rgba(20, 20, 27, 0.96);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+}
+
+.profile-menu button {
+  display: inline-flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #f8fafc;
+  padding: 10px 12px;
+  font-weight: 800;
+  text-align: left;
+}
+
+.profile-menu button:hover {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .billing-row,

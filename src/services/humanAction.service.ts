@@ -135,9 +135,9 @@ export const humanActionService = {
     });
   },
 
-  async request(leadId: string, reason = "Manual human takeover") {
+  async request(leadId: string, reason = "Manual human takeover", companyId?: string) {
     return prisma.lead.update({
-      where: { id: leadId },
+      where: { id: leadId, ...(companyId ? { companyId } : {}) },
       data: {
         humanTakeoverRequired: true,
         humanPriority: HumanPriority.HIGH,
@@ -147,9 +147,10 @@ export const humanActionService = {
     });
   },
 
-  async listQueue() {
+  async listQueue(companyId?: string) {
     const leads = await prisma.lead.findMany({
       where: {
+        ...(companyId ? { companyId } : {}),
         humanTakeoverRequired: true,
         humanResolvedAt: null
       },
@@ -166,9 +167,9 @@ export const humanActionService = {
       .sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority) || new Date(b.time).getTime() - new Date(a.time).getTime());
   },
 
-  async resolve(leadId: string) {
+  async resolve(leadId: string, companyId?: string) {
     return prisma.lead.update({
-      where: { id: leadId },
+      where: { id: leadId, ...(companyId ? { companyId } : {}) },
       data: {
         humanTakeoverRequired: false,
         humanResolvedAt: new Date()

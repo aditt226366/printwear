@@ -55,18 +55,15 @@ export const featureFlagService = {
   defaults: DEFAULT_FEATURES,
 
   async ensureDefaultsForCompany(companyId: string) {
-    for (const feature of DEFAULT_FEATURES) {
-      await prisma.companyFeature.upsert({
-        where: { companyId_featureKey: { companyId, featureKey: feature.key } },
-        update: { featureName: feature.label },
-        create: {
-          companyId,
-          featureKey: feature.key,
-          featureName: feature.label,
-          enabled: feature.enabled
-        }
-      });
-    }
+    await prisma.companyFeature.createMany({
+      data: DEFAULT_FEATURES.map((feature) => ({
+        companyId,
+        featureKey: feature.key,
+        featureName: feature.label,
+        enabled: feature.enabled
+      })),
+      skipDuplicates: true
+    });
   },
 
   async list(companyId?: string | null) {

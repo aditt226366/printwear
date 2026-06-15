@@ -64,24 +64,35 @@ Rules:
   }
 ];
 
+async function defaultCompanyId() {
+  const company = await prisma.company.upsert({
+    where: { slug: "printwear" },
+    update: {},
+    create: { name: "Printwear", slug: "printwear" }
+  });
+  return company.id;
+}
+
 export const knowledgeService = {
   async seedDefaults() {
     let created = 0;
+    const companyId = await defaultCompanyId();
 
     for (const entry of defaultEntries) {
       const existing = await prisma.knowledgeBase.findFirst({
         where: {
+          companyId,
           OR: [{ sourceKey: entry.sourceKey }, { title: entry.title }]
         }
       });
 
       if (!existing) {
-        await prisma.knowledgeBase.create({ data: entry });
+        await prisma.knowledgeBase.create({ data: { ...entry, companyId } });
         created += 1;
       } else {
         await prisma.knowledgeBase.update({
           where: { id: existing.id },
-          data: entry
+          data: { ...entry, companyId }
         });
       }
     }

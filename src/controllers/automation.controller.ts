@@ -3,6 +3,7 @@ import { LeadStatus, WorkflowTriggerType } from "@prisma/client";
 import { z } from "zod";
 import { automationService } from "../services/automation.service.js";
 import { asyncHandler } from "../utils/errors.js";
+import { companyScope, sessionCompanyId } from "../utils/tenant.js";
 
 const audienceSchema = z.object({
   leadIds: z.array(z.string().min(1)).optional(),
@@ -91,38 +92,38 @@ export const getAutomationSetup = asyncHandler(async (_req: Request, res: Respon
 
 export const listContacts = asyncHandler(async (req: Request, res: Response) => {
   const filters = contactQuerySchema.parse(req.query);
-  res.json(await automationService.listContacts(filters));
+  res.json(await automationService.listContacts(filters, companyScope(res)));
 });
 
 export const createContact = asyncHandler(async (req: Request, res: Response) => {
   const body = createContactSchema.parse(req.body);
-  res.status(201).json({ contact: await automationService.createContact(body) });
+  res.status(201).json({ contact: await automationService.createContact(body, sessionCompanyId(res)) });
 });
 
 export const importContactsCsv = asyncHandler(async (req: Request, res: Response) => {
   const body = csvImportSchema.parse(req.body);
-  res.json(await automationService.importContactsFromCsv(body));
+  res.json(await automationService.importContactsFromCsv(body, sessionCompanyId(res)));
 });
 
 export const importContactsSheets = asyncHandler(async (_req: Request, res: Response) => {
-  res.json(await automationService.importContactsFromGoogleSheets());
+  res.json(await automationService.importContactsFromGoogleSheets(companyScope(res)));
 });
 
 export const listBulkJobs = asyncHandler(async (_req: Request, res: Response) => {
-  res.json({ jobs: await automationService.listBulkJobs() });
+  res.json({ jobs: await automationService.listBulkJobs(companyScope(res)) });
 });
 
 export const createBulkSend = asyncHandler(async (req: Request, res: Response) => {
   const body = bulkSendSchema.parse(req.body);
-  res.status(202).json({ job: await automationService.createBulkSend(body) });
+  res.status(202).json({ job: await automationService.createBulkSend(body, sessionCompanyId(res)) });
 });
 
 export const listCampaigns = asyncHandler(async (_req: Request, res: Response) => {
-  res.json({ campaigns: await automationService.listCampaigns() });
+  res.json({ campaigns: await automationService.listCampaigns(companyScope(res)) });
 });
 
 export const getCampaign = asyncHandler(async (req: Request, res: Response) => {
-  res.json({ campaign: await automationService.campaignDetail(req.params.campaignId) });
+  res.json({ campaign: await automationService.campaignDetail(req.params.campaignId, companyScope(res)) });
 });
 
 export const createCampaign = asyncHandler(async (req: Request, res: Response) => {
@@ -131,20 +132,20 @@ export const createCampaign = asyncHandler(async (req: Request, res: Response) =
     campaign: await automationService.createCampaign({
       ...body,
       scheduledAt: body.scheduledAt ? new Date(body.scheduledAt) : null
-    })
+    }, sessionCompanyId(res))
   });
 });
 
 export const pauseCampaign = asyncHandler(async (req: Request, res: Response) => {
-  res.json({ campaign: await automationService.pauseCampaign(req.params.campaignId) });
+  res.json({ campaign: await automationService.pauseCampaign(req.params.campaignId, companyScope(res)) });
 });
 
 export const cancelCampaign = asyncHandler(async (req: Request, res: Response) => {
-  res.json({ campaign: await automationService.cancelCampaign(req.params.campaignId) });
+  res.json({ campaign: await automationService.cancelCampaign(req.params.campaignId, companyScope(res)) });
 });
 
 export const listAdDrafts = asyncHandler(async (_req: Request, res: Response) => {
-  res.json(await automationService.listAdDrafts());
+  res.json(await automationService.listAdDrafts(companyScope(res)));
 });
 
 export const getAdsStatus = asyncHandler(async (_req: Request, res: Response) => {
@@ -153,19 +154,19 @@ export const getAdsStatus = asyncHandler(async (_req: Request, res: Response) =>
 
 export const createAdDraft = asyncHandler(async (req: Request, res: Response) => {
   const body = adDraftSchema.parse(req.body);
-  res.status(201).json({ draft: await automationService.createAdDraft(body) });
+  res.status(201).json({ draft: await automationService.createAdDraft(body, sessionCompanyId(res)) });
 });
 
 export const listWorkflows = asyncHandler(async (_req: Request, res: Response) => {
-  res.json({ workflows: await automationService.listWorkflows() });
+  res.json({ workflows: await automationService.listWorkflows(companyScope(res)) });
 });
 
 export const createWorkflow = asyncHandler(async (req: Request, res: Response) => {
   const body = workflowSchema.parse(req.body);
-  res.status(201).json({ workflow: await automationService.createWorkflow(body) });
+  res.status(201).json({ workflow: await automationService.createWorkflow(body, sessionCompanyId(res)) });
 });
 
 export const updateWorkflow = asyncHandler(async (req: Request, res: Response) => {
   const body = workflowUpdateSchema.parse(req.body);
-  res.json({ workflow: await automationService.updateWorkflow(req.params.workflowId, body) });
+  res.json({ workflow: await automationService.updateWorkflow(req.params.workflowId, body, companyScope(res)) });
 });

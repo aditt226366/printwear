@@ -58,7 +58,9 @@ function messageSender(direction: MessageDirection) {
 }
 
 export const dashboardService = {
-  async overview() {
+  async overview(companyId?: string) {
+    const leadWhere = companyId ? { companyId } : {};
+    const messageWhere = companyId ? { lead: { companyId } } : {};
     const [
       totalLeads,
       hotLeads,
@@ -70,14 +72,15 @@ export const dashboardService = {
       recentLeads,
       recentLogs
     ] = await Promise.all([
-      prisma.lead.count(),
-      prisma.lead.count({ where: whereForTemperature("HOT") }),
-      prisma.lead.count({ where: whereForTemperature("WARM") }),
-      prisma.lead.count({ where: whereForTemperature("SCRAP") }),
-      prisma.lead.count({ where: { messageCount: { gt: 0 } } }),
-      prisma.message.count({ where: { direction: MessageDirection.INBOUND } }),
-      prisma.message.count({ where: { direction: MessageDirection.OUTBOUND } }),
+      prisma.lead.count({ where: leadWhere }),
+      prisma.lead.count({ where: { ...leadWhere, ...whereForTemperature("HOT") } }),
+      prisma.lead.count({ where: { ...leadWhere, ...whereForTemperature("WARM") } }),
+      prisma.lead.count({ where: { ...leadWhere, ...whereForTemperature("SCRAP") } }),
+      prisma.lead.count({ where: { ...leadWhere, messageCount: { gt: 0 } } }),
+      prisma.message.count({ where: { ...messageWhere, direction: MessageDirection.INBOUND } }),
+      prisma.message.count({ where: { ...messageWhere, direction: MessageDirection.OUTBOUND } }),
       prisma.lead.findMany({
+        where: leadWhere,
         orderBy: { updatedAt: "desc" },
         take: 6,
         include: {
@@ -89,6 +92,7 @@ export const dashboardService = {
         }
       }),
       prisma.sendLog.findMany({
+        where: companyId ? { lead: { companyId } } : {},
         orderBy: { createdAt: "desc" },
         take: 8,
         include: { lead: true }
@@ -136,9 +140,10 @@ export const dashboardService = {
     };
   },
 
-  async listLeads(filters: LeadListFilters = {}) {
+  async listLeads(filters: LeadListFilters = {}, companyId?: string) {
     const search = filters.search?.trim();
     const where = {
+      ...(companyId ? { companyId } : {}),
       ...whereForTemperature(filters.temperature),
       ...(search
         ? {
@@ -194,7 +199,7 @@ export const dashboardService = {
     }));
   },
 
-  async conversation(leadId: string) {
+  async conversation(leadId: string, companyId?: string) {
     const lead = await prisma.lead.findUnique({
       where: { id: leadId },
       include: {
@@ -205,7 +210,7 @@ export const dashboardService = {
       }
     });
 
-    if (!lead) {
+    if (!lead || (companyId && lead.companyId !== companyId)) {
       return null;
     }
 
@@ -240,9 +245,9 @@ export const dashboardService = {
     };
   },
 
-  async sendManualMessage(leadId: string, text: string) {
+  async sendManualMessage(leadId: string, text: string, companyId?: string) {
     const lead = await prisma.lead.findUnique({ where: { id: leadId } });
-    if (!lead) {
+    if (!lead || (companyId && lead.companyId !== companyId)) {
       throw new Error("Lead not found");
     }
 
@@ -265,15 +270,17 @@ export const dashboardService = {
     return message;
   },
 
-  async listKnowledge() {
+  async listKnowledge(companyId?: string) {
     return prisma.knowledgeBase.findMany({
+      where: companyId ? { companyId } : {},
       orderBy: [{ category: "asc" }, { title: "asc" }]
     });
   },
 
-  async createKnowledge(input: { title: string; category: string; content: string }) {
+  async createKnowledge(input: { title: string; category: string; content: string }, companyId: string) {
     return prisma.knowledgeBase.create({
       data: {
+        companyId,
         ...input,
         sourceType: "MANUAL",
         sourceName: "Dashboard manual entry"
@@ -281,23 +288,24 @@ export const dashboardService = {
     });
   },
 
-  async updateKnowledge(id: string, input: { title: string; category: string; content: string }) {
+  async updateKnowledge(id: string, input: { title: string; category: string; content: string }, companyId?: string) {
     return prisma.knowledgeBase.update({
-      where: { id },
+      where: { id, ...(companyId ? { companyId } : {}) },
       data: input
     });
   },
 
-  async deleteKnowledge(id: string) {
+  async deleteKnowledge(id: string, companyId?: string) {
     return prisma.knowledgeBase.delete({
-      where: { id }
+      where: { id, ...(companyId ? { companyId } : {}) }
     });
   },
 
-  async ingestWebsite(url: string) {
+  async ingestWebsite(url: string, companyId: string) {
     const result = await knowledgeIngestionService.ingestWebsite(url, {
       titlePrefix: "Website",
-      category: "website"
+      category: "website",
+      companyId
     });
 
     await messageService.createSendLog({
@@ -309,11 +317,12 @@ export const dashboardService = {
     return result;
   },
 
-  async syncPrintwearWebsite() {
+  async syncPrintwearWebsite(companyId: string) {
     try {
       const result = await knowledgeIngestionService.ingestWebsite(env.PRINTWEAR_WEBSITE_URL, {
         titlePrefix: "Printwear Website",
-        category: "printwear_website"
+        category: "printwear_website",
+        companyId
       });
 
       await messageService.createSendLog({
@@ -339,6 +348,7 @@ export const dashboardService = {
     buffer: Buffer;
     title?: string;
     category?: string;
+    companyId: string;
   }) {
     const result = await knowledgeIngestionService.ingestUpload(
       {
@@ -348,7 +358,8 @@ export const dashboardService = {
       },
       {
         title: input.title,
-        category: input.category
+        category: input.category,
+        companyId: input.companyId
       }
     );
 
@@ -361,8 +372,9 @@ export const dashboardService = {
     return result;
   },
 
-  async listLogs() {
+  async listLogs(companyId?: string) {
     return prisma.sendLog.findMany({
+      where: companyId ? { lead: { companyId } } : {},
       orderBy: { createdAt: "desc" },
       take: 100,
       include: { lead: true }

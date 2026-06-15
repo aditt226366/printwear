@@ -8,6 +8,7 @@ import { prisma } from "../config/prisma.js";
 import { logger } from "../utils/logger.js";
 
 type ChunkInput = {
+  companyId: string;
   title: string;
   content: string;
   category: string;
@@ -76,7 +77,7 @@ async function replaceWithChunks(input: ChunkInput) {
   const sourceKey = input.sourceKey ?? sourceKeyFor(`${input.sourceType}:${input.sourceUrl ?? input.sourceName ?? input.title}`);
   const chunks = chunkText(input.content);
 
-  await prisma.knowledgeBase.deleteMany({ where: { sourceKey } });
+  await prisma.knowledgeBase.deleteMany({ where: { sourceKey, companyId: input.companyId } });
 
   if (chunks.length === 0) {
     return { sourceKey, created: 0 };
@@ -85,6 +86,7 @@ async function replaceWithChunks(input: ChunkInput) {
   await prisma.knowledgeBase.createMany({
     data: chunks.map((chunk, index) => ({
       title: chunks.length === 1 ? input.title : `${input.title} - Part ${index + 1}`,
+      companyId: input.companyId,
       content: chunk,
       category: input.category,
       sourceType: input.sourceType,
@@ -209,7 +211,7 @@ export const knowledgeIngestionService = {
     return replaceWithChunks(input);
   },
 
-  async ingestWebsite(url: string, options?: { titlePrefix?: string; category?: string; maxPages?: number }) {
+  async ingestWebsite(url: string, options: { titlePrefix?: string; category?: string; maxPages?: number; companyId: string }) {
     const startUrl = normalizeUrl(url);
     const origin = new URL(startUrl).origin;
     const maxPages = options?.maxPages ?? env.KNOWLEDGE_CRAWL_MAX_PAGES;
@@ -249,7 +251,7 @@ export const knowledgeIngestionService = {
     }
 
     const sourceKey = sourceKeyFor(`website:${origin}`);
-    await prisma.knowledgeBase.deleteMany({ where: { sourceKey } });
+    await prisma.knowledgeBase.deleteMany({ where: { sourceKey, companyId: options.companyId } });
 
     let created = 0;
     for (const page of pages) {
@@ -257,6 +259,7 @@ export const knowledgeIngestionService = {
       await prisma.knowledgeBase.createMany({
         data: chunks.map((chunk, index) => ({
           title: `${options?.titlePrefix ?? "Website"}: ${page.title}${chunks.length > 1 ? ` - Part ${index + 1}` : ""}`,
+          companyId: options.companyId,
           content: chunk,
           category,
           sourceType: KnowledgeSourceType.WEBSITE,
@@ -277,9 +280,10 @@ export const knowledgeIngestionService = {
     };
   },
 
-  async ingestUpload(file: UploadedDocument, metadata: { title?: string; category?: string }) {
+  async ingestUpload(file: UploadedDocument, metadata: { title?: string; category?: string; companyId: string }) {
     const text = await extractUploadText(file);
     return replaceWithChunks({
+      companyId: metadata.companyId,
       title: metadata.title?.trim() || file.originalName,
       content: text,
       category: metadata.category?.trim() || "uploaded_document",

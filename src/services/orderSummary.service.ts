@@ -202,9 +202,12 @@ export const orderSummaryService = {
     });
   },
 
-  async listPipeline() {
+  async listPipeline(companyId?: string) {
     const orders = await prisma.orderSummary.findMany({
-      where: { status: { not: OrderStatus.CANCELLED } },
+      where: {
+        status: { not: OrderStatus.CANCELLED },
+        ...(companyId ? { lead: { companyId } } : {})
+      },
       orderBy: { updatedAt: "desc" },
       include: {
         lead: {
@@ -229,7 +232,11 @@ export const orderSummaryService = {
     return grouped;
   },
 
-  async updateStatus(orderId: string, status: OrderStatus) {
+  async updateStatus(orderId: string, status: OrderStatus, companyId?: string) {
+    if (companyId) {
+      const existing = await prisma.orderSummary.findFirst({ where: { id: orderId, lead: { companyId } }, select: { id: true } });
+      if (!existing) throw new Error("Order not found");
+    }
     const order = await prisma.orderSummary.update({
       where: { id: orderId },
       data: { status }
@@ -244,7 +251,11 @@ export const orderSummaryService = {
     return order;
   },
 
-  async updateOrder(orderId: string, input: OrderPatch) {
+  async updateOrder(orderId: string, input: OrderPatch, companyId?: string) {
+    if (companyId) {
+      const existing = await prisma.orderSummary.findFirst({ where: { id: orderId, lead: { companyId } }, select: { id: true } });
+      if (!existing) throw new Error("Order not found");
+    }
     const data: Prisma.OrderSummaryUpdateInput = {};
     if ("productType" in input) data.productType = clean(input.productType);
     if ("quantity" in input) data.quantity = normalizeQuantity(input.quantity);

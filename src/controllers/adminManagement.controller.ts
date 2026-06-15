@@ -7,7 +7,12 @@ import { asyncHandler, AppError } from "../utils/errors.js";
 const companySchema = z.object({
   name: z.string().trim().min(2),
   slug: z.string().trim().optional(),
-  status: z.nativeEnum(CompanyStatus).optional()
+  status: z.nativeEnum(CompanyStatus).optional(),
+  logoUrl: z.string().trim().url().optional().nullable(),
+  whatsappNumber: z.string().trim().optional().nullable(),
+  brandColor: z.string().trim().optional().nullable(),
+  timezone: z.string().trim().optional().nullable(),
+  businessType: z.string().trim().optional().nullable()
 });
 
 const userSchema = z.object({

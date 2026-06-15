@@ -26,14 +26,14 @@ const actionConfig: Record<OrderAction, { status: OrderStatus; text: string }> =
 };
 
 export const orderActionService = {
-  async perform(orderId: string, action: OrderAction) {
+  async perform(orderId: string, action: OrderAction, companyId?: string) {
     const config = actionConfig[action];
     const order = await prisma.orderSummary.findUnique({
       where: { id: orderId },
       include: { lead: true }
     });
 
-    if (!order) {
+    if (!order || (companyId && order.lead.companyId !== companyId)) {
       throw new Error("Order not found");
     }
 

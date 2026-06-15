@@ -12,6 +12,15 @@ export type ImportedLead = {
   source?: string;
 };
 
+async function defaultCompanyId() {
+  const company = await prisma.company.upsert({
+    where: { slug: "printwear" },
+    update: {},
+    create: { name: "Printwear", slug: "printwear" }
+  });
+  return company.id;
+}
+
 function getPrismaErrorLogFields(error: unknown) {
   const prismaError = error as {
     code?: string;
@@ -38,7 +47,7 @@ function getPrismaErrorLogFields(error: unknown) {
 }
 
 export const leadService = {
-  async importLead(lead: ImportedLead) {
+  async importLead(lead: ImportedLead, companyId?: string) {
     const phone = normalizePhoneNumber(lead.phone);
     if (!phone) {
       return { imported: false, reason: "invalid_phone" as const };
@@ -49,6 +58,7 @@ export const leadService = {
       await prisma.lead.create({
         data: {
           name: lead.name.trim() || "Unknown",
+          companyId: companyId || await defaultCompanyId(),
           phone,
           source: lead.source ?? "google_sheets",
           googleSheetRowNumber: lead.rowNumber,
@@ -78,11 +88,11 @@ export const leadService = {
     }
   },
 
-  async findNewLeadsForInitialMessages(limit = 100) {
+  async findNewLeadsForInitialMessages(limit = 100, companyId?: string) {
     try {
       logger.info({ limit }, "Loading leads pending welcome message from database");
       return await prisma.lead.findMany({
-        where: { status: LeadStatus.NEW },
+        where: { status: LeadStatus.NEW, ...(companyId ? { companyId } : {}) },
         orderBy: { createdAt: "asc" },
         take: limit
       });
@@ -110,15 +120,17 @@ export const leadService = {
     });
   },
 
-  async findOrCreateFromInbound(phoneValue: string, profileName?: string) {
+  async findOrCreateFromInbound(phoneValue: string, profileName?: string, companyId?: string) {
     const phone = normalizePhoneNumber(phoneValue);
     if (!phone) {
       throw new Error(`Invalid inbound phone number: ${phoneValue}`);
     }
 
+    const ownerCompanyId = companyId || await defaultCompanyId();
     return prisma.lead.upsert({
-      where: { phone },
+      where: { companyId_phone: { companyId: ownerCompanyId, phone } },
       create: {
+        companyId: ownerCompanyId,
         phone,
         name: profileName?.trim() || phone,
         source: "whatsapp",
