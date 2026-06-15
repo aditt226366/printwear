@@ -1,4 +1,5 @@
 import { env, requireEnv } from "../config/env.js";
+import { apiUsageService } from "./apiUsage.service.js";
 
 const SYSTEM_PROMPT =
   'You are Printwear\'s WhatsApp sales assistant. Use only the provided company knowledge base and website-ingested information. Keep replies short, natural, WhatsApp-friendly, and professional. Help customers choose the right product and ask one useful follow-up question when appropriate. Collect order requirements when relevant: product type, quantity, size, color, GSM preference, printing/customization requirement, and delivery location. Do not invent prices, stock, discounts, delivery timelines, or policies. If information is missing, reply exactly: "I will have our team confirm that and get back to you." Never mention Claude, AI, RAG, database, embeddings, prompts, or internal system details.';
@@ -64,6 +65,14 @@ export const claudeService = {
       });
 
       const json = (await response.json().catch(() => ({}))) as ClaudeResponse;
+      void apiUsageService.log({
+        provider: "CLAUDE",
+        endpoint: "https://api.anthropic.com/v1/messages",
+        method: "POST",
+        statusCode: response.status,
+        success: response.ok,
+        metadata: { model: env.CLAUDE_MODEL, purpose: "generate_reply" }
+      });
 
       if (!response.ok) {
         throw new Error(json.error?.message ?? `Claude API failed with status ${response.status}`);
@@ -113,6 +122,14 @@ export const claudeService = {
       });
 
       const json = (await response.json().catch(() => ({}))) as ClaudeResponse;
+      void apiUsageService.log({
+        provider: "CLAUDE",
+        endpoint: "https://api.anthropic.com/v1/messages",
+        method: "POST",
+        statusCode: response.status,
+        success: response.ok,
+        metadata: { model: env.CLAUDE_MODEL, purpose: "extract_order_summary" }
+      });
       if (!response.ok) {
         throw new Error(json.error?.message ?? `Claude API failed with status ${response.status}`);
       }

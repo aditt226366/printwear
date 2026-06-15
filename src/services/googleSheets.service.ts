@@ -3,6 +3,7 @@ import { env, requireEnv } from "../config/env.js";
 import { AppError } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
 import { normalizePhoneNumber } from "../utils/phone.js";
+import { apiUsageService } from "./apiUsage.service.js";
 
 export type SheetLead = {
   name: string;
@@ -86,9 +87,25 @@ export const googleSheetsService = {
         spreadsheetId,
         range: env.GOOGLE_SHEETS_RANGE
       });
+      void apiUsageService.log({
+        provider: "GOOGLE_SHEETS",
+        endpoint: "spreadsheets.values.get",
+        method: "GET",
+        statusCode: 200,
+        success: true,
+        metadata: { spreadsheetId, range: env.GOOGLE_SHEETS_RANGE }
+      });
     } catch (error) {
       const sheetsError = error as { code?: number; status?: number };
       const status = sheetsError.code ?? sheetsError.status;
+      void apiUsageService.log({
+        provider: "GOOGLE_SHEETS",
+        endpoint: "spreadsheets.values.get",
+        method: "GET",
+        statusCode: Number(status || 500),
+        success: false,
+        metadata: { spreadsheetId, range: env.GOOGLE_SHEETS_RANGE }
+      });
       logger.error({ error, status }, "Google Sheets read failed");
 
       if (status === 403) {
@@ -164,8 +181,25 @@ export const googleSheetsService = {
           values: [[status]]
         }
       });
+      void apiUsageService.log({
+        provider: "GOOGLE_SHEETS",
+        endpoint: "spreadsheets.values.update",
+        method: "PUT",
+        statusCode: 200,
+        success: true,
+        metadata: { spreadsheetId, range: `${sheetName}!${statusColumn}${rowNumber}` }
+      });
       logger.info({ rowNumber, status }, "Google Sheets lead status updated");
     } catch (error) {
+      const sheetsError = error as { code?: number; status?: number };
+      void apiUsageService.log({
+        provider: "GOOGLE_SHEETS",
+        endpoint: "spreadsheets.values.update",
+        method: "PUT",
+        statusCode: Number(sheetsError.code || sheetsError.status || 500),
+        success: false,
+        metadata: { spreadsheetId, range: `${sheetName}!${statusColumn}${rowNumber}` }
+      });
       logger.error({ error, rowNumber, status }, "Google Sheets status update failed");
       throw new AppError(
         "Google Sheets update failed",

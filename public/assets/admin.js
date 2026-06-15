@@ -1,0 +1,309 @@
+const adminState = {
+  companies: [],
+  users: [],
+  features: [],
+  billing: { summary: {}, logs: [] },
+  currentView: "users"
+};
+
+const featureDescriptions = {
+  dashboard: "Command metrics, import leads, and welcome sends.",
+  chats: "Live WhatsApp conversations and manual replies.",
+  contacts_broadcasts: "Audience imports, contact management, and broadcasts.",
+  campaigns: "Scheduled WhatsApp outreach and campaign reporting.",
+  ads: "Click-to-WhatsApp ad drafts and Meta status checks.",
+  ai_flows: "Workflow builder, triggers, and automation logs.",
+  human_queue: "Manual takeover queue and priority follow-ups.",
+  orders: "Order summaries, dispatch status, and customer updates.",
+  reports: "Performance dashboards and CRM analytics.",
+  settings: "Account/session controls and workspace settings."
+};
+
+function $(selector) {
+  return document.querySelector(selector);
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function pretty(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function formatDate(value) {
+  if (!value) return "--";
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+}
+
+function showNotice(message, isError = false) {
+  const notice = $("#adminNotice");
+  if (!notice) return;
+  notice.textContent = message;
+  notice.classList.toggle("error", isError);
+  notice.classList.remove("hidden");
+  window.clearTimeout(showNotice.timer);
+  showNotice.timer = window.setTimeout(() => notice.classList.add("hidden"), 4500);
+}
+
+async function api(path, options = {}) {
+  const response = await fetch(`/api${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {})
+    }
+  });
+  const data = response.status === 204 ? {} : await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || data.message || "Request failed");
+  return data;
+}
+
+function refreshIcons() {
+  window.lucide?.createIcons?.();
+}
+
+async function loadLucide() {
+  try {
+    const lucideModule = await import("https://esm.sh/lucide@0.468.0");
+    window.lucide = { createIcons: (options = {}) => lucideModule.createIcons({ icons: lucideModule.icons, ...options }) };
+    refreshIcons();
+  } catch {
+    // Icons are decorative; keep admin usable if CDN fails.
+  }
+}
+
+function switchAdminView(view) {
+  adminState.currentView = view;
+  document.querySelectorAll("[data-admin-view]").forEach((button) => button.classList.toggle("active", button.dataset.adminView === view));
+  document.querySelectorAll("main > .view").forEach((section) => section.classList.remove("active-view"));
+  $(`#admin${view[0].toUpperCase()}${view.slice(1)}View`)?.classList.add("active-view");
+  if (view === "features") loadFeatures().catch((error) => showNotice(error.message, true));
+  if (view === "billing") loadBilling().catch((error) => showNotice(error.message, true));
+}
+
+function fillCompanySelects() {
+  const options = adminState.companies.map((company) => `<option value="${escapeHtml(company.id)}">${escapeHtml(company.name)}</option>`).join("");
+  ["userCompany", "featureCompanySelect", "billingCompanySelect"].forEach((id) => {
+    const select = $(`#${id}`);
+    if (!select) return;
+    const current = select.value;
+    select.innerHTML = id === "billingCompanySelect" ? `<option value="">All companies</option>${options}` : options;
+    if (current) select.value = current;
+  });
+}
+
+async function loadCompanies() {
+  const data = await api("/admin/companies");
+  adminState.companies = data.companies || [];
+  fillCompanySelects();
+}
+
+async function loadUsers() {
+  const data = await api("/admin/users");
+  adminState.users = data.users || [];
+  renderUsers();
+}
+
+function renderUsers() {
+  const table = $("#adminUsersTable");
+  if (!table) return;
+  if (!adminState.users.length) {
+    table.innerHTML = `<div class="empty-state"><strong>No users yet.</strong><span>Create a company and user to begin.</span></div>`;
+    return;
+  }
+  table.innerHTML = `
+    <div class="data-row admin-users-head">
+      <span>Name</span><span>Username</span><span>Email</span><span>Company</span><span>Role</span><span>Status</span><span>Password</span><span>Last login</span><span>Created</span><span>Actions</span>
+    </div>
+    ${adminState.users.map((user) => `
+      <div class="data-row admin-users-row" data-user-id="${escapeHtml(user.id)}">
+        <span><strong>${escapeHtml(user.name)}</strong></span>
+        <span>${escapeHtml(user.username)}</span>
+        <span>${escapeHtml(user.email || "--")}</span>
+        <span>${escapeHtml(user.company?.name || "Admin")}</span>
+        <span><mark class="${user.role === "ADMIN" ? "green" : "neutral"}">${escapeHtml(user.role)}</mark></span>
+        <span><mark class="${user.status === "ACTIVE" ? "green" : "red"}">${escapeHtml(pretty(user.status))}</mark></span>
+        <span>Password is hidden</span>
+        <span>${formatDate(user.lastLoginAt)}</span>
+        <span>${formatDate(user.createdAt)}</span>
+        <span class="row-actions">
+          <button class="secondary-button" type="button" data-user-reset="${escapeHtml(user.id)}">Reset Password</button>
+          ${user.role === "USER" ? `<button class="secondary-button" type="button" data-user-status="${escapeHtml(user.id)}">${user.status === "ACTIVE" ? "Deactivate" : "Activate"}</button>` : ""}
+        </span>
+      </div>
+    `).join("")}
+  `;
+}
+
+async function loadFeatures() {
+  const companyId = $("#featureCompanySelect")?.value || adminState.companies[0]?.id || "";
+  if (!companyId) {
+    $("#adminFeatureList").innerHTML = `<div class="empty-state"><strong>No company selected.</strong><span>Create a company first.</span></div>`;
+    return;
+  }
+  const data = await api(`/admin/features?companyId=${encodeURIComponent(companyId)}`);
+  adminState.features = data.features || [];
+  renderFeatures();
+}
+
+function renderFeatures() {
+  const target = $("#adminFeatureList");
+  if (!target) return;
+  target.innerHTML = adminState.features.map((feature) => `
+    <article class="feature-toggle ${feature.enabled ? "active" : "inactive"}">
+      <div class="feature-toggle-copy">
+        <strong>${escapeHtml(feature.label)}</strong>
+        <small>${escapeHtml(feature.description || featureDescriptions[feature.key] || "")}</small>
+      </div>
+      <mark class="${feature.enabled ? "green" : "neutral"}">${feature.enabled ? "Active" : "Inactive"}</mark>
+      <button class="toggle-switch ${feature.enabled ? "is-on" : "is-off"}" type="button" role="switch" aria-checked="${feature.enabled ? "true" : "false"}" data-feature-toggle="${escapeHtml(feature.id)}">
+        <span class="toggle-track" aria-hidden="true"><i></i></span>
+        <b>${feature.enabled ? "ON" : "OFF"}</b>
+      </button>
+    </article>
+  `).join("");
+}
+
+async function loadBilling() {
+  const params = new URLSearchParams();
+  if ($("#billingCompanySelect")?.value) params.set("companyId", $("#billingCompanySelect").value);
+  if ($("#billingStart")?.value) params.set("start", new Date($("#billingStart").value).toISOString());
+  if ($("#billingEnd")?.value) params.set("end", new Date($("#billingEnd").value).toISOString());
+  const data = await api(`/admin/billing?${params.toString()}`);
+  adminState.billing = data;
+  renderBilling();
+}
+
+function renderBilling() {
+  const summary = adminState.billing.summary || {};
+  $("#billingSummary").innerHTML = [
+    ["WhatsApp API calls", summary.whatsappApiCalls || 0],
+    ["Meta Ads API calls", summary.metaAdsApiCalls || 0],
+    ["Claude API calls", summary.claudeApiCalls || 0],
+    ["Google Sheets API calls", summary.googleSheetsApiCalls || 0],
+    ["Total API calls", summary.totalApiCalls || 0],
+    ["Estimated cost", Number(summary.estimatedCost || 0).toFixed(4)]
+  ].map(([label, value]) => `<span><strong>${escapeHtml(value)}</strong><small>${escapeHtml(label)}</small></span>`).join("");
+
+  const logs = adminState.billing.logs || [];
+  $("#billingTable").innerHTML = logs.length ? `
+    <div class="data-row billing-head"><span>Date/time</span><span>Company</span><span>Provider</span><span>Endpoint</span><span>Status</span><span>Success</span><span>Units</span><span>Cost</span></div>
+    ${logs.map((log) => `
+      <div class="data-row billing-row">
+        <span>${formatDate(log.createdAt)}</span>
+        <span>${escapeHtml(log.company?.name || "--")}</span>
+        <span>${escapeHtml(pretty(log.provider))}</span>
+        <span>${escapeHtml(log.endpoint)}</span>
+        <span>${escapeHtml(log.statusCode)}</span>
+        <span><mark class="${log.success ? "green" : "red"}">${log.success ? "Success" : "Failure"}</mark></span>
+        <span>${escapeHtml(log.requestUnits)}</span>
+        <span>${escapeHtml(log.costEstimate ?? "--")}</span>
+      </div>
+    `).join("")}
+  ` : `<div class="empty-state"><strong>No usage logs yet.</strong><span>External API calls will appear here after they run.</span></div>`;
+}
+
+function bindEvents() {
+  document.querySelectorAll("[data-admin-view]").forEach((button) => button.addEventListener("click", () => switchAdminView(button.dataset.adminView)));
+  $("#companyName")?.addEventListener("input", (event) => {
+    if (!$("#companySlug")?.dataset.edited) $("#companySlug").value = event.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  });
+  $("#companySlug")?.addEventListener("input", (event) => {
+    event.target.dataset.edited = "true";
+  });
+  $("#companyForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await api("/admin/companies", {
+      method: "POST",
+      body: JSON.stringify({ name: $("#companyName").value, slug: $("#companySlug").value, status: $("#companyStatus").value })
+    });
+    event.target.reset();
+    showNotice("Company created.");
+    await loadCompanies();
+  });
+  $("#userForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await api("/admin/users", {
+      method: "POST",
+      body: JSON.stringify({
+        companyId: $("#userCompany").value,
+        name: $("#userName").value,
+        username: $("#userUsername").value,
+        email: $("#userEmail").value || null,
+        password: $("#userPassword").value,
+        confirmPassword: $("#userConfirmPassword").value,
+        status: $("#userStatus").value
+      })
+    });
+    event.target.reset();
+    showNotice("User created.");
+    await loadUsers();
+  });
+  $("#adminUsersTable")?.addEventListener("click", async (event) => {
+    const reset = event.target.closest("[data-user-reset]");
+    const status = event.target.closest("[data-user-status]");
+    if (reset) {
+      const password = window.prompt("New password (minimum 8 characters)");
+      if (!password) return;
+      await api(`/admin/users/${reset.dataset.userReset}/reset-password`, {
+        method: "POST",
+        body: JSON.stringify({ password, confirmPassword: password })
+      });
+      showNotice("Password reset. Password remains hidden.");
+    }
+    if (status) {
+      const user = adminState.users.find((item) => item.id === status.dataset.userStatus);
+      await api(`/admin/users/${status.dataset.userStatus}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: user.status === "ACTIVE" ? "INACTIVE" : "ACTIVE" })
+      });
+      showNotice("User status updated.");
+      await loadUsers();
+    }
+  });
+  $("#featureCompanySelect")?.addEventListener("change", () => loadFeatures().catch((error) => showNotice(error.message, true)));
+  $("#adminFeatureList")?.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-feature-toggle]");
+    if (!button) return;
+    const enabled = button.getAttribute("aria-checked") !== "true";
+    await api(`/admin/features/${button.dataset.featureToggle}`, {
+      method: "PATCH",
+      body: JSON.stringify({ enabled })
+    });
+    await loadFeatures();
+    showNotice("Feature access updated.");
+  });
+  $("#refreshBillingBtn")?.addEventListener("click", () => loadBilling().catch((error) => showNotice(error.message, true)));
+  $("#billingCompanySelect")?.addEventListener("change", () => loadBilling().catch((error) => showNotice(error.message, true)));
+  $("#exportBillingBtn")?.addEventListener("click", () => {
+    const params = new URLSearchParams();
+    if ($("#billingCompanySelect")?.value) params.set("companyId", $("#billingCompanySelect").value);
+    if ($("#billingStart")?.value) params.set("start", new Date($("#billingStart").value).toISOString());
+    if ($("#billingEnd")?.value) params.set("end", new Date($("#billingEnd").value).toISOString());
+    window.location.href = `/api/admin/billing/export?${params.toString()}`;
+  });
+}
+
+async function start() {
+  bindEvents();
+  await loadLucide();
+  await loadCompanies();
+  await loadUsers();
+  if (adminState.companies[0]) {
+    $("#featureCompanySelect").value = adminState.companies[0].id;
+    await loadFeatures();
+  }
+  await loadBilling();
+  refreshIcons();
+}
+
+start().catch((error) => showNotice(error.message, true));

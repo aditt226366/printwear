@@ -63,8 +63,14 @@ Phase 1 backend for importing leads from Google Sheets, sending WhatsApp templat
 
 See `.env.example`.
 
-- `ADMIN_EMAIL`: Login email for the single admin user.
-- `ADMIN_PASSWORD`: Login password for the single admin user. Use a strong password before sharing the service.
+- `ADMIN_USERNAME`: Username for the first database admin, default `admin`.
+- `ADMIN_EMAIL`: Email for the first database admin.
+- `ADMIN_PASSWORD`: Password used only to seed the first database admin. Use a strong password before sharing the service.
+- `ADMIN_NAME`: Display name for the first database admin.
+- `USER_USERNAME`: Optional default CRM user username.
+- `USER_EMAIL`: Optional default CRM user email.
+- `USER_PASSWORD`: Optional default CRM user password.
+- `USER_NAME`: Optional default CRM user display name.
 - `SESSION_SECRET`: Long random string used to sign admin sessions.
 - `DATABASE_URL`: PostgreSQL connection string.
 - `WHATSAPP_PHONE_NUMBER_ID`: Meta WhatsApp phone number ID.
@@ -85,6 +91,8 @@ Optional supported values:
 - `WHATSAPP_API_VERSION`: Meta Graph API version, default `v20.0`.
 - `GOOGLE_SHEETS_RANGE`: Sheet range, default `Sheet1!A:C`.
 - `GOOGLE_SHEETS_STATUS_COLUMN`: Status column, default `C`.
+- `META_AD_ACCOUNT_ID`: Meta Ads account ID used to verify Ads API connectivity.
+- `META_ADS_ACCESS_TOKEN`: Meta token used only for Ads status/insights calls.
 
 ## Database
 
@@ -94,6 +102,11 @@ The Prisma schema creates:
 - `Message`: inbound and outbound WhatsApp messages, deduplicated by WhatsApp message ID.
 - `KnowledgeBase`: simple company knowledge content.
 - `SendLog`: send attempts and failures.
+- `Company`: tenant/company records for CRM users.
+- `AppUser`: bcrypt-hashed admin and user accounts.
+- `CompanyFeature`: company-level feature visibility toggles.
+- `ApiUsageLog`: tracked WhatsApp, Meta Ads, Claude, Google Sheets, and internal calls.
+- `BillingSnapshot`: optional period summaries for billing exports.
 
 Lead temperature is refreshed from total message count:
 
@@ -145,22 +158,76 @@ Add `ANTHROPIC_API_KEY` to `.env`. The Claude service prompts the model to act a
 - `GET /webhook`: Meta webhook verification.
 - `POST /webhook`: incoming WhatsApp messages and status updates.
 
-## Admin Dashboard
+## Login, Admin, and User Access
 
-Phase 2 adds a single-admin dashboard:
+The app uses one login page for both admins and users:
 
-- `GET /login`: admin login screen.
-- `GET /dashboard`: protected dashboard.
+- `GET /login`: single username/password login screen.
+- `POST /auth/login`: validates a database user by username or email.
+- `GET /admin`: admin-only panel for users, features, and billing.
+- `GET /dashboard`: protected CRM dashboard for CRM users.
 - `POST /logout`: clears the admin session.
-- `/admin/api/*`: protected dashboard API.
 
-Set these values before using it:
+Set these values before first startup or seed:
 
 ```env
+ADMIN_USERNAME=admin
 ADMIN_EMAIL=admin@example.com
 ADMIN_PASSWORD=change-this-password
+ADMIN_NAME=Admin
 SESSION_SECRET=use-a-long-random-secret-at-least-32-characters
 ```
+
+On startup, the server creates a database admin from the admin env values only if no admin exists. Passwords are never stored in plain text; `AppUser.passwordHash` stores a bcrypt hash. Optional `USER_*` env values seed a default user assigned to the default `Printwear` company.
+
+After login:
+
+- Admin credentials redirect to `/admin`.
+- User credentials redirect to `/dashboard`.
+- Inactive users cannot log in.
+- Failed logins return the same generic error: `Invalid username or password`.
+
+## Admin Panel
+
+The admin panel has three sections:
+
+- `Users`: create companies, create users, reset passwords, and activate/deactivate users.
+- `Features`: select a company and control visible CRM features with ON/OFF toggles.
+- `Billing`: review internal tracked API calls and export usage as CSV.
+
+Admin-only APIs:
+
+- `GET /api/admin/companies`
+- `POST /api/admin/companies`
+- `GET /api/admin/users`
+- `POST /api/admin/users`
+- `PATCH /api/admin/users/:id`
+- `POST /api/admin/users/:id/reset-password`
+- `GET /api/admin/features?companyId=...`
+- `PATCH /api/admin/features/:id`
+- `GET /api/admin/billing`
+- `GET /api/admin/billing/export`
+
+## Feature Toggles
+
+Feature toggles are stored per company in `CompanyFeature`. Admins always see admin tools and can access the CRM dashboard. CRM users only see enabled features for their company.
+
+Supported feature keys:
+
+- `dashboard`
+- `chats`
+- `contacts_broadcasts`
+- `campaigns`
+- `ads`
+- `ai_flows`
+- `human_queue`
+- `orders`
+- `reports`
+- `settings`
+
+Disabled features are hidden from the user dashboard navigation. If a user calls a disabled feature API directly, the API returns `Feature disabled by admin.`
+
+## CRM Dashboard
 
 The dashboard includes:
 
@@ -191,6 +258,18 @@ npm run seed
 ```
 
 The seed command creates or updates `Printwear Company Product Knowledge` in the database.
+
+## Billing and API Usage
+
+External service wrappers write usage rows to `ApiUsageLog`:
+
+- WhatsApp Cloud API sends/templates: `META_WHATSAPP`
+- Meta Ads status/insights calls: `META_ADS`
+- Claude model calls: `CLAUDE`
+- Google Sheets reads/updates: `GOOGLE_SHEETS`
+- Bulk jobs and campaign execution events: `INTERNAL`
+
+The admin Billing page labels usage as internal tracked usage. Meta Ads account status and future insights use `META_AD_ACCOUNT_ID` and `META_ADS_ACCESS_TOKEN` when configured, but the app does not launch ads without valid API credentials.
 
 ## Local Webhook Testing With ngrok
 

@@ -16,7 +16,11 @@ const envSchema = z.object({
   DATABASE_URL: z.string().optional(),
 
   ADMIN_EMAIL: z.string().email().optional(),
+  ADMIN_USERNAME: z.string().min(2).optional(),
+  ADMIN_NAME: z.string().min(1).optional(),
   ADMIN_PASSWORD: z.string().min(8).optional(),
+  USER_USERNAME: z.string().min(2).optional(),
+  USER_NAME: z.string().min(1).optional(),
   USER_EMAIL: z.string().email().optional(),
   USER_PASSWORD: z.string().min(8).optional(),
   SESSION_SECRET: z.string().min(32).optional(),

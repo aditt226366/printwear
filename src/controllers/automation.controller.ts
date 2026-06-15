@@ -147,6 +147,10 @@ export const listAdDrafts = asyncHandler(async (_req: Request, res: Response) =>
   res.json(await automationService.listAdDrafts());
 });
 
+export const getAdsStatus = asyncHandler(async (_req: Request, res: Response) => {
+  res.json(await automationService.metaAdsStatus());
+});
+
 export const createAdDraft = asyncHandler(async (req: Request, res: Response) => {
   const body = adDraftSchema.parse(req.body);
   res.status(201).json({ draft: await automationService.createAdDraft(body) });

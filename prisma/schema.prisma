@@ -112,6 +112,123 @@ enum KnowledgeSourceType {
   SEED     @map("seed")
 }
 
+enum CompanyStatus {
+  ACTIVE    @map("active")
+  INACTIVE  @map("inactive")
+}
+
+enum AppUserRole {
+  ADMIN
+  USER
+}
+
+enum AppUserStatus {
+  ACTIVE    @map("active")
+  INACTIVE  @map("inactive")
+}
+
+enum ApiProvider {
+  META_WHATSAPP
+  META_ADS
+  CLAUDE
+  GOOGLE_SHEETS
+  INTERNAL
+}
+
+model Company {
+  id        String        @id @default(cuid())
+  name      String
+  slug      String        @unique
+  status    CompanyStatus @default(ACTIVE)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  users            AppUser[]
+  features         CompanyFeature[]
+  apiUsageLogs     ApiUsageLog[]
+  billingSnapshots BillingSnapshot[]
+
+  @@index([status])
+}
+
+model AppUser {
+  id           String        @id @default(cuid())
+  companyId    String?
+  name         String
+  username     String        @unique
+  email        String?       @unique
+  passwordHash String
+  role         AppUserRole
+  status       AppUserStatus @default(ACTIVE)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  lastLoginAt  DateTime?
+
+  company      Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  apiUsageLogs ApiUsageLog[]
+
+  @@index([companyId])
+  @@index([role])
+  @@index([status])
+}
+
+model CompanyFeature {
+  id          String   @id @default(cuid())
+  companyId   String
+  featureKey  String
+  featureName String
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, featureKey])
+  @@index([companyId])
+  @@index([featureKey])
+}
+
+model ApiUsageLog {
+  id            String      @id @default(cuid())
+  companyId     String
+  userId        String?
+  provider      ApiProvider
+  endpoint      String
+  method        String
+  statusCode    Int
+  success       Boolean
+  requestUnits  Int         @default(1)
+  costEstimate  Decimal?
+  metadata      Json        @default("{}")
+  createdAt     DateTime    @default(now())
+
+  company Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    AppUser? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, createdAt])
+  @@index([provider, createdAt])
+  @@index([userId])
+}
+
+model BillingSnapshot {
+  id                  String   @id @default(cuid())
+  companyId           String
+  periodStart         DateTime
+  periodEnd           DateTime
+  whatsappApiCalls    Int      @default(0)
+  metaAdsApiCalls     Int      @default(0)
+  claudeApiCalls      Int      @default(0)
+  googleSheetsApiCalls Int     @default(0)
+  totalApiCalls       Int      @default(0)
+  estimatedCost       Decimal  @default(0)
+  metadata            Json     @default("{}")
+  createdAt           DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, periodStart, periodEnd])
+}
+
 model Lead {
   id                   String           @id @default(cuid())
   name                 String

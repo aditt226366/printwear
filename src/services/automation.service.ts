@@ -16,6 +16,7 @@ import { AppError } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
 import { normalizePhoneNumber } from "../utils/phone.js";
 import { humanActionService } from "./humanAction.service.js";
+import { apiUsageService } from "./apiUsage.service.js";
 import { leadService } from "./lead.service.js";
 import { messageService } from "./message.service.js";
 import { whatsappService } from "./whatsapp.service.js";
@@ -609,6 +610,15 @@ export const automationService = {
     });
 
     logger.info({ jobId: job.id, count: leads.length, templateName: input.templateName }, "bulk send started");
+    void apiUsageService.log({
+      provider: "INTERNAL",
+      endpoint: "bulk_message_job.create",
+      method: "POST",
+      statusCode: 202,
+      success: true,
+      requestUnits: leads.length,
+      metadata: { jobId: job.id, templateName: input.templateName }
+    });
     void this.processBulkJob(job.id);
     return job;
   },
@@ -755,6 +765,15 @@ export const automationService = {
     });
 
     logger.info({ campaignId: campaign.id, status, scheduledAt: campaign.scheduledAt }, "campaign scheduled");
+    void apiUsageService.log({
+      provider: "INTERNAL",
+      endpoint: "campaign.create",
+      method: "POST",
+      statusCode: 201,
+      success: true,
+      requestUnits: leads.length,
+      metadata: { campaignId: campaign.id, status }
+    });
     if (input.scheduleNow) void this.processCampaign(campaign.id);
     return campaign;
   },
@@ -797,6 +816,15 @@ export const automationService = {
       });
 
       logger.info({ campaignId, count: campaign.recipients.length }, "campaign executed");
+      void apiUsageService.log({
+        provider: "INTERNAL",
+        endpoint: "campaign.execute",
+        method: "POST",
+        statusCode: 200,
+        success: true,
+        requestUnits: campaign.recipients.length,
+        metadata: { campaignId }
+      });
 
       for (const recipient of campaign.recipients) {
         const current = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { status: true } });
@@ -867,6 +895,81 @@ export const automationService = {
       metaConnected: Boolean(env.META_ADS_ACCESS_TOKEN && env.META_AD_ACCOUNT_ID),
       drafts
     };
+  },
+
+  async metaAdsStatus() {
+    const adAccountId = (env.META_AD_ACCOUNT_ID || "").trim();
+    const accessToken = (env.META_ADS_ACCESS_TOKEN || "").trim();
+    const normalizedAccountId = adAccountId.startsWith("act_") ? adAccountId : adAccountId ? `act_${adAccountId}` : "";
+
+    if (!normalizedAccountId || !accessToken) {
+      return {
+        connected: false,
+        adAccountId,
+        accountName: null,
+        accountStatus: null,
+        currency: null,
+        timezone: null,
+        error: "META_AD_ACCOUNT_ID and META_ADS_ACCESS_TOKEN are required to verify Meta Ads."
+      };
+    }
+
+    try {
+      const apiVersion = env.WHATSAPP_API_VERSION || "v20.0";
+      const url = new URL(`https://graph.facebook.com/${apiVersion}/${normalizedAccountId}`);
+      url.searchParams.set("fields", "name,account_status,currency,timezone_name");
+      url.searchParams.set("access_token", accessToken);
+
+      const response = await fetch(url);
+      const data = (await response.json().catch(() => ({}))) as {
+        name?: string;
+        account_status?: number | string;
+        currency?: string;
+        timezone_name?: string;
+        error?: { message?: string; code?: number; type?: string };
+      };
+      void apiUsageService.log({
+        provider: "META_ADS",
+        endpoint: `/${normalizedAccountId}`,
+        method: "GET",
+        statusCode: response.status,
+        success: response.ok,
+        metadata: { fields: "name,account_status,currency,timezone_name", accountId: adAccountId }
+      });
+
+      if (!response.ok) {
+        return {
+          connected: false,
+          adAccountId,
+          accountName: null,
+          accountStatus: null,
+          currency: null,
+          timezone: null,
+          error: data.error?.message || `Meta Ads API returned HTTP ${response.status}.`
+        };
+      }
+
+      return {
+        connected: true,
+        adAccountId,
+        accountName: data.name || null,
+        accountStatus: data.account_status ?? null,
+        currency: data.currency || null,
+        timezone: data.timezone_name || null,
+        error: null
+      };
+    } catch (error) {
+      logger.error({ error, adAccountId }, "Meta Ads status check failed");
+      return {
+        connected: false,
+        adAccountId,
+        accountName: null,
+        accountStatus: null,
+        currency: null,
+        timezone: null,
+        error: error instanceof Error ? error.message : "Meta Ads API verification failed."
+      };
+    }
   },
 
   async createAdDraft(input: {

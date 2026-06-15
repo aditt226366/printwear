@@ -6332,6 +6332,60 @@ body.app-shell #chatsView.active-view {
   font-size: clamp(28px, 4vw, 48px);
 }
 
+.admin-shell .workspace {
+  max-width: 1520px;
+}
+
+.admin-grid {
+  display: grid;
+  grid-template-columns: minmax(340px, 0.82fr) minmax(520px, 1.18fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.admin-select,
+.admin-filter-row input,
+.admin-filter-row select {
+  min-height: 42px;
+  border: 1px solid rgba(167, 139, 250, 0.2);
+  border-radius: 10px;
+  background: #24242c;
+  color: #f8fafc;
+  padding: 0 12px;
+  color-scheme: dark;
+}
+
+.admin-filter-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 150px 150px auto auto;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.admin-users-row,
+.admin-users-head {
+  grid-template-columns: minmax(140px, 1fr) 120px 170px 150px 82px 95px 140px 140px 140px minmax(210px, 1fr);
+}
+
+.billing-row,
+.billing-head {
+  grid-template-columns: 160px 150px 140px minmax(260px, 1fr) 80px 100px 80px 100px;
+}
+
+.admin-shell .row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+@media (max-width: 1100px) {
+  .admin-grid,
+  .admin-filter-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 720px) {
   .feature-toggle {
     grid-template-columns: 1fr;

@@ -1,5 +1,6 @@
 import { MessageStatus, MessageType } from "@prisma/client";
 import { env, requireEnv } from "../config/env.js";
+import { apiUsageService } from "./apiUsage.service.js";
 import { AppError } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
 
@@ -131,6 +132,19 @@ async function postToWhatsApp(body: unknown, attempt = 1): Promise<{ messageId?:
     });
 
     const json = (await response.json().catch(() => ({}))) as WhatsAppSendResponse;
+    void apiUsageService.log({
+      provider: "META_WHATSAPP",
+      endpoint: endpoint(),
+      method: "POST",
+      statusCode: response.status,
+      success: response.ok,
+      metadata: {
+        type: requestBody.type,
+        templateName: requestBody.template?.name,
+        messageId: json.messages?.[0]?.id,
+        error: json.error?.message
+      }
+    });
     logger.info(
       {
         status: response.status,

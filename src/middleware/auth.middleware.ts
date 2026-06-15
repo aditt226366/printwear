@@ -15,13 +15,13 @@ export function requireSession(req: Request, res: Response, next: NextFunction) 
   }
 
   res.locals.session = session;
-  res.locals.admin = session.role === "admin" ? session : null;
+  res.locals.admin = session.role === "ADMIN" ? session : null;
   next();
 }
 
 export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   requireSession(req, res, () => {
-    if (res.locals.session?.role !== "admin") {
+    if (res.locals.session?.role !== "ADMIN") {
       next(new AppError("Admin access required", 403));
       return;
     }

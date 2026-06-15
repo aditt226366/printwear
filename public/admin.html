@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Printwear Admin Panel</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&display=swap" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/assets/styles.css?v=20260615-admin" />
+  </head>
+  <body class="app-shell admin-shell">
+    <header class="topbar admin-topbar">
+      <div class="brand-block">
+        <span class="brand-mark">PW</span>
+        <div>
+          <strong>Printwear Admin</strong>
+          <span>User, feature, and billing control</span>
+        </div>
+      </div>
+      <nav class="top-nav" aria-label="Admin sections">
+        <button class="nav-item active" data-admin-view="users"><i data-lucide="users"></i>Users</button>
+        <button class="nav-item" data-admin-view="features"><i data-lucide="sliders-horizontal"></i>Features</button>
+        <button class="nav-item" data-admin-view="billing"><i data-lucide="receipt-text"></i>Billing</button>
+      </nav>
+      <div class="topbar-right">
+        <form action="/logout" method="post"><button class="secondary-button" type="submit"><i data-lucide="log-out"></i>Logout</button></form>
+      </div>
+    </header>
+
+    <main class="workspace admin-workspace">
+      <section id="adminNotice" class="notice hidden"></section>
+
+      <section id="adminUsersView" class="view active-view">
+        <div class="page-heading-row premium-heading">
+          <div>
+            <p class="eyebrow">Users</p>
+            <h1>Company & User Management</h1>
+            <span>Create companies, provision users, reset passwords, and manage account status securely.</span>
+          </div>
+        </div>
+        <section class="admin-grid">
+          <article class="panel premium-card">
+            <div class="panel-heading"><div><p class="eyebrow">Create Company</p><h2>Company profile</h2></div></div>
+            <form id="companyForm" class="automation-form">
+              <label>Company name<input id="companyName" required placeholder="Printwear" /></label>
+              <label>Slug<input id="companySlug" placeholder="printwear" /></label>
+              <label>Status<select id="companyStatus"><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></label>
+              <button class="primary-button" type="submit"><i data-lucide="building-2"></i>Create company</button>
+            </form>
+          </article>
+          <article class="panel premium-card">
+            <div class="panel-heading"><div><p class="eyebrow">Create User</p><h2>User login</h2></div></div>
+            <form id="userForm" class="automation-form">
+              <label>Company<select id="userCompany" required></select></label>
+              <div class="form-row"><label>Name<input id="userName" required /></label><label>Username<input id="userUsername" required /></label></div>
+              <label>Email optional<input id="userEmail" type="email" /></label>
+              <div class="form-row"><label>Password<input id="userPassword" type="password" required /></label><label>Confirm password<input id="userConfirmPassword" type="password" required /></label></div>
+              <label>Status<select id="userStatus"><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></label>
+              <button class="primary-button" type="submit"><i data-lucide="user-plus"></i>Create user</button>
+            </form>
+          </article>
+        </section>
+        <section class="panel premium-card">
+          <div class="panel-heading"><div><p class="eyebrow">User Table</p><h2>Provisioned accounts</h2></div></div>
+          <div id="adminUsersTable" class="data-table"></div>
+        </section>
+      </section>
+
+      <section id="adminFeaturesView" class="view">
+        <div class="page-heading-row premium-heading">
+          <div>
+            <p class="eyebrow">Features</p>
+            <h1>Company Feature Controls</h1>
+            <span>Select a company and decide which modules its users can see and access.</span>
+          </div>
+        </div>
+        <section class="panel premium-card">
+          <div class="panel-heading">
+            <div><p class="eyebrow">Company</p><h2>Feature access</h2></div>
+            <select id="featureCompanySelect" class="admin-select"></select>
+          </div>
+          <div id="adminFeatureList" class="feature-toggle-list"></div>
+        </section>
+      </section>
+
+      <section id="adminBillingView" class="view">
+        <div class="page-heading-row premium-heading">
+          <div>
+            <p class="eyebrow">Billing</p>
+            <h1>API Usage & Cost Tracking</h1>
+            <span>Internal tracked usage, Meta Ads status/spend when available, and estimated WhatsApp usage from sent messages.</span>
+          </div>
+        </div>
+        <section class="panel premium-card">
+          <div class="admin-filter-row">
+            <select id="billingCompanySelect" class="admin-select"></select>
+            <input id="billingStart" type="date" />
+            <input id="billingEnd" type="date" />
+            <button id="refreshBillingBtn" class="secondary-button" type="button"><i data-lucide="refresh-cw"></i>Refresh</button>
+            <button id="exportBillingBtn" class="primary-button" type="button"><i data-lucide="download"></i>Export CSV</button>
+          </div>
+          <div id="billingSummary" class="broadcast-stat-grid"></div>
+          <div id="billingTable" class="data-table"></div>
+        </section>
+      </section>
+    </main>
+
+    <script src="/assets/admin.js?v=20260615-admin"></script>
+  </body>
+</html>

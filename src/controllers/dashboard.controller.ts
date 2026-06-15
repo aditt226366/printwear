@@ -7,3 +7,7 @@ const publicDir = path.resolve(process.cwd(), "public");
 export const showDashboard = asyncHandler(async (_req: Request, res: Response) => {
   res.sendFile(path.join(publicDir, "dashboard.html"));
 });
+
+export const showAdminPanel = asyncHandler(async (_req: Request, res: Response) => {
+  res.sendFile(path.join(publicDir, "admin.html"));
+});

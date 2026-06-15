@@ -10,7 +10,10 @@ const featureUpdateSchema = z.object({
 export const getSession = asyncHandler(async (_req: Request, res: Response) => {
   res.json({
     session: {
+      userId: res.locals.session.userId,
       email: res.locals.session.email,
+      username: res.locals.session.username,
+      companyId: res.locals.session.companyId,
       role: res.locals.session.role
     }
   });
@@ -18,16 +21,17 @@ export const getSession = asyncHandler(async (_req: Request, res: Response) => {
 
 export const getEnabledFeatures = asyncHandler(async (_req: Request, res: Response) => {
   const session = res.locals.session;
-  const features = session.role === "admin" ? await featureFlagService.list() : await featureFlagService.enabledForUser();
+  const features = session.role === "ADMIN" ? await featureFlagService.list(session.companyId) : await featureFlagService.enabledForUser(session.companyId);
   res.json({ features });
 });
 
-export const getAdminFeatures = asyncHandler(async (_req: Request, res: Response) => {
-  res.json({ features: await featureFlagService.list() });
+export const getAdminFeatures = asyncHandler(async (req: Request, res: Response) => {
+  const companyId = String(req.query.companyId || "");
+  res.json({ features: await featureFlagService.list(companyId) });
 });
 
 export const updateAdminFeature = asyncHandler(async (req: Request, res: Response) => {
   const body = featureUpdateSchema.parse(req.body);
   const feature = await featureFlagService.update(req.params.key, body.enabled);
-  res.json({ feature, features: await featureFlagService.list() });
+  res.json({ feature });
 });

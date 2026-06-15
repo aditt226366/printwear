@@ -67,26 +67,26 @@ const views = {
 };
 
 const viewFeatureMap = {
-  overview: "overview",
+  overview: "dashboard",
   chats: "chats",
-  contacts: "contacts",
+  contacts: "contacts_broadcasts",
   campaigns: "campaigns",
   ads: "ads",
-  flows: "flows",
-  human: "human",
+  flows: "ai_flows",
+  human: "human_queue",
   orders: "orders",
   reports: "reports",
   settings: "settings"
 };
 
 const featureDescriptions = {
-  overview: "Command metrics, import leads, and welcome sends.",
+  dashboard: "Command metrics, import leads, and welcome sends.",
   chats: "Live WhatsApp conversations and manual replies.",
-  contacts: "Audience imports, contact management, and broadcasts.",
+  contacts_broadcasts: "Audience imports, contact management, and broadcasts.",
   campaigns: "Scheduled WhatsApp outreach and campaign reporting.",
   ads: "Click-to-WhatsApp ad drafts and creative previews.",
-  flows: "AI workflow builder, triggers, and automation logs.",
-  human: "Manual takeover queue and priority follow-ups.",
+  ai_flows: "AI workflow builder, triggers, and automation logs.",
+  human_queue: "Manual takeover queue and priority follow-ups.",
   orders: "Order summaries, dispatch status, and customer updates.",
   reports: "Performance dashboards and CRM analytics.",
   settings: "Connected systems, knowledge, and workspace controls."
@@ -1596,7 +1596,7 @@ async function loadSessionAndFeatures() {
 }
 
 function isAdmin() {
-  return state.session?.role === "admin";
+  return state.session?.role === "ADMIN";
 }
 
 function featureEnabledForView(view) {
@@ -1609,8 +1609,8 @@ function firstAvailableView() {
 }
 
 function applyFeatureVisibility() {
-  document.body.dataset.role = state.session?.role || "user";
-  const initials = (state.session?.email || "AD")
+  document.body.dataset.role = state.session?.role || "USER";
+  const initials = (state.session?.email || state.session?.username || "AD")
     .split("@")[0]
     .split(/[.\-_]/)
     .map((part) => part[0])

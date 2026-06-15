@@ -4,11 +4,46 @@ import { authService } from "../services/auth.service.js";
 import { asyncHandler, AppError } from "../utils/errors.js";
 
 const publicDir = path.resolve(process.cwd(), "public");
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_MAX_ATTEMPTS = 8;
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+
+function loginAttemptKey(req: Request, username: string) {
+  return `${req.ip || req.socket.remoteAddress || "unknown"}:${username.toLowerCase()}`;
+}
+
+function assertLoginAllowed(req: Request, username: string) {
+  const key = loginAttemptKey(req, username);
+  const now = Date.now();
+  const current = loginAttempts.get(key);
+  if (!current || current.resetAt <= now) {
+    loginAttempts.set(key, { count: 0, resetAt: now + LOGIN_WINDOW_MS });
+    return;
+  }
+  if (current.count >= LOGIN_MAX_ATTEMPTS) {
+    throw new AppError("Invalid username or password", 401);
+  }
+}
+
+function recordLoginFailure(req: Request, username: string) {
+  const key = loginAttemptKey(req, username);
+  const now = Date.now();
+  const current = loginAttempts.get(key);
+  if (!current || current.resetAt <= now) {
+    loginAttempts.set(key, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
+    return;
+  }
+  current.count += 1;
+}
+
+function clearLoginFailures(req: Request, username: string) {
+  loginAttempts.delete(loginAttemptKey(req, username));
+}
 
 export const showLogin = asyncHandler(async (req: Request, res: Response) => {
   const session = authService.readSession(req);
   if (session) {
-    res.redirect("/dashboard");
+    res.redirect(session.role === "ADMIN" ? "/admin" : "/dashboard");
     return;
   }
 
@@ -16,25 +51,33 @@ export const showLogin = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const login = asyncHandler(async (req: Request, res: Response) => {
-  const email = String(req.body.email ?? "").trim().toLowerCase();
+  const username = String(req.body.username ?? req.body.email ?? "").trim();
   const password = String(req.body.password ?? "");
 
-  if (!email || !password) {
-    throw new AppError("Email and password are required", 400);
+  if (!username || !password) {
+    throw new AppError("Invalid username or password", 401);
   }
 
   if (!authService.isConfigured()) {
-    throw new AppError("Admin login is not configured. Set ADMIN_EMAIL, ADMIN_PASSWORD, and SESSION_SECRET.", 500);
+    throw new AppError("Login is not configured.", 500);
   }
 
-  const role = authService.verifyCredentials(email, password);
-  if (!role) {
-    throw new AppError("Invalid email or password", 401);
+  assertLoginAllowed(req, username);
+  let user: Awaited<ReturnType<typeof authService.verifyCredentials>>;
+  try {
+    user = await authService.verifyCredentials(username, password);
+  } catch {
+    throw new AppError("Login service unavailable. Please try again.", 503);
+  }
+  if (!user) {
+    recordLoginFailure(req, username);
+    throw new AppError("Invalid username or password", 401);
   }
 
-  const session = authService.createSession(email, role);
+  clearLoginFailures(req, username);
+  const session = authService.createSession(user);
   authService.setSessionCookie(res, session);
-  res.json({ ok: true, role });
+  res.json({ ok: true, role: user.role, redirectTo: user.role === "ADMIN" ? "/admin" : "/dashboard" });
 });
 
 export const logout = asyncHandler(async (_req: Request, res: Response) => {

@@ -5,12 +5,12 @@ import { AppError } from "../utils/errors.js";
 export function requireFeature(key: FeatureKey) {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      if (res.locals.session?.role === "admin") {
+      if (res.locals.session?.role === "ADMIN") {
         next();
         return;
       }
 
-      if (await featureFlagService.isEnabled(key)) {
+      if (await featureFlagService.isEnabled(key, res.locals.session?.companyId)) {
         next();
         return;
       }
