@@ -51,6 +51,7 @@ import {
 import { requireAdmin, requireSession } from "../middleware/auth.middleware.js";
 import { requireFeature } from "../middleware/feature.middleware.js";
 import { getSystemStatus } from "../controllers/systemStatus.controller.js";
+import { getGoogleSheetsStatus } from "../controllers/googleSheets.controller.js";
 
 export const apiRoutes = Router();
 
@@ -73,6 +74,7 @@ apiRoutes.get("/admin/billing", requireAdmin, getBilling);
 apiRoutes.get("/admin/billing/export", requireAdmin, exportBillingCsv);
 
 apiRoutes.get("/dashboard", getDashboard);
+apiRoutes.get("/debug/google-sheets-status", requireAdmin, getGoogleSheetsStatus);
 apiRoutes.get("/debug/webhook-status", requireFeature("settings"), getWebhookStatus);
 apiRoutes.get("/events", requireFeature("chats"), streamChatEvents);
 apiRoutes.get("/leads", requireFeature("chats"), getLeads);

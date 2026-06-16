@@ -2,10 +2,11 @@ import type { Request, Response } from "express";
 import { importLeadsJob } from "../jobs/importLeads.job.js";
 import { AppError, asyncHandler } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
+import { sessionCompanyId } from "../utils/tenant.js";
 
 export const importLeads = asyncHandler(async (_req: Request, res: Response) => {
   try {
-    const result = await importLeadsJob();
+    const result = await importLeadsJob(sessionCompanyId(res));
     res.json(result);
   } catch (error) {
     const statusCode = error instanceof AppError ? error.statusCode : 500;

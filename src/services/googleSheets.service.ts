@@ -11,6 +11,16 @@ export type SheetLead = {
   rowNumber: number;
 };
 
+export type GoogleSheetsStatus = {
+  connected: boolean;
+  serviceAccountEmail: string | null;
+  sheetId: string | null;
+  readable: boolean;
+  rowCount: number;
+  headers: string[];
+  error: string | null;
+};
+
 function normalizeHeader(value: unknown) {
   return String(value).trim().toLowerCase().replace(/[\s_-]+/g, "");
 }
@@ -74,7 +84,79 @@ function columnIndexToLetter(index: number) {
   return letter;
 }
 
+function googleSheetsErrorMessage(error: unknown) {
+  const sheetsError = error as { code?: number; status?: number; message?: string };
+  const status = sheetsError.code ?? sheetsError.status;
+
+  if (status === 403) {
+    const serviceAccountEmail = env.GOOGLE_SERVICE_ACCOUNT_EMAIL || "GOOGLE_SERVICE_ACCOUNT_EMAIL";
+    return `Google Sheets permission denied. Share this spreadsheet with ${serviceAccountEmail} and give it Editor access.`;
+  }
+
+  if (status === 404) {
+    return "Google Sheet not found. Check GOOGLE_SHEETS_ID and GOOGLE_SHEETS_RANGE in .env.";
+  }
+
+  return error instanceof Error ? error.message : "Google Sheets access failed.";
+}
+
 export const googleSheetsService = {
+  async status(companyId?: string | null): Promise<GoogleSheetsStatus> {
+    const sheetId = env.GOOGLE_SHEETS_ID || null;
+    const serviceAccountEmail = env.GOOGLE_SERVICE_ACCOUNT_EMAIL || null;
+
+    try {
+      const sheets = google.sheets({ version: "v4", auth: getAuthClient() });
+      const spreadsheetId = requireEnv("GOOGLE_SHEETS_ID");
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: env.GOOGLE_SHEETS_RANGE
+      });
+      const rows = response.data.values ?? [];
+
+      void apiUsageService.log({
+        companyId,
+        provider: "GOOGLE_SHEETS",
+        endpoint: "debug.spreadsheets.values.get",
+        method: "GET",
+        statusCode: 200,
+        success: true,
+        metadata: { spreadsheetId, range: env.GOOGLE_SHEETS_RANGE }
+      });
+
+      return {
+        connected: true,
+        serviceAccountEmail,
+        sheetId,
+        readable: true,
+        rowCount: rows.length,
+        headers: (rows[0] ?? []).map((header) => String(header)),
+        error: null
+      };
+    } catch (error) {
+      const sheetsError = error as { code?: number; status?: number };
+      void apiUsageService.log({
+        companyId,
+        provider: "GOOGLE_SHEETS",
+        endpoint: "debug.spreadsheets.values.get",
+        method: "GET",
+        statusCode: Number(sheetsError.code || sheetsError.status || 500),
+        success: false,
+        metadata: { spreadsheetId: sheetId, range: env.GOOGLE_SHEETS_RANGE }
+      });
+
+      return {
+        connected: false,
+        serviceAccountEmail,
+        sheetId,
+        readable: false,
+        rowCount: 0,
+        headers: [],
+        error: googleSheetsErrorMessage(error)
+      };
+    }
+  },
+
   async getNewLeads(companyId?: string | null): Promise<SheetLead[]> {
     logger.info({ range: env.GOOGLE_SHEETS_RANGE }, "Starting Google Sheets lead read");
     const sheets = google.sheets({ version: "v4", auth: getAuthClient() });
