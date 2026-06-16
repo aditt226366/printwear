@@ -55,7 +55,7 @@ import {
 } from "../controllers/automation.controller.js";
 import { requireAdmin, requireSession } from "../middleware/auth.middleware.js";
 import { requireFeature } from "../middleware/feature.middleware.js";
-import { getSystemStatus } from "../controllers/systemStatus.controller.js";
+import { getDatabaseSchema, getSystemStatus } from "../controllers/systemStatus.controller.js";
 import { getGoogleSheetsStatus } from "../controllers/googleSheets.controller.js";
 
 export const apiRoutes = Router();
@@ -82,6 +82,7 @@ apiRoutes.put("/admin/company-integrations", requireAdmin, updateCompanyIntegrat
 
 apiRoutes.get("/dashboard", getDashboard);
 apiRoutes.get("/integrations/status", getIntegrationStatus);
+apiRoutes.get("/debug/database-schema", requireAdmin, getDatabaseSchema);
 apiRoutes.get("/debug/google-sheets-status", requireAdmin, getGoogleSheetsStatus);
 apiRoutes.get("/debug/webhook-status", requireFeature("settings"), getWebhookStatus);
 apiRoutes.get("/events", requireFeature("chats"), streamChatEvents);

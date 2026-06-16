@@ -3,6 +3,7 @@ import { prisma } from "./config/prisma.js";
 import { createApp } from "./app.js";
 import { automationService } from "./services/automation.service.js";
 import { authService } from "./services/auth.service.js";
+import { systemStatusService } from "./services/systemStatus.service.js";
 import { logger } from "./utils/logger.js";
 
 const app = createApp();
@@ -23,6 +24,17 @@ function assertSupportedRuntime() {
 async function start() {
   assertSupportedRuntime();
   await authService.ensureSeedUsers();
+  const schemaStatus = await systemStatusService.databaseSchema();
+  logger.info(
+    {
+      databaseConnected: schemaStatus.databaseConnected,
+      missingTables: schemaStatus.missingTables,
+      missingMigrations: schemaStatus.missingMigrations,
+      companyCount: schemaStatus.companyCount,
+      userCount: schemaStatus.userCount
+    },
+    `Database schema verified: ${schemaStatus.schemaVerified}`
+  );
   server = app.listen(port, () => {
     logger.info({ port }, "Server started");
     if (env.AUTOMATION_WORKERS_ENABLED) {

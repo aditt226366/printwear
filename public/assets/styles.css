@@ -2128,6 +2128,17 @@ input[type="file"] {
   grid-template-columns: minmax(250px, 1.45fr) minmax(150px, 0.8fr) 86px 96px 148px 148px minmax(178px, 0.82fr);
 }
 
+.diagnostics-head,
+.diagnostics-row {
+  min-width: 760px;
+  grid-template-columns: 190px minmax(0, 1fr);
+}
+
+.diagnostics-row span:last-child {
+  white-space: normal;
+  word-break: break-word;
+}
+
 .user-cell {
   display: inline-flex;
   align-items: center;

@@ -6,3 +6,8 @@ export const getSystemStatus = asyncHandler(async (_req: Request, res: Response)
   const status = await systemStatusService.getStatus();
   res.status(status.databaseConnected ? 200 : 503).json(status);
 });
+
+export const getDatabaseSchema = asyncHandler(async (_req: Request, res: Response) => {
+  const status = await systemStatusService.databaseSchema();
+  res.status(status.databaseConnected ? 200 : 503).json(status);
+});

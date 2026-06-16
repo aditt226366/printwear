@@ -1,11 +1,11 @@
-import { AppUserRole, Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
 
-const REQUIRED_MIGRATION = "20260615170000_company_users_billing";
 const REQUIRED_TABLES = [
   "Company",
   "AppUser",
   "CompanyFeature",
+  "CompanyIntegration",
   "ApiUsageLog",
   "BillingSnapshot",
   "BulkMessageJob",
@@ -17,61 +17,105 @@ const REQUIRED_TABLES = [
   "WorkflowExecutionLog"
 ];
 
-export type SystemStatus = {
+const REQUIRED_MIGRATIONS = [
+  "20260615170000_company_users_billing",
+  "20260615190000_multi_tenant_company_isolation",
+  "20260616170000_company_integrations"
+];
+
+export type DatabaseSchemaStatus = {
   databaseConnected: boolean;
+  schemaVerified: boolean;
   migrationApplied: boolean;
-  adminUserExists: boolean;
-  userCount: number;
+  tables: string[];
+  missingTables: string[];
+  migrations: string[];
+  missingMigrations: string[];
   companyCount: number;
-  setupComplete: boolean;
+  userCount: number;
+  nodeVersion: string;
+  prismaVersion: string;
   error?: string;
 };
 
+async function countTable(tableName: string, tables: Set<string>) {
+  if (!tables.has(tableName)) return 0;
+  const rows = await prisma.$queryRaw<Array<{ count: bigint }>>(
+    Prisma.sql`SELECT COUNT(*)::bigint AS count FROM ${Prisma.raw(`"${tableName}"`)}`
+  );
+  return Number(rows[0]?.count ?? 0);
+}
+
 export const systemStatusService = {
-  async getStatus(): Promise<SystemStatus> {
+  requiredTables: REQUIRED_TABLES,
+  requiredMigrations: REQUIRED_MIGRATIONS,
+
+  async databaseSchema(): Promise<DatabaseSchemaStatus> {
     try {
       await prisma.$queryRaw`SELECT 1`;
-      const [migration, tables, adminCount, userCount, companyCount] = await Promise.all([
-        prisma.$queryRaw<Array<{ migration_name: string }>>`
-          SELECT migration_name
-          FROM "_prisma_migrations"
-          WHERE migration_name = ${REQUIRED_MIGRATION}
-          LIMIT 1
-        `,
+
+      const [tableRows, migrationRows] = await Promise.all([
         prisma.$queryRaw<Array<{ table_name: string }>>`
           SELECT table_name
           FROM information_schema.tables
           WHERE table_schema = 'public'
             AND table_name IN (${Prisma.join(REQUIRED_TABLES)})
+          ORDER BY table_name
         `,
-        prisma.appUser.count({ where: { role: AppUserRole.ADMIN } }),
-        prisma.appUser.count(),
-        prisma.company.count()
+        prisma.$queryRaw<Array<{ migration_name: string }>>`
+          SELECT migration_name
+          FROM "_prisma_migrations"
+          ORDER BY finished_at NULLS LAST, started_at
+        `.catch(() => [])
       ]);
 
-      const existingTables = new Set(tables.map((table) => table.table_name));
-      const requiredTablesExist = REQUIRED_TABLES.every((tableName) => existingTables.has(tableName));
-      const migrationApplied = migration.length > 0 && requiredTablesExist;
-      const adminUserExists = adminCount > 0;
+      const existingTables = new Set(tableRows.map((table) => table.table_name));
+      const migrations = migrationRows.map((migration) => migration.migration_name);
+      const migrationSet = new Set(migrations);
+      const missingTables = REQUIRED_TABLES.filter((tableName) => !existingTables.has(tableName));
+      const missingMigrations = REQUIRED_MIGRATIONS.filter((migrationName) => !migrationSet.has(migrationName));
+      const [companyCount, userCount] = await Promise.all([
+        countTable("Company", existingTables),
+        countTable("AppUser", existingTables)
+      ]);
 
       return {
         databaseConnected: true,
-        migrationApplied,
-        adminUserExists,
-        userCount,
+        schemaVerified: missingTables.length === 0,
+        migrationApplied: missingMigrations.length === 0 && missingTables.length === 0,
+        tables: REQUIRED_TABLES.filter((tableName) => existingTables.has(tableName)),
+        missingTables,
+        migrations,
+        missingMigrations,
         companyCount,
-        setupComplete: migrationApplied && adminUserExists && userCount > 0 && companyCount > 0
+        userCount,
+        nodeVersion: process.version,
+        prismaVersion: Prisma.prismaVersion.client
       };
     } catch (error) {
       return {
         databaseConnected: false,
+        schemaVerified: false,
         migrationApplied: false,
-        adminUserExists: false,
-        userCount: 0,
+        tables: [],
+        missingTables: REQUIRED_TABLES,
+        migrations: [],
+        missingMigrations: REQUIRED_MIGRATIONS,
         companyCount: 0,
-        setupComplete: false,
-        error: error instanceof Error ? error.message : "Database status check failed"
+        userCount: 0,
+        nodeVersion: process.version,
+        prismaVersion: Prisma.prismaVersion.client,
+        error: error instanceof Error ? error.message : "Database schema verification failed"
       };
     }
+  },
+
+  async getStatus() {
+    const schema = await this.databaseSchema();
+    return {
+      ...schema,
+      adminUserExists: schema.userCount > 0,
+      setupComplete: schema.schemaVerified && schema.userCount > 0 && schema.companyCount > 0
+    };
   }
 };

@@ -3,6 +3,7 @@ const adminState = {
   users: [],
   features: [],
   integration: null,
+  diagnostics: null,
   billing: { summary: {}, logs: [] },
   currentView: "users",
   userFilters: {
@@ -105,6 +106,7 @@ function switchAdminView(view) {
   if (view === "features") loadFeatures().catch((error) => showNotice(error.message, true));
   if (view === "integrations") loadIntegration().catch((error) => showNotice(error.message, true));
   if (view === "billing") loadBilling().catch((error) => showNotice(error.message, true));
+  if (view === "diagnostics") loadDiagnostics().catch((error) => showNotice(error.message, true));
 }
 
 function fillCompanySelects() {
@@ -207,6 +209,44 @@ function renderIntegration() {
   $("#integrationMetaAdAccountId").value = integration.metaAdAccountId || "";
   $("#integrationMetaAdsAccessToken").value = "";
   $("#integrationMetaAdsAccessTokenMasked").textContent = integration.metaAdsAccessTokenMasked ? `Saved: ${integration.metaAdsAccessTokenMasked}` : "No token saved.";
+}
+
+async function loadDiagnostics() {
+  const data = await api("/debug/database-schema");
+  adminState.diagnostics = data;
+  renderDiagnostics();
+}
+
+function renderDiagnostics() {
+  const status = adminState.diagnostics || {};
+  const missingTables = status.missingTables || [];
+  const missingMigrations = status.missingMigrations || [];
+  $("#diagnosticsSummary").innerHTML = [
+    ["Database connected", status.databaseConnected ? "Yes" : "No"],
+    ["Migration applied", status.migrationApplied ? "Yes" : "No"],
+    ["Missing tables", missingTables.length],
+    ["Companies", status.companyCount || 0],
+    ["Users", status.userCount || 0],
+    ["Node", status.nodeVersion || "--"],
+    ["Prisma", status.prismaVersion || "--"]
+  ].map(([label, value]) => `<span><strong>${escapeHtml(value)}</strong><small>${escapeHtml(label)}</small></span>`).join("");
+
+  const rows = [
+    ["Existing tables", (status.tables || []).join(", ") || "--"],
+    ["Missing tables", missingTables.join(", ") || "None"],
+    ["Applied migrations", (status.migrations || []).join(", ") || "--"],
+    ["Missing migrations", missingMigrations.join(", ") || "None"],
+    ["Error", status.error || "None"]
+  ];
+  $("#diagnosticsTable").innerHTML = `
+    <div class="data-row diagnostics-head"><span>Check</span><span>Result</span></div>
+    ${rows.map(([label, value]) => `
+      <div class="data-row diagnostics-row">
+        <span>${escapeHtml(label)}</span>
+        <span>${escapeHtml(value)}</span>
+      </div>
+    `).join("")}
+  `;
 }
 
 async function loadFeatures() {
@@ -412,6 +452,7 @@ function bindEvents() {
     }
   });
   $("#refreshBillingBtn")?.addEventListener("click", () => loadBilling().catch((error) => showNotice(error.message, true)));
+  $("#refreshDiagnosticsBtn")?.addEventListener("click", () => loadDiagnostics().catch((error) => showNotice(error.message, true)));
   $("#billingCompanySelect")?.addEventListener("change", () => loadBilling().catch((error) => showNotice(error.message, true)));
   $("#exportBillingBtn")?.addEventListener("click", () => {
     const params = new URLSearchParams();
@@ -434,6 +475,7 @@ async function start() {
     await loadIntegration();
   }
   await loadBilling();
+  await loadDiagnostics();
   refreshIcons();
 }
 

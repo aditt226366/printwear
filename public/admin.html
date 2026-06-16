@@ -23,6 +23,7 @@
         <button class="nav-item" data-admin-view="features"><i data-lucide="sliders-horizontal"></i>Features</button>
         <button class="nav-item" data-admin-view="integrations"><i data-lucide="plug-zap"></i>Integrations</button>
         <button class="nav-item" data-admin-view="billing"><i data-lucide="receipt-text"></i>Billing</button>
+        <button class="nav-item" data-admin-view="diagnostics"><i data-lucide="activity"></i>Diagnostics</button>
       </nav>
       <div class="topbar-right">
         <form action="/logout" method="post"><button class="secondary-button" type="submit"><i data-lucide="log-out"></i>Logout</button></form>
@@ -131,6 +132,24 @@
             </fieldset>
             <button class="primary-button" type="submit"><i data-lucide="save"></i>Save integrations</button>
           </form>
+        </section>
+      </section>
+
+      <section id="adminDiagnosticsView" class="view">
+        <div class="page-heading-row premium-heading">
+          <div>
+            <p class="eyebrow">System Diagnostics</p>
+            <h1>Database & Runtime Readiness</h1>
+            <span>Direct schema checks for multi-tenant tables, migrations, and runtime versions.</span>
+          </div>
+        </div>
+        <section class="panel premium-card">
+          <div class="panel-heading">
+            <div><p class="eyebrow">Database</p><h2>Schema verification</h2></div>
+            <button id="refreshDiagnosticsBtn" class="secondary-button" type="button"><i data-lucide="refresh-cw"></i>Refresh</button>
+          </div>
+          <div id="diagnosticsSummary" class="broadcast-stat-grid"></div>
+          <div id="diagnosticsTable" class="data-table"></div>
         </section>
       </section>
 
