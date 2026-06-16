@@ -72,6 +72,10 @@ function showNotice(message, isError = false) {
   showNotice.timer = window.setTimeout(() => notice.classList.add("hidden"), 4500);
 }
 
+function isDevelopmentHost() {
+  return ["localhost", "127.0.0.1", ""].includes(window.location.hostname);
+}
+
 async function api(path, options = {}) {
   const response = await fetch(`/api${path}`, {
     ...options,
@@ -81,8 +85,58 @@ async function api(path, options = {}) {
     }
   });
   const data = response.status === 204 ? {} : await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || data.message || "Request failed");
+  if (!response.ok) {
+    const fieldErrors = data.fieldErrors || data.details?.fieldErrors || {};
+    if (isDevelopmentHost() && Object.keys(fieldErrors).length) console.log("Validation error", response);
+    const error = new Error(data.error || data.message || Object.values(fieldErrors)[0] || "Request failed");
+    error.fieldErrors = fieldErrors;
+    error.response = data;
+    throw error;
+  }
   return data;
+}
+
+const fieldSelectors = {
+  companyName: "#companyName",
+  slug: "#companySlug",
+  companyId: "#userCompany",
+  name: "#userName",
+  username: "#userUsername",
+  password: "#userPassword",
+  confirmPassword: "#userConfirmPassword",
+  status: "#userStatus"
+};
+
+function clearFormErrors(form) {
+  form?.querySelectorAll(".field-error").forEach((error) => error.remove());
+  form?.querySelectorAll(".is-invalid").forEach((field) => {
+    field.classList.remove("is-invalid");
+    field.removeAttribute("aria-invalid");
+    field.removeAttribute("aria-describedby");
+  });
+}
+
+function setFieldError(form, field, message) {
+  const selector = field === "status" && form?.id === "companyForm" ? "#companyStatus" : fieldSelectors[field];
+  const input = selector ? form?.querySelector(selector) : null;
+  if (!input || !message) return false;
+  const id = `${input.id}Error`;
+  const error = document.createElement("small");
+  error.id = id;
+  error.className = "field-error";
+  error.textContent = message;
+  input.classList.add("is-invalid");
+  input.setAttribute("aria-invalid", "true");
+  input.setAttribute("aria-describedby", id);
+  input.closest("label")?.appendChild(error);
+  return true;
+}
+
+function showFormError(form, error) {
+  clearFormErrors(form);
+  const fieldErrors = error.fieldErrors || {};
+  Object.entries(fieldErrors).forEach(([field, message]) => setFieldError(form, field, message));
+  showNotice(error.message || Object.values(fieldErrors)[0] || "Please check the highlighted fields.", true);
 }
 
 function clearClientSessionState() {
@@ -201,6 +255,7 @@ async function createUserFromForm(form) {
   if (!form || form.dataset.submitting === "true") return;
   const button = form.querySelector("button[type='submit']");
   const previousHtml = button?.innerHTML;
+  clearFormErrors(form);
   form.dataset.submitting = "true";
   if (button) {
     button.disabled = true;
@@ -219,11 +274,12 @@ async function createUserFromForm(form) {
         status: $("#userStatus").value
       })
     });
+    clearFormErrors(form);
     form.reset();
     showNotice("User created.");
     await loadUsers();
   } catch (error) {
-    showNotice(error.message, true);
+    showFormError(form, error);
   } finally {
     delete form.dataset.submitting;
     if (button) {
@@ -489,6 +545,7 @@ function bindEvents() {
   });
   $("#companyForm")?.addEventListener("submit", async (event) => {
     event.preventDefault();
+    clearFormErrors(event.currentTarget);
     try {
       const data = await api("/admin/companies", {
         method: "POST",
@@ -500,11 +557,12 @@ function bindEvents() {
       });
       upsertCompany(data.company);
       fillCompanySelects(data.company?.id || "");
+      clearFormErrors(event.currentTarget);
       event.target.reset();
       $("#companySlug")?.removeAttribute("data-edited");
       showNotice("Company created.");
     } catch (error) {
-      showNotice(error.message, true);
+      showFormError(event.currentTarget, error);
     }
   });
   $("#userForm")?.addEventListener("submit", async (event) => {

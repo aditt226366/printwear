@@ -95,7 +95,7 @@ export const adminManagementService = {
         return created;
       } catch (error) {
         if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-          throw new AppError("A company with this slug already exists.", 409);
+          throw new AppError("Company slug already exists.", 409, { fieldErrors: { slug: "Company slug already exists." } });
         }
         throw error;
       }
@@ -121,7 +121,11 @@ export const adminManagementService = {
   }) {
     const started = performance.now();
     if (input.password.length < 8) throw new AppError("Password must be at least 8 characters", 400);
-    if (input.companyId) await featureFlagService.ensureDefaultsForCompany(input.companyId);
+    if (input.companyId) {
+      const company = await prisma.company.findUnique({ where: { id: input.companyId }, select: { id: true } });
+      if (!company) throw new AppError("Selected company does not exist.", 400, { fieldErrors: { companyId: "Selected company does not exist." } });
+      await featureFlagService.ensureDefaultsForCompany(input.companyId);
+    }
     const user = await (async () => {
       try {
         return await prisma.appUser.create({
@@ -138,7 +142,7 @@ export const adminManagementService = {
         });
       } catch (error) {
         if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-          throw new AppError("A user with this username or email already exists.", 409);
+          throw new AppError("Username already exists.", 409, { fieldErrors: { username: "Username already exists." } });
         }
         throw error;
       }

@@ -44,7 +44,7 @@
         <section class="admin-grid">
           <article class="panel premium-card">
             <div class="panel-heading"><div><p class="eyebrow">Create Company</p><h2>Company profile</h2></div></div>
-            <form id="companyForm" class="automation-form">
+            <form id="companyForm" class="automation-form" novalidate>
               <label>Company name<input id="companyName" required placeholder="ABC Uniforms" /></label>
               <label>Slug<input id="companySlug" placeholder="abc-uniforms" /></label>
               <label>Status<select id="companyStatus"><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></label>
@@ -53,7 +53,7 @@
           </article>
           <article class="panel premium-card">
             <div class="panel-heading"><div><p class="eyebrow">Create User</p><h2>User login</h2></div></div>
-            <form id="userForm" class="automation-form">
+            <form id="userForm" class="automation-form" novalidate>
               <label>Company<select id="userCompany" required></select></label>
               <div class="form-row"><label>Name<input id="userName" required /></label><label>Username<input id="userUsername" required /></label></div>
               <div class="form-row"><label>Password<input id="userPassword" type="password" required /></label><label>Confirm password<input id="userConfirmPassword" type="password" required /></label></div>

@@ -1562,6 +1562,20 @@ textarea,
   font-weight: 700;
 }
 
+input.is-invalid,
+select.is-invalid,
+textarea.is-invalid {
+  border-color: color-mix(in srgb, var(--coral) 68%, var(--paper));
+  background: color-mix(in srgb, var(--coral) 7%, white);
+}
+
+.field-error {
+  color: color-mix(in srgb, var(--coral) 78%, var(--ink));
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
 textarea {
   min-height: 96px;
   padding-top: 10px;

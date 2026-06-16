@@ -31,7 +31,7 @@ export function errorHandler(
   _next: NextFunction
 ) {
   const requestError = error as { status?: number; statusCode?: number; type?: string; message?: string };
-  if (requestError.type === "entity.parse.failed" || requestError.status === 400 || requestError.statusCode === 400) {
+  if (!(error instanceof AppError) && (requestError.type === "entity.parse.failed" || requestError.status === 400 || requestError.statusCode === 400)) {
     res.status(400).json({ error: requestError.message ?? "Invalid request body" });
     return;
   }
@@ -42,8 +42,15 @@ export function errorHandler(
   }
 
   if (error instanceof ZodError) {
+    const fieldErrors = error.issues.reduce<Record<string, string>>((errors, issue) => {
+      const key = String(issue.path[0] || "form");
+      if (!errors[key]) errors[key] = issue.message;
+      return errors;
+    }, {});
+    const message = Object.values(fieldErrors)[0] || "Please check the highlighted fields.";
     res.status(400).json({
-      error: "Validation failed",
+      error: message,
+      fieldErrors,
       details: error.flatten()
     });
     return;
@@ -56,6 +63,7 @@ export function errorHandler(
 
     res.status(error.statusCode).json({
       error: error.message,
+      ...((error.details as { fieldErrors?: unknown } | undefined)?.fieldErrors ? { fieldErrors: (error.details as { fieldErrors: unknown }).fieldErrors } : {}),
       details: error.details
     });
     return;
