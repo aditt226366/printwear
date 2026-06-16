@@ -364,10 +364,10 @@ function renderIntegration() {
   $("#integrationWhatsappTemplateLanguage").value = integration.whatsappTemplateLanguage || "en";
   $("#integrationWhatsappVerifyToken").value = "";
   $("#integrationWhatsappAccessToken").value = "";
-  $("#integrationWhatsappAccessTokenMasked").textContent = integration.whatsappAccessTokenMasked ? `Saved: ${integration.whatsappAccessTokenMasked}` : "No token saved.";
+  $("#integrationWhatsappAccessTokenMasked").textContent = integration.whatsappAccessTokenMasked || "No token saved.";
   $("#integrationMetaAdAccountId").value = integration.metaAdAccountId || "";
   $("#integrationMetaAdsAccessToken").value = "";
-  $("#integrationMetaAdsAccessTokenMasked").textContent = integration.metaAdsAccessTokenMasked ? `Saved: ${integration.metaAdsAccessTokenMasked}` : "No token saved.";
+  $("#integrationMetaAdsAccessTokenMasked").textContent = integration.metaAdsAccessTokenMasked || "No token saved.";
   renderIntegrationTests();
 }
 
@@ -415,6 +415,20 @@ async function testIntegration(provider, button) {
         googleSheetsId: $("#integrationGoogleSheetsId").value,
         googleServiceAccountEmail: $("#integrationGoogleServiceAccountEmail").value,
         googlePrivateKey: $("#integrationGooglePrivateKey").value
+      });
+    } else if (provider === "whatsapp") {
+      requestOptions.body = JSON.stringify({
+        whatsappPhoneNumberId: $("#integrationWhatsappPhoneNumberId").value,
+        whatsappBusinessAccountId: $("#integrationWhatsappBusinessAccountId").value,
+        whatsappAccessToken: $("#integrationWhatsappAccessToken").value,
+        whatsappVerifyToken: $("#integrationWhatsappVerifyToken").value,
+        whatsappDefaultTemplateName: $("#integrationWhatsappTemplateName").value,
+        whatsappTemplateLanguage: $("#integrationWhatsappTemplateLanguage").value || "en"
+      });
+    } else if (provider === "metaAds") {
+      requestOptions.body = JSON.stringify({
+        metaAdAccountId: $("#integrationMetaAdAccountId").value,
+        metaAdsAccessToken: $("#integrationMetaAdsAccessToken").value
       });
     }
     const data = await api(paths[provider], requestOptions);

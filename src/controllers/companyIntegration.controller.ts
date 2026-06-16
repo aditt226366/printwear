@@ -32,6 +32,20 @@ const googleSheetsTestSchema = z.object({
   googlePrivateKey: z.string().optional().nullable()
 });
 
+const whatsAppTestSchema = z.object({
+  whatsappPhoneNumberId: z.string().trim().optional().nullable(),
+  whatsappBusinessAccountId: z.string().trim().optional().nullable(),
+  whatsappAccessToken: z.string().optional().nullable(),
+  whatsappVerifyToken: z.string().trim().optional().nullable(),
+  whatsappDefaultTemplateName: z.string().trim().optional().nullable(),
+  whatsappTemplateLanguage: z.string().trim().optional().nullable()
+});
+
+const metaAdsTestSchema = z.object({
+  metaAdAccountId: z.string().trim().optional().nullable(),
+  metaAdsAccessToken: z.string().optional().nullable()
+});
+
 export const getCompanyIntegration = asyncHandler(async (req: Request, res: Response) => {
   const companyId = String(req.query.companyId || "").trim();
   res.json({ integration: await companyIntegrationService.listAdmin(companyId) });
@@ -56,7 +70,8 @@ export const getIntegrationStatus = asyncHandler(async (_req: Request, res: Resp
 });
 
 export const testWhatsAppIntegration = asyncHandler(async (req: Request, res: Response) => {
-  res.json({ test: await companyIntegrationService.testWhatsApp(req.params.companyId) });
+  const body = whatsAppTestSchema.parse(req.body ?? {});
+  res.json({ test: await companyIntegrationService.testWhatsApp(req.params.companyId, body) });
 });
 
 export const testGoogleSheetsIntegration = asyncHandler(async (req: Request, res: Response) => {
@@ -65,5 +80,6 @@ export const testGoogleSheetsIntegration = asyncHandler(async (req: Request, res
 });
 
 export const testMetaAdsIntegration = asyncHandler(async (req: Request, res: Response) => {
-  res.json({ test: await companyIntegrationService.testMetaAds(req.params.companyId) });
+  const body = metaAdsTestSchema.parse(req.body ?? {});
+  res.json({ test: await companyIntegrationService.testMetaAds(req.params.companyId, body) });
 });

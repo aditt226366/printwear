@@ -20,8 +20,11 @@ export type GoogleSheetsStatus = {
   rowCount: number;
   headers: string[];
   error: string | null;
+  accessTokenProvidedInRequest: boolean;
+  savedAccessTokenExists: boolean;
   privateKeyProvidedInRequest: boolean;
   savedPrivateKeyExists: boolean;
+  encryptionKeyConfigured: boolean;
 };
 
 function normalizeHeader(value: unknown) {
@@ -119,7 +122,7 @@ function googleSheetsErrorMessage(error: unknown, serviceAccountEmail?: string |
 export const googleSheetsService = {
   async status(companyId?: string | null, input?: GoogleSheetsIntegrationInput): Promise<GoogleSheetsStatus> {
     let config: GoogleSheetsCredentials | null = null;
-    const secretState = await companyIntegrationService.googleSheetsSecretState(companyId, input);
+    const secretState = await companyIntegrationService.integrationSecretState("googleSheets", companyId, input);
 
     try {
       const authClient = await getAuthClient(companyId, input);

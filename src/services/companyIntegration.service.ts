@@ -3,7 +3,7 @@ import type { CompanyIntegration } from "@prisma/client";
 import { env } from "../config/env.js";
 import { prisma } from "../config/prisma.js";
 import { AppError } from "../utils/errors.js";
-import { localIntegrationFallbackEnabled } from "../utils/integrationConfig.js";
+import { integrationEncryptionKeyConfigured, localIntegrationFallbackEnabled } from "../utils/integrationConfig.js";
 import { apiUsageService } from "./apiUsage.service.js";
 
 type IntegrationInput = {
@@ -21,6 +21,10 @@ type IntegrationInput = {
 };
 
 export type GoogleSheetsIntegrationInput = Pick<IntegrationInput, "googleSheetsId" | "googleServiceAccountEmail" | "googlePrivateKey">;
+export type WhatsAppIntegrationInput = Pick<IntegrationInput, "whatsappPhoneNumberId" | "whatsappBusinessAccountId" | "whatsappAccessToken" | "whatsappVerifyToken" | "whatsappDefaultTemplateName" | "whatsappTemplateLanguage">;
+export type MetaAdsIntegrationInput = Pick<IntegrationInput, "metaAdAccountId" | "metaAdsAccessToken">;
+type IntegrationTestProvider = "googleSheets" | "whatsapp" | "metaAds";
+type SecretDebugInput = GoogleSheetsIntegrationInput & WhatsAppIntegrationInput & MetaAdsIntegrationInput;
 
 export type GoogleSheetsCredentials = {
   spreadsheetId: string;
@@ -49,7 +53,7 @@ function clean(value?: string | null) {
 
 function encryptionKey() {
   const key = clean(process.env.INTEGRATION_ENCRYPTION_KEY);
-  if (!key) throw new AppError("INTEGRATION_ENCRYPTION_KEY is required before saving integration secrets.", 500);
+  if (!key) throw new AppError("Encryption key missing. Add INTEGRATION_ENCRYPTION_KEY and restart server.", 500);
   return crypto.createHash("sha256").update(key).digest();
 }
 
@@ -64,7 +68,7 @@ function encryptSecret(value?: string | null) {
 }
 
 function integrationDecryptError() {
-  return new AppError("Saved integration secret cannot be decrypted. Please re-enter and save the credentials.", 400);
+  return new AppError("Saved secret cannot be decrypted. Clear and re-enter the credential.", 400);
 }
 
 function decryptSecret(value?: string | null) {
@@ -73,8 +77,9 @@ function decryptSecret(value?: string | null) {
   if (version !== "v1" || !ivValue || !tagValue || !ciphertextValue) {
     throw integrationDecryptError();
   }
+  const key = encryptionKey();
   try {
-    const decipher = crypto.createDecipheriv("aes-256-gcm", encryptionKey(), Buffer.from(ivValue, "base64"));
+    const decipher = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(ivValue, "base64"));
     decipher.setAuthTag(Buffer.from(tagValue, "base64"));
     return Buffer.concat([
       decipher.update(Buffer.from(ciphertextValue, "base64")),
@@ -85,8 +90,8 @@ function decryptSecret(value?: string | null) {
   }
 }
 
-function maskEncryptedSecret(value?: string | null) {
-  return value ? "Saved secret" : null;
+function savedSecretLabel(value: string | null | undefined, label: string) {
+  return value ? label : null;
 }
 
 function publicIntegration(row: CompanyIntegration | null) {
@@ -94,15 +99,15 @@ function publicIntegration(row: CompanyIntegration | null) {
     companyId: row?.companyId ?? null,
     googleSheetsId: row?.googleSheetsId ?? null,
     googleServiceAccountEmail: row?.googleServiceAccountEmail ?? null,
-    googlePrivateKeyMasked: maskEncryptedSecret(row?.googlePrivateKeyEncrypted),
+    googlePrivateKeyMasked: savedSecretLabel(row?.googlePrivateKeyEncrypted, "Key saved"),
     whatsappPhoneNumberId: row?.whatsappPhoneNumberId ?? null,
     whatsappBusinessAccountId: row?.whatsappBusinessAccountId ?? null,
-    whatsappAccessTokenMasked: maskEncryptedSecret(row?.whatsappAccessTokenEncrypted),
+    whatsappAccessTokenMasked: savedSecretLabel(row?.whatsappAccessTokenEncrypted, "Token saved"),
     whatsappVerifyToken: row?.whatsappVerifyToken ? `********${row.whatsappVerifyToken.slice(-4)}` : null,
     whatsappDefaultTemplateName: row?.whatsappDefaultTemplateName ?? null,
     whatsappTemplateLanguage: row?.whatsappTemplateLanguage ?? "en",
     metaAdAccountId: row?.metaAdAccountId ?? null,
-    metaAdsAccessTokenMasked: maskEncryptedSecret(row?.metaAdsAccessTokenEncrypted),
+    metaAdsAccessTokenMasked: savedSecretLabel(row?.metaAdsAccessTokenEncrypted, "Token saved"),
     connected: {
       googleSheets: Boolean(row?.googleSheetsId && row.googleServiceAccountEmail && row.googlePrivateKeyEncrypted),
       whatsapp: Boolean(row?.whatsappPhoneNumberId && row.whatsappAccessTokenEncrypted),
@@ -132,15 +137,15 @@ function missingGoogleSheetsConfig(spreadsheetId?: string | null, serviceAccount
   return null;
 }
 
-function missingWhatsAppConfig(row: CompanyIntegration | null) {
-  if (!row?.whatsappPhoneNumberId) return "WhatsApp phone number ID missing.";
-  if (!row.whatsappAccessTokenEncrypted) return "WhatsApp access token missing.";
+function missingWhatsAppConfig(phoneNumberId?: string | null, accessToken?: string | null) {
+  if (!phoneNumberId) return "WhatsApp phone number ID missing.";
+  if (!accessToken) return "WhatsApp access token missing.";
   return null;
 }
 
-function missingMetaAdsConfig(row: CompanyIntegration | null) {
-  if (!row?.metaAdAccountId) return "Meta Ads account ID missing.";
-  if (!row.metaAdsAccessTokenEncrypted) return "Meta Ads access token missing.";
+function missingMetaAdsConfig(adAccountId?: string | null, accessToken?: string | null) {
+  if (!adAccountId) return "Meta Ads account ID missing.";
+  if (!accessToken) return "Meta Ads access token missing.";
   return null;
 }
 
@@ -237,11 +242,24 @@ export const companyIntegrationService = {
     return publicIntegration(await rowForCompany(companyId));
   },
 
-  async googleSheetsSecretState(companyId?: string | null, input?: GoogleSheetsIntegrationInput) {
+  async integrationSecretState(provider: IntegrationTestProvider, companyId?: string | null, input?: SecretDebugInput) {
     const row = await rowForCompany(companyId);
+    const accessTokenProvidedInRequest = provider === "whatsapp"
+      ? Boolean(clean(input?.whatsappAccessToken))
+      : provider === "metaAds"
+        ? Boolean(clean(input?.metaAdsAccessToken))
+        : false;
+    const savedAccessTokenExists = provider === "whatsapp"
+      ? Boolean(row?.whatsappAccessTokenEncrypted)
+      : provider === "metaAds"
+        ? Boolean(row?.metaAdsAccessTokenEncrypted)
+        : false;
     return {
-      privateKeyProvidedInRequest: Boolean(clean(input?.googlePrivateKey)),
-      savedPrivateKeyExists: Boolean(row?.googlePrivateKeyEncrypted)
+      accessTokenProvidedInRequest,
+      savedAccessTokenExists,
+      privateKeyProvidedInRequest: provider === "googleSheets" ? Boolean(clean(input?.googlePrivateKey)) : false,
+      savedPrivateKeyExists: provider === "googleSheets" ? Boolean(row?.googlePrivateKeyEncrypted) : false,
+      encryptionKeyConfigured: integrationEncryptionKeyConfigured()
     };
   },
 
@@ -271,17 +289,24 @@ export const companyIntegrationService = {
     throw new AppError(missingConfig, 400);
   },
 
-  async whatsApp(companyId?: string | null) {
+  async whatsApp(companyId?: string | null, input?: WhatsAppIntegrationInput) {
     const row = await rowForCompany(companyId);
-    const missingConfig = missingWhatsAppConfig(row);
+    const requestAccessToken = clean(input?.whatsappAccessToken);
+    const phoneNumberId = clean(input?.whatsappPhoneNumberId) ?? row?.whatsappPhoneNumberId ?? null;
+    const savedAccessTokenExists = Boolean(row?.whatsappAccessTokenEncrypted);
+    const missingConfig = missingWhatsAppConfig(
+      phoneNumberId,
+      requestAccessToken ?? (savedAccessTokenExists ? "saved-secret" : null)
+    );
     if (!missingConfig) {
+      const accessToken = requestAccessToken ?? decryptSecret(row?.whatsappAccessTokenEncrypted) ?? "";
       return {
-        phoneNumberId: row!.whatsappPhoneNumberId!,
-        businessAccountId: row!.whatsappBusinessAccountId,
-        accessToken: decryptSecret(row!.whatsappAccessTokenEncrypted) ?? "",
-        verifyToken: row!.whatsappVerifyToken,
-        templateName: row!.whatsappDefaultTemplateName,
-        templateLanguage: row!.whatsappTemplateLanguage || "en"
+        phoneNumberId: phoneNumberId!,
+        businessAccountId: clean(input?.whatsappBusinessAccountId) ?? row?.whatsappBusinessAccountId,
+        accessToken,
+        verifyToken: clean(input?.whatsappVerifyToken) ?? row?.whatsappVerifyToken,
+        templateName: clean(input?.whatsappDefaultTemplateName) ?? row?.whatsappDefaultTemplateName,
+        templateLanguage: clean(input?.whatsappTemplateLanguage) ?? row?.whatsappTemplateLanguage ?? "en"
       };
     }
     if (shouldUseEnvFallback(companyId)) {
@@ -291,13 +316,20 @@ export const companyIntegrationService = {
     throw new AppError(missingConfig, 400);
   },
 
-  async metaAds(companyId?: string | null) {
+  async metaAds(companyId?: string | null, input?: MetaAdsIntegrationInput) {
     const row = await rowForCompany(companyId);
-    const missingConfig = missingMetaAdsConfig(row);
+    const requestAccessToken = clean(input?.metaAdsAccessToken);
+    const adAccountId = clean(input?.metaAdAccountId) ?? row?.metaAdAccountId ?? null;
+    const savedAccessTokenExists = Boolean(row?.metaAdsAccessTokenEncrypted);
+    const missingConfig = missingMetaAdsConfig(
+      adAccountId,
+      requestAccessToken ?? (savedAccessTokenExists ? "saved-secret" : null)
+    );
     if (!missingConfig) {
+      const accessToken = requestAccessToken ?? decryptSecret(row?.metaAdsAccessTokenEncrypted) ?? "";
       return {
-        adAccountId: row!.metaAdAccountId!,
-        accessToken: decryptSecret(row!.metaAdsAccessTokenEncrypted) ?? ""
+        adAccountId: adAccountId!,
+        accessToken
       };
     }
     if (shouldUseEnvFallback(companyId)) {
@@ -332,13 +364,16 @@ export const companyIntegrationService = {
     return Boolean(row);
   },
 
-  async testWhatsApp(companyId: string) {
-    const credentials = await this.whatsApp(companyId);
-    const endpoint = `/${credentials.phoneNumberId}`;
-    const url = new URL(`https://graph.facebook.com/${env.WHATSAPP_API_VERSION}${endpoint}`);
-    url.searchParams.set("fields", "id,display_phone_number,verified_name");
+  async testWhatsApp(companyId: string, input?: WhatsAppIntegrationInput) {
+    const debug = await this.integrationSecretState("whatsapp", companyId, input);
+    let credentials: WhatsAppCredentials | null = null;
+    let endpoint = "";
 
     try {
+      credentials = await this.whatsApp(companyId, input);
+      endpoint = `/${credentials.phoneNumberId}`;
+      const url = new URL(`https://graph.facebook.com/${env.WHATSAPP_API_VERSION}${endpoint}`);
+      url.searchParams.set("fields", "id,display_phone_number,verified_name");
       const response = await fetch(url, {
         headers: { Authorization: `Bearer ${credentials.accessToken}` }
       });
@@ -365,38 +400,45 @@ export const companyIntegrationService = {
         businessAccountId: credentials.businessAccountId ?? null,
         displayPhoneNumber: data.display_phone_number ?? null,
         verifiedName: data.verified_name ?? null,
-        error: response.ok ? null : data.error?.message || `WhatsApp API returned HTTP ${response.status}.`
+        error: response.ok ? null : data.error?.message || `WhatsApp API returned HTTP ${response.status}.`,
+        ...debug
       };
     } catch (error) {
-      void apiUsageService.log({
-        companyId,
-        provider: "META_WHATSAPP",
-        endpoint,
-        method: "GET",
-        statusCode: 500,
-        success: false,
-        metadata: { error: error instanceof Error ? error.message : "WhatsApp test failed" }
-      });
+      if (credentials) {
+        void apiUsageService.log({
+          companyId,
+          provider: "META_WHATSAPP",
+          endpoint,
+          method: "GET",
+          statusCode: 500,
+          success: false,
+          metadata: { error: error instanceof Error ? error.message : "WhatsApp test failed" }
+        });
+      }
       return {
         provider: "whatsapp",
         connected: false,
-        phoneNumberId: credentials.phoneNumberId,
-        businessAccountId: credentials.businessAccountId ?? null,
+        phoneNumberId: credentials?.phoneNumberId ?? clean(input?.whatsappPhoneNumberId),
+        businessAccountId: credentials?.businessAccountId ?? clean(input?.whatsappBusinessAccountId),
         displayPhoneNumber: null,
         verifiedName: null,
-        error: error instanceof Error ? error.message : "WhatsApp test failed."
+        error: error instanceof Error ? error.message : "WhatsApp test failed.",
+        ...debug
       };
     }
   },
 
-  async testMetaAds(companyId: string) {
-    const credentials = await this.metaAds(companyId);
-    const normalizedAccountId = credentials.adAccountId.startsWith("act_") ? credentials.adAccountId : `act_${credentials.adAccountId}`;
-    const endpoint = `/${normalizedAccountId}`;
-    const url = new URL(`https://graph.facebook.com/${env.WHATSAPP_API_VERSION}${endpoint}`);
-    url.searchParams.set("fields", "name,account_status,currency,timezone_name");
+  async testMetaAds(companyId: string, input?: MetaAdsIntegrationInput) {
+    const debug = await this.integrationSecretState("metaAds", companyId, input);
+    let credentials: MetaAdsCredentials | null = null;
+    let endpoint = "";
 
     try {
+      credentials = await this.metaAds(companyId, input);
+      const normalizedAccountId = credentials.adAccountId.startsWith("act_") ? credentials.adAccountId : `act_${credentials.adAccountId}`;
+      endpoint = `/${normalizedAccountId}`;
+      const url = new URL(`https://graph.facebook.com/${env.WHATSAPP_API_VERSION}${endpoint}`);
+      url.searchParams.set("fields", "name,account_status,currency,timezone_name");
       const response = await fetch(url, {
         headers: { Authorization: `Bearer ${credentials.accessToken}` }
       });
@@ -425,27 +467,31 @@ export const companyIntegrationService = {
         accountStatus: data.account_status ?? null,
         currency: data.currency ?? null,
         timezone: data.timezone_name ?? null,
-        error: response.ok ? null : data.error?.message || `Meta Ads API returned HTTP ${response.status}.`
+        error: response.ok ? null : data.error?.message || `Meta Ads API returned HTTP ${response.status}.`,
+        ...debug
       };
     } catch (error) {
-      void apiUsageService.log({
-        companyId,
-        provider: "META_ADS",
-        endpoint,
-        method: "GET",
-        statusCode: 500,
-        success: false,
-        metadata: { error: error instanceof Error ? error.message : "Meta Ads test failed" }
-      });
+      if (credentials) {
+        void apiUsageService.log({
+          companyId,
+          provider: "META_ADS",
+          endpoint,
+          method: "GET",
+          statusCode: 500,
+          success: false,
+          metadata: { error: error instanceof Error ? error.message : "Meta Ads test failed" }
+        });
+      }
       return {
         provider: "metaAds",
         connected: false,
-        adAccountId: credentials.adAccountId,
+        adAccountId: credentials?.adAccountId ?? clean(input?.metaAdAccountId),
         accountName: null,
         accountStatus: null,
         currency: null,
         timezone: null,
-        error: error instanceof Error ? error.message : "Meta Ads test failed."
+        error: error instanceof Error ? error.message : "Meta Ads test failed.",
+        ...debug
       };
     }
   }
