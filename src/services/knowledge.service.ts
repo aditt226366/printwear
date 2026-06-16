@@ -106,11 +106,12 @@ export const knowledgeService = {
     });
   },
 
-  async search(query: string, limit = 3) {
+  async search(query: string, limit = 3, companyId?: string | null) {
     const trimmed = query.trim();
+    const scope = companyId ?? null;
 
     if (!trimmed) {
-      const entries = await prisma.knowledgeBase.findMany({ take: limit });
+      const entries = await prisma.knowledgeBase.findMany({ where: scope ? { companyId: scope } : {}, take: limit });
       return entries.map((entry) => `${entry.title}: ${entry.content}`).join("\n\n");
     }
 
@@ -118,7 +119,8 @@ export const knowledgeService = {
       Prisma.sql`
         SELECT title, content, category
         FROM "KnowledgeBase"
-        WHERE to_tsvector('simple', coalesce(title, '') || ' ' || coalesce(content, '') || ' ' || coalesce(category, ''))
+        WHERE (${scope}::text IS NULL OR "companyId" = ${scope})
+          AND to_tsvector('simple', coalesce(title, '') || ' ' || coalesce(content, '') || ' ' || coalesce(category, ''))
           @@ plainto_tsquery('simple', ${trimmed})
         ORDER BY ts_rank(
           to_tsvector('simple', coalesce(title, '') || ' ' || coalesce(content, '') || ' ' || coalesce(category, '')),
@@ -133,6 +135,7 @@ export const knowledgeService = {
         ? matches
         : await prisma.knowledgeBase.findMany({
             where: {
+              ...(scope ? { companyId: scope } : {}),
               OR: [
                 { title: { contains: trimmed, mode: "insensitive" } },
                 { content: { contains: trimmed, mode: "insensitive" } },
@@ -143,7 +146,7 @@ export const knowledgeService = {
           });
 
     if (entries.length === 0) {
-      const fallback = await prisma.knowledgeBase.findMany({ take: limit });
+      const fallback = await prisma.knowledgeBase.findMany({ where: scope ? { companyId: scope } : {}, take: limit });
       return fallback.map((entry) => `${entry.title}: ${entry.content}`).join("\n\n");
     }
 

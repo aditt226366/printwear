@@ -152,6 +152,7 @@ model Company {
   features         CompanyFeature[]
   apiUsageLogs     ApiUsageLog[]
   billingSnapshots BillingSnapshot[]
+  integration      CompanyIntegration?
   leads            Lead[]
   knowledgeBase    KnowledgeBase[]
   bulkMessageJobs  BulkMessageJob[]
@@ -160,6 +161,28 @@ model Company {
   aiWorkflows      AiWorkflow[]
 
   @@index([status])
+}
+
+model CompanyIntegration {
+  id                               String   @id @default(cuid())
+  companyId                        String   @unique
+  googleSheetsId                   String?
+  googleServiceAccountEmail        String?
+  googlePrivateKeyEncrypted        String?
+  whatsappPhoneNumberId            String?
+  whatsappBusinessAccountId        String?
+  whatsappAccessTokenEncrypted     String?
+  whatsappVerifyToken              String?
+  whatsappDefaultTemplateName      String?
+  whatsappTemplateLanguage         String   @default("en")
+  metaAdAccountId                  String?
+  metaAdsAccessTokenEncrypted      String?
+  createdAt                        DateTime @default(now())
+  updatedAt                        DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([whatsappPhoneNumberId])
 }
 
 model AppUser {

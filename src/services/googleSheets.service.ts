@@ -1,9 +1,10 @@
 import { google } from "googleapis";
-import { env, requireEnv } from "../config/env.js";
+import { env } from "../config/env.js";
 import { AppError } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
 import { normalizePhoneNumber } from "../utils/phone.js";
 import { apiUsageService } from "./apiUsage.service.js";
+import { companyIntegrationService, type GoogleSheetsCredentials } from "./companyIntegration.service.js";
 
 export type SheetLead = {
   name: string;
@@ -33,18 +34,9 @@ function normalizePrivateKey(value: string) {
   return value.trim().replace(/^"|"$/g, "").replace(/\\n/g, "\n");
 }
 
-export function validateGoogleSheetsConfig() {
-  const missing = [
-    "GOOGLE_SHEETS_ID",
-    "GOOGLE_SERVICE_ACCOUNT_EMAIL",
-    "GOOGLE_PRIVATE_KEY"
-  ].filter((name) => !String(env[name as keyof typeof env] ?? "").trim());
-
-  if (missing.length) {
-    throw new AppError("Google Sheets configuration is incomplete", 400, `Missing ${missing.join(", ")}`);
-  }
-
-  const key = normalizePrivateKey(requireEnv("GOOGLE_PRIVATE_KEY"));
+export async function validateGoogleSheetsConfig(companyId?: string | null) {
+  const config = await companyIntegrationService.googleSheets(companyId);
+  const key = normalizePrivateKey(config.privateKey);
   if (!key.includes("-----BEGIN PRIVATE KEY-----") || !key.includes("-----END PRIVATE KEY-----")) {
     throw new AppError(
       "Google Sheets access failed",
@@ -54,21 +46,24 @@ export function validateGoogleSheetsConfig() {
   }
 
   return {
-    spreadsheetId: requireEnv("GOOGLE_SHEETS_ID"),
-    serviceAccountEmail: requireEnv("GOOGLE_SERVICE_ACCOUNT_EMAIL"),
+    spreadsheetId: config.spreadsheetId,
+    serviceAccountEmail: config.serviceAccountEmail,
     privateKey: key
   };
 }
 
-function getAuthClient() {
-  const config = validateGoogleSheetsConfig();
+async function getAuthClient(companyId?: string | null) {
+  const config = await validateGoogleSheetsConfig(companyId);
   logger.info({ serviceAccountEmail: config.serviceAccountEmail }, "Creating Google Sheets auth client");
 
-  return new google.auth.JWT({
-    email: config.serviceAccountEmail,
-    key: config.privateKey,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"]
-  });
+  return {
+    config,
+    auth: new google.auth.JWT({
+      email: config.serviceAccountEmail,
+      key: config.privateKey,
+      scopes: ["https://www.googleapis.com/auth/spreadsheets"]
+    })
+  };
 }
 
 function columnIndexToLetter(index: number) {
@@ -84,13 +79,13 @@ function columnIndexToLetter(index: number) {
   return letter;
 }
 
-function googleSheetsErrorMessage(error: unknown) {
+function googleSheetsErrorMessage(error: unknown, serviceAccountEmail?: string | null) {
   const sheetsError = error as { code?: number; status?: number; message?: string };
   const status = sheetsError.code ?? sheetsError.status;
 
   if (status === 403) {
-    const serviceAccountEmail = env.GOOGLE_SERVICE_ACCOUNT_EMAIL || "GOOGLE_SERVICE_ACCOUNT_EMAIL";
-    return `Google Sheets permission denied. Share this spreadsheet with ${serviceAccountEmail} and give it Editor access.`;
+    const email = serviceAccountEmail || env.GOOGLE_SERVICE_ACCOUNT_EMAIL || "GOOGLE_SERVICE_ACCOUNT_EMAIL";
+    return `Google Sheets permission denied. Share this spreadsheet with ${email} and give it Editor access.`;
   }
 
   if (status === 404) {
@@ -102,12 +97,13 @@ function googleSheetsErrorMessage(error: unknown) {
 
 export const googleSheetsService = {
   async status(companyId?: string | null): Promise<GoogleSheetsStatus> {
-    const sheetId = env.GOOGLE_SHEETS_ID || null;
-    const serviceAccountEmail = env.GOOGLE_SERVICE_ACCOUNT_EMAIL || null;
+    let config: GoogleSheetsCredentials | null = null;
 
     try {
-      const sheets = google.sheets({ version: "v4", auth: getAuthClient() });
-      const spreadsheetId = requireEnv("GOOGLE_SHEETS_ID");
+      const authClient = await getAuthClient(companyId);
+      config = authClient.config;
+      const sheets = google.sheets({ version: "v4", auth: authClient.auth });
+      const spreadsheetId = config.spreadsheetId;
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId,
         range: env.GOOGLE_SHEETS_RANGE
@@ -126,8 +122,8 @@ export const googleSheetsService = {
 
       return {
         connected: true,
-        serviceAccountEmail,
-        sheetId,
+        serviceAccountEmail: config.serviceAccountEmail,
+        sheetId: config.spreadsheetId,
         readable: true,
         rowCount: rows.length,
         headers: (rows[0] ?? []).map((header) => String(header)),
@@ -142,25 +138,26 @@ export const googleSheetsService = {
         method: "GET",
         statusCode: Number(sheetsError.code || sheetsError.status || 500),
         success: false,
-        metadata: { spreadsheetId: sheetId, range: env.GOOGLE_SHEETS_RANGE }
+        metadata: { spreadsheetId: config?.spreadsheetId ?? null, range: env.GOOGLE_SHEETS_RANGE }
       });
 
       return {
         connected: false,
-        serviceAccountEmail,
-        sheetId,
+        serviceAccountEmail: config?.serviceAccountEmail ?? null,
+        sheetId: config?.spreadsheetId ?? null,
         readable: false,
         rowCount: 0,
         headers: [],
-        error: googleSheetsErrorMessage(error)
+        error: googleSheetsErrorMessage(error, config?.serviceAccountEmail ?? null)
       };
     }
   },
 
   async getNewLeads(companyId?: string | null): Promise<SheetLead[]> {
     logger.info({ range: env.GOOGLE_SHEETS_RANGE }, "Starting Google Sheets lead read");
-    const sheets = google.sheets({ version: "v4", auth: getAuthClient() });
-    const spreadsheetId = requireEnv("GOOGLE_SHEETS_ID");
+    const authClient = await getAuthClient(companyId);
+    const sheets = google.sheets({ version: "v4", auth: authClient.auth });
+    const spreadsheetId = authClient.config.spreadsheetId;
     let response;
 
     try {
@@ -193,7 +190,7 @@ export const googleSheetsService = {
       logger.error({ error, status }, "Google Sheets read failed");
 
       if (status === 403) {
-        const serviceAccountEmail = requireEnv("GOOGLE_SERVICE_ACCOUNT_EMAIL");
+        const serviceAccountEmail = authClient.config.serviceAccountEmail;
         throw new AppError(
           `Google Sheets permission denied. Share this spreadsheet with ${serviceAccountEmail} and give it Editor access.`,
           400
@@ -251,8 +248,9 @@ export const googleSheetsService = {
 
   async updateLeadStatus(rowNumber: number, status: string, companyId?: string | null) {
     logger.info({ rowNumber, status }, "Updating Google Sheets lead status");
-    const sheets = google.sheets({ version: "v4", auth: getAuthClient() });
-    const spreadsheetId = requireEnv("GOOGLE_SHEETS_ID");
+    const authClient = await getAuthClient(companyId);
+    const sheets = google.sheets({ version: "v4", auth: authClient.auth });
+    const spreadsheetId = authClient.config.spreadsheetId;
     const sheetName = env.GOOGLE_SHEETS_RANGE.split("!")[0] || "Sheet1";
     const statusColumn = env.GOOGLE_SHEETS_STATUS_COLUMN || columnIndexToLetter(2);
 

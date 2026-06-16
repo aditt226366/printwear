@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
-import { env } from "../config/env.js";
 import { claudeService } from "../services/claude.service.js";
 import { automationService } from "../services/automation.service.js";
+import { companyIntegrationService } from "../services/companyIntegration.service.js";
 import { knowledgeService } from "../services/knowledge.service.js";
 import { leadService } from "../services/lead.service.js";
 import { resolveMenuIntent } from "../services/menuIntent.service.js";
@@ -16,11 +16,7 @@ export const verifyWebhook = asyncHandler(async (req: Request, res: Response) =>
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
 
-  if (!env.WHATSAPP_VERIFY_TOKEN) {
-    throw new AppError("WHATSAPP_VERIFY_TOKEN is not configured", 500);
-  }
-
-  if (mode === "subscribe" && token === env.WHATSAPP_VERIFY_TOKEN && typeof challenge === "string") {
+  if (mode === "subscribe" && typeof token === "string" && typeof challenge === "string" && await companyIntegrationService.acceptsWebhookVerifyToken(token)) {
     res.status(200).send(challenge);
     return;
   }
@@ -97,9 +93,18 @@ async function processInboundMessage(incoming: ReturnType<typeof whatsappService
     "Inbound WhatsApp message parsed"
   );
 
+  const companyId = await companyIntegrationService.findCompanyByWhatsAppPhoneNumberId(incoming.phoneNumberId);
+  if (!companyId) {
+    logger.error(
+      { phoneNumberId: incoming.phoneNumberId, whatsappMessageId: incoming.messageId },
+      "Unable to route inbound webhook to a company"
+    );
+    return;
+  }
+
   let lead;
   try {
-    lead = await leadService.findOrCreateFromInbound(incoming.from, incoming.profileName);
+    lead = await leadService.findOrCreateFromInbound(incoming.from, incoming.profileName, companyId);
     logger.info(
       { leadId: lead.id, phone: lead.phone, whatsappMessageId: incoming.messageId },
       "Lead saved from inbound webhook"
@@ -192,7 +197,7 @@ async function processInboundMessage(incoming: ReturnType<typeof whatsappService
   let conversationHistory = "";
 
   try {
-    knowledgeContext = await knowledgeService.search(knowledgeQuery, 3);
+    knowledgeContext = await knowledgeService.search(knowledgeQuery, 3, lead.companyId);
     conversationHistory = await messageService.getRecentConversation(lead.id, 8);
   } catch (error) {
     logger.error({ error, leadId: lead.id, whatsappMessageId: incoming.messageId }, "Database error while preparing Claude context");

@@ -2,6 +2,7 @@ const adminState = {
   companies: [],
   users: [],
   features: [],
+  integration: null,
   billing: { summary: {}, logs: [] },
   currentView: "users",
   userFilters: {
@@ -102,12 +103,13 @@ function switchAdminView(view) {
   document.querySelectorAll("main > .view").forEach((section) => section.classList.remove("active-view"));
   $(`#admin${view[0].toUpperCase()}${view.slice(1)}View`)?.classList.add("active-view");
   if (view === "features") loadFeatures().catch((error) => showNotice(error.message, true));
+  if (view === "integrations") loadIntegration().catch((error) => showNotice(error.message, true));
   if (view === "billing") loadBilling().catch((error) => showNotice(error.message, true));
 }
 
 function fillCompanySelects() {
   const options = adminState.companies.map((company) => `<option value="${escapeHtml(company.id)}">${escapeHtml(company.name)}</option>`).join("");
-  ["userCompany", "featureCompanySelect", "billingCompanySelect", "userCompanyFilter"].forEach((id) => {
+  ["userCompany", "featureCompanySelect", "integrationCompanySelect", "billingCompanySelect", "userCompanyFilter"].forEach((id) => {
     const select = $(`#${id}`);
     if (!select) return;
     const current = select.value;
@@ -176,6 +178,35 @@ function renderUsers() {
     `).join("")}
   `;
   refreshIcons();
+}
+
+async function loadIntegration() {
+  const companyId = $("#integrationCompanySelect")?.value || adminState.companies[0]?.id || "";
+  if (!companyId) {
+    adminState.integration = null;
+    return;
+  }
+  const data = await api(`/admin/company-integrations?companyId=${encodeURIComponent(companyId)}`);
+  adminState.integration = data.integration || null;
+  renderIntegration();
+}
+
+function renderIntegration() {
+  const integration = adminState.integration || {};
+  $("#integrationGoogleSheetsId").value = integration.googleSheetsId || "";
+  $("#integrationGoogleServiceAccountEmail").value = integration.googleServiceAccountEmail || "";
+  $("#integrationGooglePrivateKey").value = "";
+  $("#integrationGooglePrivateKeyMasked").textContent = integration.googlePrivateKeyMasked ? `Saved: ${integration.googlePrivateKeyMasked}` : "No key saved.";
+  $("#integrationWhatsappPhoneNumberId").value = integration.whatsappPhoneNumberId || "";
+  $("#integrationWhatsappBusinessAccountId").value = integration.whatsappBusinessAccountId || "";
+  $("#integrationWhatsappTemplateName").value = integration.whatsappDefaultTemplateName || "";
+  $("#integrationWhatsappTemplateLanguage").value = integration.whatsappTemplateLanguage || "en";
+  $("#integrationWhatsappVerifyToken").value = "";
+  $("#integrationWhatsappAccessToken").value = "";
+  $("#integrationWhatsappAccessTokenMasked").textContent = integration.whatsappAccessTokenMasked ? `Saved: ${integration.whatsappAccessTokenMasked}` : "No token saved.";
+  $("#integrationMetaAdAccountId").value = integration.metaAdAccountId || "";
+  $("#integrationMetaAdsAccessToken").value = "";
+  $("#integrationMetaAdsAccessTokenMasked").textContent = integration.metaAdsAccessTokenMasked ? `Saved: ${integration.metaAdsAccessTokenMasked}` : "No token saved.";
 }
 
 async function loadFeatures() {
@@ -324,6 +355,30 @@ function bindEvents() {
     }
   });
   $("#featureCompanySelect")?.addEventListener("change", () => loadFeatures().catch((error) => showNotice(error.message, true)));
+  $("#integrationCompanySelect")?.addEventListener("change", () => loadIntegration().catch((error) => showNotice(error.message, true)));
+  $("#integrationForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const companyId = $("#integrationCompanySelect")?.value;
+    await api("/admin/company-integrations", {
+      method: "PUT",
+      body: JSON.stringify({
+        companyId,
+        googleSheetsId: $("#integrationGoogleSheetsId").value,
+        googleServiceAccountEmail: $("#integrationGoogleServiceAccountEmail").value,
+        googlePrivateKey: $("#integrationGooglePrivateKey").value,
+        whatsappPhoneNumberId: $("#integrationWhatsappPhoneNumberId").value,
+        whatsappBusinessAccountId: $("#integrationWhatsappBusinessAccountId").value,
+        whatsappAccessToken: $("#integrationWhatsappAccessToken").value,
+        whatsappVerifyToken: $("#integrationWhatsappVerifyToken").value,
+        whatsappDefaultTemplateName: $("#integrationWhatsappTemplateName").value,
+        whatsappTemplateLanguage: $("#integrationWhatsappTemplateLanguage").value || "en",
+        metaAdAccountId: $("#integrationMetaAdAccountId").value,
+        metaAdsAccessToken: $("#integrationMetaAdsAccessToken").value
+      })
+    });
+    showNotice("Integration settings saved. Secrets remain masked.");
+    await loadIntegration();
+  });
   $("#adminFeatureList")?.addEventListener("click", async (event) => {
     const button = event.target.closest("[data-feature-toggle]");
     if (!button || button.disabled) return;
@@ -374,7 +429,9 @@ async function start() {
   await loadUsers();
   if (adminState.companies[0]) {
     $("#featureCompanySelect").value = adminState.companies[0].id;
+    $("#integrationCompanySelect").value = adminState.companies[0].id;
     await loadFeatures();
+    await loadIntegration();
   }
   await loadBilling();
   refreshIcons();

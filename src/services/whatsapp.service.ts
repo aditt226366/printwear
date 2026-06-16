@@ -1,8 +1,9 @@
 import { MessageStatus, MessageType } from "@prisma/client";
-import { env, requireEnv } from "../config/env.js";
+import { env } from "../config/env.js";
 import { apiUsageService } from "./apiUsage.service.js";
 import { AppError } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
+import { companyIntegrationService } from "./companyIntegration.service.js";
 
 type WhatsAppSendResponse = {
   messages?: Array<{ id?: string }>;
@@ -20,6 +21,7 @@ type TemplateParameter = {
 
 export type ParsedIncomingMessage = {
   messageId: string;
+  phoneNumberId?: string;
   from: string;
   profileName?: string;
   type: keyof typeof MessageType;
@@ -29,34 +31,22 @@ export type ParsedIncomingMessage = {
 
 export type ParsedStatusUpdate = {
   messageId: string;
+  phoneNumberId?: string;
   recipientId?: string;
   status: keyof typeof MessageStatus;
   rawPayload: unknown;
 };
 
-function endpoint() {
-  const phoneNumberId = requireEnv("WHATSAPP_PHONE_NUMBER_ID");
+function endpoint(phoneNumberId: string) {
   return `https://graph.facebook.com/${env.WHATSAPP_API_VERSION}/${phoneNumberId}/messages`;
 }
 
-export function validateWhatsAppConfig() {
-  const missing = [
-    "WHATSAPP_ACCESS_TOKEN",
-    "WHATSAPP_PHONE_NUMBER_ID",
-    "WHATSAPP_TEMPLATE_NAME",
-    "WHATSAPP_TEMPLATE_LANGUAGE"
-  ].filter((name) => !String(env[name as keyof typeof env] ?? "").trim());
-
-  if (missing.length) {
-    throw new AppError("WhatsApp configuration is incomplete", 400, `Missing ${missing.join(", ")}`);
+export async function validateWhatsAppConfig(companyId?: string | null) {
+  const config = await companyIntegrationService.whatsApp(companyId);
+  if (!config.templateLanguage) {
+    throw new AppError("WhatsApp configuration is incomplete", 400, "Missing WhatsApp template language");
   }
-
-  return {
-    accessToken: requireEnv("WHATSAPP_ACCESS_TOKEN").trim(),
-    phoneNumberId: requireEnv("WHATSAPP_PHONE_NUMBER_ID"),
-    templateName: requireEnv("WHATSAPP_TEMPLATE_NAME").trim(),
-    templateLanguage: env.WHATSAPP_TEMPLATE_LANGUAGE.trim()
-  };
+  return config;
 }
 
 function statusFromMeta(status: string): keyof typeof MessageStatus {
@@ -108,7 +98,8 @@ async function postToWhatsApp(
   options: { companyId?: string | null } = {},
   attempt = 1
 ): Promise<{ messageId?: string; rawResponse: unknown }> {
-  const config = validateWhatsAppConfig();
+  const config = await validateWhatsAppConfig(options.companyId);
+  const requestEndpoint = endpoint(config.phoneNumberId);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
   const requestBody = body as { type?: string; to?: string; template?: { name?: string; language?: { code?: string } } };
@@ -125,7 +116,7 @@ async function postToWhatsApp(
       "Sending WhatsApp API request"
     );
 
-    const response = await fetch(endpoint(), {
+    const response = await fetch(requestEndpoint, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${config.accessToken}`,
@@ -139,7 +130,7 @@ async function postToWhatsApp(
     void apiUsageService.log({
       companyId: options.companyId,
       provider: "META_WHATSAPP",
-      endpoint: endpoint(),
+      endpoint: requestEndpoint,
       method: "POST",
       statusCode: response.status,
       success: response.ok,
@@ -207,7 +198,7 @@ export const whatsappService = {
     parameters?: TemplateParameter[];
     companyId?: string | null;
   }) {
-    const config = validateWhatsAppConfig();
+    const config = await validateWhatsAppConfig(input.companyId);
     const body: Record<string, unknown> = {
       messaging_product: "whatsapp",
       to: input.phone,
@@ -236,7 +227,8 @@ export const whatsappService = {
   },
 
   async sendTemplateMessage(phone: string, name: string, companyId?: string | null) {
-    const config = validateWhatsAppConfig();
+    const config = await validateWhatsAppConfig(companyId);
+    if (!config.templateName) throw new AppError("WhatsApp default template is not configured for your company.", 400);
     return this.sendNamedTemplateMessage({
       phone,
       templateName: config.templateName,
@@ -274,6 +266,7 @@ export const whatsappService = {
       const changes = (entry as { changes?: unknown[] }).changes ?? [];
       for (const change of changes) {
         const value = (change as { value?: Record<string, unknown> }).value;
+        const metadata = value?.metadata as { phone_number_id?: string } | undefined;
         const messages = (value?.messages as Array<Record<string, unknown>> | undefined) ?? [];
         const contacts = (value?.contacts as Array<{ wa_id?: string; profile?: { name?: string } }> | undefined) ?? [];
 
@@ -289,6 +282,7 @@ export const whatsappService = {
 
           parsed.push({
             messageId: id,
+            phoneNumberId: metadata?.phone_number_id,
             from,
             profileName: contact?.profile?.name,
             type: typeFromMeta(type),
@@ -310,6 +304,7 @@ export const whatsappService = {
       const changes = (entry as { changes?: unknown[] }).changes ?? [];
       for (const change of changes) {
         const value = (change as { value?: Record<string, unknown> }).value;
+        const metadata = value?.metadata as { phone_number_id?: string } | undefined;
         const statuses = (value?.statuses as Array<Record<string, unknown>> | undefined) ?? [];
 
         for (const status of statuses) {
@@ -320,6 +315,7 @@ export const whatsappService = {
 
           parsed.push({
             messageId: id,
+            phoneNumberId: metadata?.phone_number_id,
             recipientId: status.recipient_id ? String(status.recipient_id) : undefined,
             status: statusFromMeta(String(status.status ?? "")),
             rawPayload: status

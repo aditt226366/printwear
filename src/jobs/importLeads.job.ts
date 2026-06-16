@@ -4,7 +4,7 @@ import { logger } from "../utils/logger.js";
 
 export async function importLeadsJob(companyId?: string) {
   logger.info("Validating Google Sheets environment for lead import");
-  validateGoogleSheetsConfig();
+  await validateGoogleSheetsConfig(companyId);
   logger.info("Google Sheets environment validated for lead import");
 
   const sheetLeads = await googleSheetsService.getNewLeads(companyId);

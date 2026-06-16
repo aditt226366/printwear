@@ -2101,6 +2101,27 @@ input[type="file"] {
   grid-template-columns: minmax(220px, 1fr) 150px 150px auto auto;
 }
 
+.integration-form fieldset {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  border: 1px solid color-mix(in srgb, var(--ink) 12%, var(--paper));
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.integration-form legend {
+  padding: 0 6px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.integration-form small {
+  color: color-mix(in srgb, var(--ink) 55%, var(--paper));
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .admin-users-row,
 .admin-users-head {
   min-width: 1040px;

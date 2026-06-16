@@ -4,6 +4,7 @@ const state = {
   selectedConversation: null,
   session: null,
   features: [],
+  integration: null,
   enabledFeatureKeys: new Set(),
   leadSearch: "",
   chatSearch: "",
@@ -1585,14 +1586,17 @@ function renderSelectOptions(select, values, currentValue, label) {
 }
 
 async function loadSessionAndFeatures() {
-  const [sessionData, featureData] = await Promise.all([
+  const [sessionData, featureData, integrationData] = await Promise.all([
     publicApi("/session"),
-    publicApi("/features/enabled")
+    publicApi("/features/enabled"),
+    publicApi("/integrations/status")
   ]);
   state.session = sessionData.session || null;
   state.features = featureData.features || [];
+  state.integration = integrationData.integration || null;
   state.enabledFeatureKeys = new Set(state.features.map((feature) => feature.key));
   applyFeatureVisibility();
+  applyIntegrationAvailability();
 }
 
 function isAdmin() {
@@ -1647,6 +1651,30 @@ function applyFeatureVisibility() {
   const panel = $("#adminFeaturePanel");
   if (panel) panel.classList.toggle("hidden", !isAdmin());
   renderFeatureToggles();
+}
+
+function integrationConnected(key) {
+  return Boolean(state.integration?.connected?.[key]);
+}
+
+function applyIntegrationAvailability() {
+  const whatsAppConnected = integrationConnected("whatsapp");
+  const googleSheetsConnected = integrationConnected("googleSheets");
+  const metaAdsConnected = integrationConnected("metaAds");
+
+  ["sendSelectedBulkBtn"].forEach((id) => {
+    const button = $(`#${id}`);
+    if (!button) return;
+    button.disabled = !whatsAppConnected;
+    button.title = whatsAppConnected ? "" : "WhatsApp not connected for your company.";
+  });
+  ["importSheetsContactsBtn", "importLeadsBtn"].forEach((id) => {
+    const button = $(`#${id}`);
+    if (!button) return;
+    button.disabled = !googleSheetsConnected;
+    button.title = googleSheetsConnected ? "" : "Google Sheets not connected.";
+  });
+  state.metaAdsConnected = state.metaAdsConnected && metaAdsConnected;
 }
 
 function renderFeatureToggles() {
@@ -1950,6 +1978,7 @@ async function loadAds() {
     const data = await publicApi("/ads");
     state.metaAdsConnected = Boolean(data.metaConnected);
     state.adDrafts = data.drafts || [];
+    applyIntegrationAvailability();
     renderAds();
   } catch (error) {
     if (error.setupRequired) {
@@ -1969,7 +1998,7 @@ function renderAds() {
     "metaAdsStatusText",
     state.metaAdsConnected
       ? "Meta Ads API credentials are configured. Draft launch controls can be enabled once account review is complete."
-      : "Meta Ads API not connected yet. Set META_ADS_ACCESS_TOKEN and META_AD_ACCOUNT_ID to enable future launch controls. You can still create ad drafts and previews."
+      : "Meta Ads not connected for your company. Ask an admin to add this company's Meta Ads account."
   );
   renderAdPreview();
   const list = $("#adDraftsList");
@@ -2522,6 +2551,7 @@ function bindEvents() {
 
   $("#importSheetsContactsBtn")?.addEventListener("click", async () => {
     try {
+      if (!integrationConnected("googleSheets")) throw new Error("Google Sheets not connected.");
       const result = await publicApi("/contacts/import/google-sheets", { method: "POST" });
       showNotice(`Imported ${result.imported || 0} contacts from Google Sheets.`);
       await loadContacts();
@@ -2578,6 +2608,7 @@ function bindEvents() {
   $("#bulkSendForm")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     try {
+      if (!integrationConnected("whatsapp")) throw new Error("WhatsApp not connected for your company.");
       const body = {
         name: $("#bulkName")?.value.trim() || "Bulk WhatsApp template send",
         templateName: $("#bulkTemplateName")?.value.trim(),
@@ -2615,9 +2646,11 @@ function bindEvents() {
         showNotice(`Campaign CSV imported ${result.imported || 0} contacts. ${result.skipped || 0} skipped.`);
       }
       if (audienceSourceType === "sheets") {
+        if (!integrationConnected("googleSheets")) throw new Error("Google Sheets not connected.");
         const result = await publicApi("/contacts/import/google-sheets", { method: "POST" });
         showNotice(`Google Sheets synced ${result.imported || 0} contacts for campaign audience.`);
       }
+      if (!integrationConnected("whatsapp")) throw new Error("WhatsApp not connected for your company.");
       const audience = audienceSourceType === "manual"
         ? selectedAudienceFromContacts({})
         : selectedAudienceFromContacts({
@@ -2783,6 +2816,7 @@ function bindEvents() {
 
   $("#importLeadsBtn")?.addEventListener("click", async () => {
     try {
+      if (!integrationConnected("googleSheets")) throw new Error("Google Sheets not connected.");
       const result = await publicApi("/leads/import", { method: "POST" });
       showNotice(`Imported ${result.imported} leads`);
       await refreshCurrentView();
@@ -2793,6 +2827,7 @@ function bindEvents() {
 
   $("#sendInitialBtn")?.addEventListener("click", async () => {
     try {
+      if (!integrationConnected("whatsapp")) throw new Error("WhatsApp not connected for your company.");
       const result = await publicApi("/messages/send-initial", { method: "POST" });
       showNotice(`Sent ${result.sent} welcome messages. ${result.failed} failed.`);
       await refreshCurrentView();

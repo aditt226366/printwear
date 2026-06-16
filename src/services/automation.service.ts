@@ -17,6 +17,7 @@ import { logger } from "../utils/logger.js";
 import { normalizePhoneNumber } from "../utils/phone.js";
 import { humanActionService } from "./humanAction.service.js";
 import { apiUsageService } from "./apiUsage.service.js";
+import { companyIntegrationService } from "./companyIntegration.service.js";
 import { leadService } from "./lead.service.js";
 import { messageService } from "./message.service.js";
 import { whatsappService } from "./whatsapp.service.js";
@@ -610,6 +611,7 @@ export const automationService = {
 
   async createBulkSend(input: { name: string; templateName: string; templateLanguage?: string; audience: AudienceFilter }, companyId: string) {
     await assertAutomationSetup();
+    const whatsApp = await companyIntegrationService.whatsApp(companyId);
     const leads = await selectAudience(input.audience, companyId);
     if (!leads.length) throw new AppError("No contacts matched this bulk-send audience", 400);
 
@@ -617,8 +619,8 @@ export const automationService = {
       data: {
         name: input.name,
         companyId,
-        templateName: input.templateName,
-        templateLanguage: input.templateLanguage || env.WHATSAPP_TEMPLATE_LANGUAGE,
+        templateName: input.templateName || whatsApp.templateName || "",
+        templateLanguage: input.templateLanguage || whatsApp.templateLanguage,
         totalCount: leads.length,
         recipients: {
           create: leads.map((lead) => ({
@@ -758,6 +760,7 @@ export const automationService = {
     scheduleNow?: boolean;
   }, companyId: string) {
     await assertAutomationSetup();
+    const whatsApp = await companyIntegrationService.whatsApp(companyId);
     const leads = await selectAudience(input.audience, companyId);
     if (!leads.length) throw new AppError("No contacts matched this campaign audience", 400);
 
@@ -773,8 +776,8 @@ export const automationService = {
         companyId,
         type: CampaignType.WHATSAPP_TEMPLATE,
         audience: input.audience as Prisma.InputJsonObject,
-        templateName: input.templateName,
-        templateLanguage: input.templateLanguage || env.WHATSAPP_TEMPLATE_LANGUAGE,
+        templateName: input.templateName || whatsApp.templateName || "",
+        templateLanguage: input.templateLanguage || whatsApp.templateLanguage,
         messagePreview: input.messagePreview,
         scheduledAt: input.scheduledAt,
         status,
@@ -918,15 +921,30 @@ export const automationService = {
   async listAdDrafts(companyId?: string) {
     await assertAutomationSetup();
     const drafts = await prisma.adDraft.findMany({ where: companyId ? { companyId } : {}, orderBy: { createdAt: "desc" } });
+    const integration = await companyIntegrationService.userStatus(companyId);
     return {
-      metaConnected: Boolean(env.META_ADS_ACCESS_TOKEN && env.META_AD_ACCOUNT_ID),
+      metaConnected: Boolean(integration.connected.metaAds),
       drafts
     };
   },
 
   async metaAdsStatus(companyId?: string | null) {
-    const adAccountId = (env.META_AD_ACCOUNT_ID || "").trim();
-    const accessToken = (env.META_ADS_ACCESS_TOKEN || "").trim();
+    let credentials;
+    try {
+      credentials = await companyIntegrationService.metaAds(companyId);
+    } catch (error) {
+      return {
+        connected: false,
+        adAccountId: null,
+        accountName: null,
+        accountStatus: null,
+        currency: null,
+        timezone: null,
+        error: error instanceof Error ? error.message : "Meta Ads not connected for your company."
+      };
+    }
+    const adAccountId = credentials.adAccountId.trim();
+    const accessToken = credentials.accessToken.trim();
     const normalizedAccountId = adAccountId.startsWith("act_") ? adAccountId : adAccountId ? `act_${adAccountId}` : "";
 
     if (!normalizedAccountId || !accessToken) {
@@ -937,7 +955,7 @@ export const automationService = {
         accountStatus: null,
         currency: null,
         timezone: null,
-        error: "META_AD_ACCOUNT_ID and META_ADS_ACCESS_TOKEN are required to verify Meta Ads."
+        error: "Meta Ads not connected for your company."
       };
     }
 
@@ -1179,7 +1197,8 @@ export const automationService = {
       }
 
       if (current.type === "template") {
-        const templateName = stringConfig(current, "templateName", env.WHATSAPP_TEMPLATE_NAME || "");
+        const whatsApp = await companyIntegrationService.whatsApp(lead.companyId);
+        const templateName = stringConfig(current, "templateName", whatsApp.templateName || "");
         if (!templateName) throw new AppError("Workflow template block needs a template name", 400);
         await sendTemplateToLead({
           leadId,
@@ -1187,7 +1206,7 @@ export const automationService = {
           phone: lead.phone,
           customerName: lead.name,
           templateName,
-          templateLanguage: stringConfig(current, "templateLanguage", env.WHATSAPP_TEMPLATE_LANGUAGE),
+          templateLanguage: stringConfig(current, "templateLanguage", whatsApp.templateLanguage),
           source: `workflow:${workflow.id}`
         });
       }

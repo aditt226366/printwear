@@ -29,6 +29,11 @@ import {
   updateUser
 } from "../controllers/adminManagement.controller.js";
 import {
+  getCompanyIntegration,
+  getIntegrationStatus,
+  updateCompanyIntegration
+} from "../controllers/companyIntegration.controller.js";
+import {
   cancelCampaign,
   createAdDraft,
   createBulkSend,
@@ -72,8 +77,11 @@ apiRoutes.get("/admin/features", requireAdmin, getAdminFeatures);
 apiRoutes.patch("/admin/features/:key", requireAdmin, updateAdminFeature);
 apiRoutes.get("/admin/billing", requireAdmin, getBilling);
 apiRoutes.get("/admin/billing/export", requireAdmin, exportBillingCsv);
+apiRoutes.get("/admin/company-integrations", requireAdmin, getCompanyIntegration);
+apiRoutes.put("/admin/company-integrations", requireAdmin, updateCompanyIntegration);
 
 apiRoutes.get("/dashboard", getDashboard);
+apiRoutes.get("/integrations/status", getIntegrationStatus);
 apiRoutes.get("/debug/google-sheets-status", requireAdmin, getGoogleSheetsStatus);
 apiRoutes.get("/debug/webhook-status", requireFeature("settings"), getWebhookStatus);
 apiRoutes.get("/events", requireFeature("chats"), streamChatEvents);

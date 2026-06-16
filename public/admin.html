@@ -21,6 +21,7 @@
       <nav class="top-nav" aria-label="Admin sections">
         <button class="nav-item active" data-admin-view="users"><i data-lucide="users"></i>Users</button>
         <button class="nav-item" data-admin-view="features"><i data-lucide="sliders-horizontal"></i>Features</button>
+        <button class="nav-item" data-admin-view="integrations"><i data-lucide="plug-zap"></i>Integrations</button>
         <button class="nav-item" data-admin-view="billing"><i data-lucide="receipt-text"></i>Billing</button>
       </nav>
       <div class="topbar-right">
@@ -94,6 +95,42 @@
             <select id="featureCompanySelect" class="admin-select"></select>
           </div>
           <div id="adminFeatureList" class="feature-toggle-list"></div>
+        </section>
+      </section>
+
+      <section id="adminIntegrationsView" class="view">
+        <div class="page-heading-row premium-heading">
+          <div>
+            <p class="eyebrow">Integrations</p>
+            <h1>Company Integration Settings</h1>
+            <span>Configure each company's Google Sheets, WhatsApp, and Meta Ads credentials without exposing saved secrets.</span>
+          </div>
+        </div>
+        <section class="panel premium-card">
+          <div class="panel-heading">
+            <div><p class="eyebrow">Company</p><h2>Credential routing</h2></div>
+            <select id="integrationCompanySelect" class="admin-select"></select>
+          </div>
+          <form id="integrationForm" class="automation-form integration-form">
+            <fieldset>
+              <legend>Google Sheets</legend>
+              <div class="form-row"><label>Sheet ID<input id="integrationGoogleSheetsId" /></label><label>Service account email<input id="integrationGoogleServiceAccountEmail" /></label></div>
+              <label>Private key<textarea id="integrationGooglePrivateKey" rows="4" placeholder="Leave blank to keep saved key"></textarea><small id="integrationGooglePrivateKeyMasked">No key saved.</small></label>
+            </fieldset>
+            <fieldset>
+              <legend>WhatsApp</legend>
+              <div class="form-row"><label>Phone number ID<input id="integrationWhatsappPhoneNumberId" /></label><label>WABA ID<input id="integrationWhatsappBusinessAccountId" /></label></div>
+              <div class="form-row"><label>Default template<input id="integrationWhatsappTemplateName" /></label><label>Template language<input id="integrationWhatsappTemplateLanguage" placeholder="en" /></label></div>
+              <div class="form-row"><label>Verify token<input id="integrationWhatsappVerifyToken" placeholder="Leave blank to keep saved token" /></label><label>Access token<input id="integrationWhatsappAccessToken" type="password" placeholder="Leave blank to keep saved token" /></label></div>
+              <small id="integrationWhatsappAccessTokenMasked">No token saved.</small>
+            </fieldset>
+            <fieldset>
+              <legend>Meta Ads</legend>
+              <div class="form-row"><label>Ad account ID<input id="integrationMetaAdAccountId" /></label><label>Access token<input id="integrationMetaAdsAccessToken" type="password" placeholder="Leave blank to keep saved token" /></label></div>
+              <small id="integrationMetaAdsAccessTokenMasked">No token saved.</small>
+            </fieldset>
+            <button class="primary-button" type="submit"><i data-lucide="save"></i>Save integrations</button>
+          </form>
         </section>
       </section>
 
