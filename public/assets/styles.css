@@ -131,18 +131,41 @@ body.chat-mode .workspace {
   gap: 11px;
 }
 
+.avatar-initials,
+.brand-mark,
+.company-avatar,
+.profile-button span,
+.lead-avatar,
+.user-cell i {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  aspect-ratio: 1 / 1;
+  padding: 0;
+  text-align: center;
+  line-height: 1;
+  font-weight: 800;
+}
+
+.avatar-initials,
+.company-avatar {
+  --avatar-size: 40px;
+  width: var(--avatar-size);
+  height: var(--avatar-size);
+  font-size: calc(var(--avatar-size) * 0.34);
+}
+
 .brand-mark {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
+  --avatar-size: 40px;
+  width: var(--avatar-size);
+  height: var(--avatar-size);
   border: 1px solid color-mix(in srgb, var(--ink) 12%, var(--paper));
   border-radius: 8px;
   background: var(--ink);
   color: var(--signal);
   font-family: IBM Plex Mono, monospace;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: calc(var(--avatar-size) * 0.34);
 }
 
 .brand-block strong,
@@ -361,16 +384,14 @@ body.chat-mode .workspace {
 }
 
 .profile-button span {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
+  --avatar-size: 28px;
+  width: var(--avatar-size);
+  height: var(--avatar-size);
   border-radius: 50%;
   background: var(--whatsapp);
   color: var(--paper);
   font-family: IBM Plex Mono, monospace;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: calc(var(--avatar-size) * 0.39);
 }
 
 .profile-menu {
@@ -1138,22 +1159,18 @@ mark.green,
 }
 
 .lead-avatar {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
+  --avatar-size: 40px;
+  width: var(--avatar-size);
+  height: var(--avatar-size);
   border-radius: 50%;
   background: var(--ink);
   color: var(--signal);
   font-family: IBM Plex Mono, monospace;
-  font-size: 13px;
-  font-weight: 700;
+  font-size: calc(var(--avatar-size) * 0.34);
 }
 
 .lead-avatar.large {
-  width: 64px;
-  height: 64px;
-  font-size: 20px;
+  --avatar-size: 64px;
 }
 
 .tag,
@@ -2098,17 +2115,15 @@ input[type="file"] {
 }
 
 .user-cell i {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
+  --avatar-size: 32px;
+  width: var(--avatar-size);
+  height: var(--avatar-size);
   border-radius: 50%;
   background: var(--ink);
   color: var(--signal);
   font-style: normal;
   font-family: IBM Plex Mono, monospace;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: calc(var(--avatar-size) * 0.36);
 }
 
 .user-cell span,
