@@ -7,6 +7,7 @@ import pinoHttp from "pino-http";
 import { adminRoutes } from "./routes/admin.routes.js";
 import { apiRoutes } from "./routes/api.routes.js";
 import { webhookRoutes } from "./routes/webhook.routes.js";
+import { authService } from "./services/auth.service.js";
 import { errorHandler, notFoundHandler } from "./utils/errors.js";
 import { logger } from "./utils/logger.js";
 
@@ -49,8 +50,14 @@ export function createApp() {
   app.use(express.urlencoded({ extended: false }));
   app.use("/assets", express.static(path.join(publicDir, "assets")));
 
-  app.get("/", (_req, res) => {
-    res.redirect("/dashboard");
+  app.get("/", (req, res) => {
+    const session = authService.readSession(req);
+    if (!session) {
+      res.redirect("/login");
+      return;
+    }
+
+    res.redirect(session.role === "ADMIN" ? "/admin" : "/dashboard");
   });
 
   app.get("/health", (_req, res) => {

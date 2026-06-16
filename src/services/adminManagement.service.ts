@@ -161,6 +161,7 @@ export const adminManagementService = {
       metaAdsApiCalls: 0,
       claudeApiCalls: 0,
       googleSheetsApiCalls: 0,
+      internalApiCalls: 0,
       totalApiCalls: 0,
       estimatedCost: 0
     };
@@ -173,6 +174,7 @@ export const adminManagementService = {
       if (log.provider === ApiProvider.META_ADS) summary.metaAdsApiCalls += units;
       if (log.provider === ApiProvider.CLAUDE) summary.claudeApiCalls += units;
       if (log.provider === ApiProvider.GOOGLE_SHEETS) summary.googleSheetsApiCalls += units;
+      if (log.provider === ApiProvider.INTERNAL) summary.internalApiCalls += units;
     }
 
     return { summary, logs };

@@ -224,6 +224,7 @@ function renderBilling() {
     ["Meta Ads API calls", summary.metaAdsApiCalls || 0],
     ["Claude API calls", summary.claudeApiCalls || 0],
     ["Google Sheets API calls", summary.googleSheetsApiCalls || 0],
+    ["Internal API calls", summary.internalApiCalls || 0],
     ["Total API calls", summary.totalApiCalls || 0],
     ["Estimated cost", Number(summary.estimatedCost || 0).toFixed(4)]
   ].map(([label, value]) => `<span><strong>${escapeHtml(value)}</strong><small>${escapeHtml(label)}</small></span>`).join("");

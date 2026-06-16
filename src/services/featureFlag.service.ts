@@ -24,12 +24,12 @@ export type FeatureFlag = {
 
 export const DEFAULT_FEATURES: FeatureFlag[] = [
   { key: "dashboard", label: "Dashboard", description: "Command metrics, import leads, and welcome sends.", enabled: true },
-  { key: "chats", label: "Chats", description: "Live WhatsApp conversations and manual replies.", enabled: true },
-  { key: "contacts_broadcasts", label: "Contacts & Broadcasts", description: "Audience imports, contact management, and broadcasts.", enabled: true },
+  { key: "chats", label: "Inbox / Chats", description: "Live WhatsApp conversations and manual replies.", enabled: true },
+  { key: "contacts_broadcasts", label: "Audience / Contacts & Broadcasts", description: "Audience imports, contact management, and broadcasts.", enabled: true },
   { key: "campaigns", label: "Campaigns", description: "Scheduled WhatsApp outreach and campaign reporting.", enabled: true },
   { key: "ads", label: "Ads", description: "Click-to-WhatsApp ad drafts and Meta status checks.", enabled: true },
   { key: "ai_flows", label: "AI Flows", description: "Workflow builder, triggers, and automation logs.", enabled: true },
-  { key: "human_queue", label: "Human Queue", description: "Manual takeover queue and priority follow-ups.", enabled: true },
+  { key: "human_queue", label: "Takeover / Human Queue", description: "Manual takeover queue and priority follow-ups.", enabled: true },
   { key: "orders", label: "Orders", description: "Order summaries, dispatch status, and customer updates.", enabled: true },
   { key: "reports", label: "Reports", description: "Performance dashboards and CRM analytics.", enabled: true },
   { key: "settings", label: "Settings", description: "Account/session controls and workspace settings.", enabled: true }
@@ -44,7 +44,7 @@ function normalizeRows(rows: Array<{ id: string; featureKey: string; featureName
     return {
       id: row?.id,
       key: feature.key,
-      label: row?.featureName || feature.label,
+      label: feature.label,
       description: feature.description,
       enabled: row?.enabled ?? feature.enabled
     };
@@ -105,7 +105,7 @@ export const featureFlagService = {
     return {
       id: updated.id,
       key: updated.featureKey as FeatureKey,
-      label: updated.featureName,
+      label: defaults?.label || updated.featureName,
       description: defaults?.description || "",
       enabled: updated.enabled
     };

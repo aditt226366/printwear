@@ -82,10 +82,11 @@ export const authService = {
   },
 
   async ensureSeedUsers() {
+    const defaultCompanySlug = slugify(env.DEFAULT_COMPANY_SLUG || env.DEFAULT_COMPANY_NAME);
     const company = await prisma.company.upsert({
-      where: { slug: "printwear" },
-      update: { name: "Printwear", status: CompanyStatus.ACTIVE },
-      create: { name: "Printwear", slug: "printwear", status: CompanyStatus.ACTIVE }
+      where: { slug: defaultCompanySlug },
+      update: { name: env.DEFAULT_COMPANY_NAME, status: CompanyStatus.ACTIVE },
+      create: { name: env.DEFAULT_COMPANY_NAME, slug: defaultCompanySlug, status: CompanyStatus.ACTIVE }
     }).catch((error) => {
       logger.warn({ error }, "Company table unavailable; skipping auth seed");
       return null;

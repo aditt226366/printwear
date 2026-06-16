@@ -23,6 +23,8 @@ const envSchema = z.object({
   USER_NAME: z.string().min(1).optional(),
   USER_EMAIL: z.string().email().optional(),
   USER_PASSWORD: z.string().min(8).optional(),
+  DEFAULT_COMPANY_NAME: z.string().min(1).default("Demo Company"),
+  DEFAULT_COMPANY_SLUG: z.string().min(1).default("demo-company"),
   SESSION_SECRET: z.string().min(32).optional(),
 
   WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),

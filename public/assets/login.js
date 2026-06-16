@@ -5,7 +5,7 @@ form.addEventListener("submit", async (event) => {
   event.preventDefault();
   error.textContent = "";
 
-  const response = await fetch("/auth/login", {
+  const response = await fetch("/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

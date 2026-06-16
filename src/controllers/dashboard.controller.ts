@@ -5,6 +5,11 @@ import { asyncHandler } from "../utils/errors.js";
 const publicDir = path.resolve(process.cwd(), "public");
 
 export const showDashboard = asyncHandler(async (_req: Request, res: Response) => {
+  if (res.locals.session?.role === "ADMIN") {
+    res.redirect("/admin");
+    return;
+  }
+
   res.sendFile(path.join(publicDir, "dashboard.html"));
 });
 

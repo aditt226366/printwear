@@ -637,7 +637,7 @@ function refreshIcons() {
   }
 }
 
-function runMotion(selector = ".premium-card, .metric-tile, .lead-card") {
+function runMotion(selector = ".premium-card, .lead-card") {
   const motionApi = window.Motion || window.motion;
   if (!motionApi?.animate) return;
 
@@ -743,7 +743,7 @@ function renderHumanSummaryCards() {
   if (!target) return;
   const stats = humanQueueStats();
   const cards = [
-    { key: "pending", label: "Pending Takeover", value: stats.pending, icon: "user-round-check", accent: "purple" },
+    { key: "pending", label: "Pending Takeover", value: stats.pending, icon: "user-round-check", accent: "ink" },
     { key: "wait", label: "Avg Wait Time", value: durationLabel(stats.averageWait), icon: "clock-3", accent: "amber" },
     { key: "high", label: "High Priority", value: stats.highPriority, icon: "flame", accent: "red" },
     { key: "progress", label: "In Progress", value: stats.inProgress, icon: "messages-square", accent: "blue" },
@@ -862,7 +862,7 @@ function renderLeadGrowthChart(stats = {}) {
     chart,
     `
     <svg viewBox="0 0 100 100" role="img" aria-label="Lead growth trend">
-      <defs><linearGradient id="leadGlow" x1="0" x2="1"><stop stop-color="#6d5dfc"/><stop offset="1" stop-color="#bb7cff"/></linearGradient></defs>
+      <defs><linearGradient id="leadGlow" x1="0" x2="1"><stop stop-color="var(--whatsapp)"/><stop offset="1" stop-color="var(--signal)"/></linearGradient></defs>
       <polyline points="${points}" fill="none" stroke="url(#leadGlow)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></polyline>
       ${values
         .map((value, index) => `<circle cx="${12 + index * 28}" cy="${86 - Math.round((value / max) * 62)}" r="3.5"></circle>`)
@@ -1038,7 +1038,7 @@ function renderOrderSummaryCards() {
   if (!target) return;
   const stats = orderDeskStats();
   const cards = [
-    { key: "total", label: "Total Orders", value: stats.total, icon: "package", accent: "purple" },
+    { key: "total", label: "Total Orders", value: stats.total, icon: "package", accent: "ink" },
     { key: "confirmed", label: "Confirmed", value: stats.confirmed, icon: "circle-check-big", accent: "green" },
     { key: "dispatch", label: "Dispatch Ready", value: stats.dispatchReady, icon: "truck", accent: "blue" },
     { key: "dispatched", label: "Dispatched", value: stats.dispatched, icon: "send", accent: "amber" },
@@ -1995,17 +1995,17 @@ function renderAds() {
 function renderAdPreview() {
   const target = $("#adPreview");
   if (!target) return;
-  const headline = $("#adHeadline")?.value || "Custom printwear for your team";
+  const headline = $("#adHeadline")?.value || "Talk to our team on WhatsApp";
   const body = $("#adBodyText")?.value || "Launch a WhatsApp enquiry from this ad.";
   const cta = $("#adCta")?.value || "Send WhatsApp";
-  const opening = $("#adTemplatePreview")?.value || "Hi, I am interested in custom uniforms.";
+  const opening = $("#adTemplatePreview")?.value || "Hi, I am interested in speaking with your team.";
   const platform = $("#adPlatform")?.value || "Facebook + Instagram";
   const budget = $("#adBudget")?.value || "Budget not set";
   const location = $("#adLocation")?.value || "Location not set";
   target.innerHTML = `
     <article class="ad-card-preview">
       <small class="ad-platform">${escapeHtml(platform)} - ${escapeHtml(location)} - ${escapeHtml(budget)}</small>
-      <span class="ad-media"><i data-lucide="shirt"></i></span>
+      <span class="ad-media"><i data-lucide="messages-square"></i></span>
       <strong>${escapeHtml(headline)}</strong>
       <p>${escapeHtml(body)}</p>
       <button type="button">${escapeHtml(cta)}</button>
@@ -2020,7 +2020,7 @@ function renderAdPreview() {
 
 const flowDefaults = {
   start: { label: "Start trigger", config: { trigger: "keyword" } },
-  text: { label: "Send message", config: { text: "Thanks for reaching out. How can we help with your printwear order?" } },
+  text: { label: "Send message", config: { text: "Thanks for reaching out. How can our team help?" } },
   template: { label: "Send template", config: { templateName: "", templateLanguage: "en_US" } },
   question: { label: "Ask question", config: { text: "What quantity do you need?" } },
   delay: { label: "Wait for reply", config: { seconds: 2 } },
@@ -2028,7 +2028,7 @@ const flowDefaults = {
   add_tag: { label: "Add tag", config: { tag: "workflow" } },
   set_status: { label: "Set lead status", config: { status: "WARM" } },
   human_takeover: { label: "Request human takeover", config: { reason: "Workflow requested human follow-up" } },
-  order_draft: { label: "Create order draft", config: { productType: "Custom uniforms", confidence: "draft" } },
+  order_draft: { label: "Create order draft", config: { productType: "Customer request", confidence: "draft" } },
   api_request: { label: "API request", config: { url: "", method: "POST" } },
   end: { label: "End flow", config: { outcome: "completed" } }
 };
@@ -2359,7 +2359,7 @@ function switchView(name) {
     const isPrimaryView = !isSegment && button.dataset.view === name;
     button.classList.toggle("active", isPrimaryView || isSelectedSegment);
   });
-  runMotion(name === "overview" ? ".premium-card, .metric-tile" : ".premium-card, .lead-card, .chat-list-row");
+  runMotion(name === "overview" ? ".operations-pulse, .command-rail .premium-card, .operations-strip .premium-card" : ".premium-card, .lead-card, .chat-list-row");
   if (name === "overview") loadOverview();
   if (name === "leads" || name === "chats") loadLeads().catch((error) => showNotice(error.message, true));
   if (name === "contacts") loadContacts().catch((error) => showNotice(error.message, true));

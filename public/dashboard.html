@@ -6,9 +6,8 @@
     <title>CRM Command Center</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&display=swap" rel="stylesheet" />
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/assets/styles.css?v=20260615-refined" />
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,650;9..144,800&family=IBM+Plex+Mono:wght@500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/assets/styles.css?v=20260616-command" />
   </head>
   <body class="app-shell">
     <header class="topbar">
@@ -21,15 +20,15 @@
       </div>
 
       <nav class="top-nav" aria-label="CRM sections">
-        <button class="nav-item active" data-view="overview"><i data-lucide="layout-dashboard"></i>Dashboard</button>
-        <button class="nav-item" data-view="chats"><i data-lucide="messages-square"></i>Chats</button>
-        <button class="nav-item" data-view="contacts"><i data-lucide="contact-round"></i>Contacts &amp; Broadcasts</button>
+        <button class="nav-item active" data-view="overview"><i data-lucide="radar"></i>Command</button>
+        <button class="nav-item" data-view="chats"><i data-lucide="inbox"></i>Inbox</button>
+        <button class="nav-item" data-view="contacts"><i data-lucide="contact-round"></i>Audience</button>
         <button class="nav-item" data-view="campaigns"><i data-lucide="calendar-clock"></i>Campaigns</button>
         <button class="nav-item" data-view="ads"><i data-lucide="megaphone"></i>Ads</button>
         <button class="nav-item" data-view="flows"><i data-lucide="workflow"></i>AI Flows</button>
-        <button class="nav-item" data-view="human"><i data-lucide="user-round-check"></i>Human Queue</button>
+        <button class="nav-item" data-view="human"><i data-lucide="user-round-check"></i>Takeover</button>
         <button class="nav-item" data-view="orders"><i data-lucide="package-check"></i>Orders</button>
-        <button class="nav-item" data-view="reports"><i data-lucide="chart-no-axes-combined"></i>Reports</button>
+        <button class="nav-item" data-view="reports"><i data-lucide="chart-no-axes-combined"></i>Intel</button>
         <button class="nav-item" data-view="settings"><i data-lucide="settings"></i>Settings</button>
       </nav>
 
@@ -64,63 +63,71 @@
         </div>
 
         <div id="overviewContent" class="dashboard-stack hidden">
-          <section class="dashboard-hero premium-card">
-            <div class="hero-copy">
-              <p class="eyebrow">Live CRM Intelligence</p>
-              <h1 id="dashboardHeroTitle">CRM Command Center</h1>
-              <span id="dashboardHeroSummary">Live WhatsApp sales, orders, and human takeover intelligence.</span>
-              <div class="hero-actions">
-                <button id="importLeadsBtn" class="secondary-button compact-action">
-                  <i data-lucide="file-spreadsheet"></i>
-                  Import Leads
-                </button>
-                <button id="sendInitialBtn" class="primary-button compact-action">
-                  <i data-lucide="send"></i>
-                  Send Welcomes
-                </button>
+          <section class="command-layout">
+            <article class="operations-pulse premium-card">
+              <div class="pulse-heading">
+                <div>
+                  <p class="eyebrow">Operations Pulse</p>
+                  <h1 id="dashboardHeroTitle">CRM Command Center</h1>
+                  <span id="dashboardHeroSummary">Live WhatsApp sales, orders, and human takeover intelligence.</span>
+                </div>
+                <div class="pulse-actions">
+                  <button id="importLeadsBtn" class="secondary-button compact-action" type="button">
+                    <i data-lucide="file-spreadsheet"></i>
+                    Import
+                  </button>
+                  <button id="sendInitialBtn" class="primary-button compact-action" type="button">
+                    <i data-lucide="send"></i>
+                    Send welcomes
+                  </button>
+                </div>
               </div>
-            </div>
+
+              <div class="pulse-heatline" aria-label="Current operational pressure">
+                <span class="pulse-node hot"><b id="hotLeads">0</b><small>Hot</small><em id="hotLeadTrend">6+ messages</em></span>
+                <span class="pulse-node warm"><b id="warmLeads">0</b><small>Warm</small><em id="warmLeadTrend">2-5 messages</em></span>
+                <span class="pulse-node cool"><b id="scrapLeads">0</b><small>Low intent</small><em id="scrapLeadTrend">&lt;2 messages</em></span>
+                <span class="pulse-node human"><b id="humanQueueCount">0</b><small>Human</small><em id="humanTakeoverTrend">Manual queue</em></span>
+                <span class="pulse-node orders"><b id="ordersDone">0</b><small>Orders</small><em id="ordersDoneTrend">Confirmed onward</em></span>
+              </div>
+
+              <div class="pulse-readout">
+                <p id="hotLeadInsight">Leads with enough conversation depth for same-day closing.</p>
+                <p id="warmLeadInsight">Customers showing intent and needing nurture.</p>
+                <p id="scrapLeadInsight">Low-engagement records kept out of the closing queue.</p>
+                <p id="humanQueueInsight">Chats currently marked for manual attention.</p>
+                <p id="ordersDoneInsight">Confirmed, dispatched, delivered, or completed orders.</p>
+              </div>
+            </article>
+
+            <aside class="command-rail">
+              <article class="panel premium-card decision-panel">
+                <div class="panel-heading">
+                  <div>
+                    <p class="eyebrow">Priority Inbox</p>
+                    <h2>Needs a human.</h2>
+                  </div>
+                </div>
+                <div id="humanActionQueueList" class="intel-list"></div>
+              </article>
+              <article class="panel premium-card signal-panel">
+                <div class="panel-heading">
+                  <div>
+                    <p class="eyebrow">Recent Movement</p>
+                    <h2>Conversations changing.</h2>
+                  </div>
+                </div>
+                <div id="recentConversationList" class="intel-list"></div>
+              </article>
+            </aside>
           </section>
 
-          <section class="kpi-grid hero-kpis" aria-label="CRM KPIs">
-            <article class="metric-tile accent-hot">
-              <div class="metric-top"><i data-lucide="flame"></i><span id="hotLeadTrend">6+ messages</span></div>
-              <strong id="hotLeads">0</strong>
-              <h3>Hot Leads</h3>
-              <p id="hotLeadInsight">Leads with enough conversation depth for same-day closing.</p>
-            </article>
-            <article class="metric-tile accent-warm">
-              <div class="metric-top"><i data-lucide="thermometer-sun"></i><span id="warmLeadTrend">2-5 messages</span></div>
-              <strong id="warmLeads">0</strong>
-              <h3>Warm Leads</h3>
-              <p id="warmLeadInsight">Customers showing intent and needing nurture.</p>
-            </article>
-            <article class="metric-tile accent-scrap">
-              <div class="metric-top"><i data-lucide="archive-x"></i><span id="scrapLeadTrend">&lt;2 messages</span></div>
-              <strong id="scrapLeads">0</strong>
-              <h3>Scrap Leads</h3>
-              <p id="scrapLeadInsight">Low-engagement records kept out of the closing queue.</p>
-            </article>
-            <article class="metric-tile accent-blue">
-              <div class="metric-top"><i data-lucide="user-round-check"></i><span id="humanTakeoverTrend">Manual queue</span></div>
-              <strong id="humanQueueCount">0</strong>
-              <h3>Human Takeover</h3>
-              <p id="humanQueueInsight">Chats currently marked for manual attention.</p>
-            </article>
-            <article class="metric-tile accent-green">
-              <div class="metric-top"><i data-lucide="package-check"></i><span id="ordersDoneTrend">Confirmed onward</span></div>
-              <strong id="ordersDone">0</strong>
-              <h3>Orders Done</h3>
-              <p id="ordersDoneInsight">Confirmed, dispatched, delivered, or completed orders.</p>
-            </article>
-          </section>
-
-          <section class="analytics-grid">
-            <article class="panel premium-card chart-card">
+          <section class="operations-strip">
+            <article class="panel premium-card chart-card wide-chart">
               <div class="panel-heading">
                 <div>
-                  <p class="eyebrow">Lead Growth Trend</p>
-                  <h2>Momentum by lead temperature.</h2>
+                  <p class="eyebrow">Audience Momentum</p>
+                  <h2>Lead quality is shifting.</h2>
                 </div>
               </div>
               <div id="leadGrowthChart" class="line-chart"></div>
@@ -129,8 +136,8 @@
             <article class="panel premium-card chart-card">
               <div class="panel-heading">
                 <div>
-                  <p class="eyebrow">Hot/Warm/Scrap Distribution</p>
-                  <h2>Lead quality from message counts.</h2>
+                  <p class="eyebrow">Audience Mix</p>
+                  <h2>Quality distribution.</h2>
                 </div>
               </div>
               <div id="temperatureDistribution" class="distribution-chart"></div>
@@ -139,30 +146,20 @@
             <article class="panel premium-card chart-card">
               <div class="panel-heading">
                 <div>
-                  <p class="eyebrow">Response Performance</p>
-                  <h2>Reply coverage and handoff pressure.</h2>
+                  <p class="eyebrow">Response Load</p>
+                  <h2>Reply coverage.</h2>
                 </div>
               </div>
               <div id="responsePerformance" class="performance-chart"></div>
             </article>
           </section>
 
-          <section class="overview-lists-grid">
+          <section class="operations-context">
             <article class="panel premium-card">
               <div class="panel-heading">
                 <div>
-                  <p class="eyebrow">Human Queue</p>
-                  <h2>Priority conversations.</h2>
-                </div>
-              </div>
-              <div id="humanActionQueueList" class="intel-list"></div>
-            </article>
-
-            <article class="panel premium-card">
-              <div class="panel-heading">
-                <div>
-                  <p class="eyebrow">Workspace Insights</p>
-                  <h2>Today&apos;s operating summary.</h2>
+                  <p class="eyebrow">Workspace Intelligence</p>
+                  <h2>Operating summary.</h2>
                 </div>
               </div>
               <div id="workspaceInsightsList" class="workspace-insights-list"></div>
@@ -517,7 +514,7 @@
               </div>
             </div>
             <form id="adDraftForm" class="automation-form">
-              <label>Ad name<input id="adName" placeholder="Dubai uniforms lead ad" /></label>
+              <label>Ad name<input id="adName" placeholder="Dubai service lead ad" /></label>
               <div class="form-row">
                 <label>Objective<input id="adObjective" placeholder="WhatsApp enquiries" /></label>
                 <label>Audience / segment<input id="adAudience" placeholder="VIP contacts, UAE small businesses" /></label>
@@ -534,11 +531,11 @@
                 <label>Location<input id="adLocation" placeholder="Dubai, UAE" /></label>
                 <label>WhatsApp number<input id="adDestination" placeholder="+971..." /></label>
               </div>
-              <label>Headline<input id="adHeadline" placeholder="Custom uniforms for your team" /></label>
+              <label>Headline<input id="adHeadline" placeholder="Talk to our team on WhatsApp" /></label>
               <textarea id="adBodyText" rows="3" placeholder="Primary text"></textarea>
               <div class="form-row">
                 <label>CTA<input id="adCta" placeholder="Send WhatsApp" /></label>
-                <label>Template preview<input id="adTemplateName" placeholder="printwear_business_intro" /></label>
+                <label>Template preview<input id="adTemplateName" placeholder="business_intro_template" /></label>
               </div>
               <textarea id="adTemplatePreview" rows="3" placeholder="WhatsApp opening message"></textarea>
               <button class="primary-button" type="submit"><i data-lucide="save"></i>Save ad draft</button>
@@ -715,7 +712,7 @@
             <span>Track WhatsApp response quality, lead mix, and operational momentum.</span>
           </div>
         </div>
-        <section class="analytics-grid">
+        <section class="reports-grid">
           <article class="panel premium-card chart-card"><div id="reportsLeadMix" class="distribution-chart"></div></article>
           <article class="panel premium-card chart-card"><div id="reportsResponse" class="performance-chart"></div></article>
         </section>
@@ -750,6 +747,6 @@
       </section>
     </main>
 
-    <script src="/assets/dashboard.js?v=20260615-refined"></script>
+    <script src="/assets/dashboard.js?v=20260616-command"></script>
   </body>
 </html>
