@@ -357,7 +357,7 @@ function renderIntegration() {
   $("#integrationGoogleSheetsId").value = integration.googleSheetsId || "";
   $("#integrationGoogleServiceAccountEmail").value = integration.googleServiceAccountEmail || "";
   $("#integrationGooglePrivateKey").value = "";
-  $("#integrationGooglePrivateKeyMasked").textContent = integration.googlePrivateKeyMasked ? `Saved: ${integration.googlePrivateKeyMasked}` : "No key saved.";
+  $("#integrationGooglePrivateKeyMasked").textContent = integration.googlePrivateKeyMasked || "No key saved.";
   $("#integrationWhatsappPhoneNumberId").value = integration.whatsappPhoneNumberId || "";
   $("#integrationWhatsappBusinessAccountId").value = integration.whatsappBusinessAccountId || "";
   $("#integrationWhatsappTemplateName").value = integration.whatsappDefaultTemplateName || "";
@@ -409,7 +409,15 @@ async function testIntegration(provider, button) {
     button.textContent = `Testing ${labels[provider]}...`;
   }
   try {
-    const data = await api(paths[provider], { method: "POST" });
+    const requestOptions = { method: "POST" };
+    if (provider === "googleSheets") {
+      requestOptions.body = JSON.stringify({
+        googleSheetsId: $("#integrationGoogleSheetsId").value,
+        googleServiceAccountEmail: $("#integrationGoogleServiceAccountEmail").value,
+        googlePrivateKey: $("#integrationGooglePrivateKey").value
+      });
+    }
+    const data = await api(paths[provider], requestOptions);
     adminState.integrationTests[provider] = data.test || {};
     renderIntegrationTests();
     const passed = Boolean(data.test?.connected || data.test?.readable);

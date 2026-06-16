@@ -26,6 +26,12 @@ const providerMap = {
   "meta-ads": "metaAds"
 } as const;
 
+const googleSheetsTestSchema = z.object({
+  googleSheetsId: z.string().trim().optional().nullable(),
+  googleServiceAccountEmail: z.string().trim().optional().nullable(),
+  googlePrivateKey: z.string().optional().nullable()
+});
+
 export const getCompanyIntegration = asyncHandler(async (req: Request, res: Response) => {
   const companyId = String(req.query.companyId || "").trim();
   res.json({ integration: await companyIntegrationService.listAdmin(companyId) });
@@ -54,7 +60,8 @@ export const testWhatsAppIntegration = asyncHandler(async (req: Request, res: Re
 });
 
 export const testGoogleSheetsIntegration = asyncHandler(async (req: Request, res: Response) => {
-  res.json({ test: await googleSheetsService.status(req.params.companyId) });
+  const body = googleSheetsTestSchema.parse(req.body ?? {});
+  res.json({ test: await googleSheetsService.status(req.params.companyId, body) });
 });
 
 export const testMetaAdsIntegration = asyncHandler(async (req: Request, res: Response) => {

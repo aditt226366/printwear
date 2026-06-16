@@ -20,6 +20,8 @@ type IntegrationInput = {
   metaAdsAccessToken?: string | null;
 };
 
+export type GoogleSheetsIntegrationInput = Pick<IntegrationInput, "googleSheetsId" | "googleServiceAccountEmail" | "googlePrivateKey">;
+
 export type GoogleSheetsCredentials = {
   spreadsheetId: string;
   serviceAccountEmail: string;
@@ -123,10 +125,10 @@ function shouldUseEnvFallback(companyId?: string | null) {
   return !companyId || localIntegrationFallbackEnabled();
 }
 
-function missingGoogleSheetsConfig(row: CompanyIntegration | null) {
-  if (!row?.googleSheetsId) return "Sheet ID missing.";
-  if (!row.googleServiceAccountEmail) return "Service account email missing.";
-  if (!row.googlePrivateKeyEncrypted) return "Private key missing.";
+function missingGoogleSheetsConfig(spreadsheetId?: string | null, serviceAccountEmail?: string | null, privateKey?: string | null) {
+  if (!spreadsheetId) return "Sheet ID missing.";
+  if (!serviceAccountEmail) return "Service account email missing.";
+  if (!privateKey) return "Private key missing.";
   return null;
 }
 
@@ -235,14 +237,31 @@ export const companyIntegrationService = {
     return publicIntegration(await rowForCompany(companyId));
   },
 
-  async googleSheets(companyId?: string | null) {
+  async googleSheetsSecretState(companyId?: string | null, input?: GoogleSheetsIntegrationInput) {
     const row = await rowForCompany(companyId);
-    const missingConfig = missingGoogleSheetsConfig(row);
+    return {
+      privateKeyProvidedInRequest: Boolean(clean(input?.googlePrivateKey)),
+      savedPrivateKeyExists: Boolean(row?.googlePrivateKeyEncrypted)
+    };
+  },
+
+  async googleSheets(companyId?: string | null, input?: GoogleSheetsIntegrationInput) {
+    const row = await rowForCompany(companyId);
+    const requestPrivateKey = clean(input?.googlePrivateKey);
+    const spreadsheetId = clean(input?.googleSheetsId) ?? row?.googleSheetsId ?? null;
+    const serviceAccountEmail = clean(input?.googleServiceAccountEmail) ?? row?.googleServiceAccountEmail ?? null;
+    const savedPrivateKeyExists = Boolean(row?.googlePrivateKeyEncrypted);
+    const missingConfig = missingGoogleSheetsConfig(
+      spreadsheetId,
+      serviceAccountEmail,
+      requestPrivateKey ?? (savedPrivateKeyExists ? "saved-secret" : null)
+    );
     if (!missingConfig) {
+      const privateKey = requestPrivateKey ?? decryptSecret(row?.googlePrivateKeyEncrypted) ?? "";
       return {
-        spreadsheetId: row!.googleSheetsId!,
-        serviceAccountEmail: row!.googleServiceAccountEmail!,
-        privateKey: decryptSecret(row!.googlePrivateKeyEncrypted) ?? ""
+        spreadsheetId: spreadsheetId!,
+        serviceAccountEmail: serviceAccountEmail!,
+        privateKey
       };
     }
     if (shouldUseEnvFallback(companyId)) {

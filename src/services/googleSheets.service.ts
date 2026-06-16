@@ -4,7 +4,7 @@ import { AppError } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
 import { normalizePhoneNumber } from "../utils/phone.js";
 import { apiUsageService } from "./apiUsage.service.js";
-import { companyIntegrationService, type GoogleSheetsCredentials } from "./companyIntegration.service.js";
+import { companyIntegrationService, type GoogleSheetsCredentials, type GoogleSheetsIntegrationInput } from "./companyIntegration.service.js";
 
 export type SheetLead = {
   name: string;
@@ -20,6 +20,8 @@ export type GoogleSheetsStatus = {
   rowCount: number;
   headers: string[];
   error: string | null;
+  privateKeyProvidedInRequest: boolean;
+  savedPrivateKeyExists: boolean;
 };
 
 function normalizeHeader(value: unknown) {
@@ -34,8 +36,8 @@ function normalizePrivateKey(value: string) {
   return value.trim().replace(/^"|"$/g, "").replace(/\\n/g, "\n");
 }
 
-export async function validateGoogleSheetsConfig(companyId?: string | null) {
-  const config = await companyIntegrationService.googleSheets(companyId);
+export async function validateGoogleSheetsConfig(companyId?: string | null, input?: GoogleSheetsIntegrationInput) {
+  const config = await companyIntegrationService.googleSheets(companyId, input);
   if (!config.spreadsheetId?.trim()) throw new AppError("Sheet ID missing.", 400);
   if (!config.serviceAccountEmail?.trim()) throw new AppError("Service account email missing.", 400);
   if (!config.privateKey?.trim()) throw new AppError("Private key missing.", 400);
@@ -51,8 +53,8 @@ export async function validateGoogleSheetsConfig(companyId?: string | null) {
   };
 }
 
-async function getAuthClient(companyId?: string | null) {
-  const config = await validateGoogleSheetsConfig(companyId);
+async function getAuthClient(companyId?: string | null, input?: GoogleSheetsIntegrationInput) {
+  const config = await validateGoogleSheetsConfig(companyId, input);
   logger.info({ serviceAccountEmail: config.serviceAccountEmail }, "Creating Google Sheets auth client");
 
   return {
@@ -115,11 +117,12 @@ function googleSheetsErrorMessage(error: unknown, serviceAccountEmail?: string |
 }
 
 export const googleSheetsService = {
-  async status(companyId?: string | null): Promise<GoogleSheetsStatus> {
+  async status(companyId?: string | null, input?: GoogleSheetsIntegrationInput): Promise<GoogleSheetsStatus> {
     let config: GoogleSheetsCredentials | null = null;
+    const secretState = await companyIntegrationService.googleSheetsSecretState(companyId, input);
 
     try {
-      const authClient = await getAuthClient(companyId);
+      const authClient = await getAuthClient(companyId, input);
       config = authClient.config;
       const sheets = google.sheets({ version: "v4", auth: authClient.auth });
       const spreadsheetId = config.spreadsheetId;
@@ -146,7 +149,8 @@ export const googleSheetsService = {
         readable: true,
         rowCount: rows.length,
         headers: (rows[0] ?? []).map((header) => String(header)),
-        error: null
+        error: null,
+        ...secretState
       };
     } catch (error) {
       const sheetsError = error as { code?: number; status?: number };
@@ -167,7 +171,8 @@ export const googleSheetsService = {
         readable: false,
         rowCount: 0,
         headers: [],
-        error: googleSheetsErrorMessage(error, config?.serviceAccountEmail ?? null)
+        error: googleSheetsErrorMessage(error, config?.serviceAccountEmail ?? null),
+        ...secretState
       };
     }
   },
