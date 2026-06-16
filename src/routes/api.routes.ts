@@ -29,6 +29,7 @@ import {
   updateUser
 } from "../controllers/adminManagement.controller.js";
 import {
+  clearCompanyIntegrationProvider,
   getCompanyIntegration,
   getIntegrationStatus,
   testGoogleSheetsIntegration,
@@ -58,7 +59,7 @@ import {
 } from "../controllers/automation.controller.js";
 import { requireAdmin, requireSession } from "../middleware/auth.middleware.js";
 import { requireFeature } from "../middleware/feature.middleware.js";
-import { getDatabaseSchema, getSystemStatus } from "../controllers/systemStatus.controller.js";
+import { getDatabaseSchema, getIntegrationConfig, getSystemStatus } from "../controllers/systemStatus.controller.js";
 import { getGoogleSheetsStatus } from "../controllers/googleSheets.controller.js";
 
 export const apiRoutes = Router();
@@ -82,6 +83,7 @@ apiRoutes.get("/admin/billing", requireAdmin, getBilling);
 apiRoutes.get("/admin/billing/export", requireAdmin, exportBillingCsv);
 apiRoutes.get("/admin/company-integrations", requireAdmin, getCompanyIntegration);
 apiRoutes.put("/admin/company-integrations", requireAdmin, updateCompanyIntegration);
+apiRoutes.delete("/admin/company-integrations/:companyId/:provider", requireAdmin, clearCompanyIntegrationProvider);
 apiRoutes.post("/admin/company-integrations/:companyId/test/whatsapp", requireAdmin, testWhatsAppIntegration);
 apiRoutes.post("/admin/company-integrations/:companyId/test/google-sheets", requireAdmin, testGoogleSheetsIntegration);
 apiRoutes.post("/admin/company-integrations/:companyId/test/meta-ads", requireAdmin, testMetaAdsIntegration);
@@ -89,6 +91,7 @@ apiRoutes.post("/admin/company-integrations/:companyId/test/meta-ads", requireAd
 apiRoutes.get("/dashboard", getDashboard);
 apiRoutes.get("/integrations/status", getIntegrationStatus);
 apiRoutes.get("/debug/database-schema", requireAdmin, getDatabaseSchema);
+apiRoutes.get("/debug/integration-config", requireAdmin, getIntegrationConfig);
 apiRoutes.get("/debug/google-sheets-status", requireAdmin, getGoogleSheetsStatus);
 apiRoutes.get("/debug/webhook-status", requireFeature("settings"), getWebhookStatus);
 apiRoutes.get("/events", requireFeature("chats"), streamChatEvents);

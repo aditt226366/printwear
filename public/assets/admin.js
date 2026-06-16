@@ -412,11 +412,45 @@ async function testIntegration(provider, button) {
     const data = await api(paths[provider], { method: "POST" });
     adminState.integrationTests[provider] = data.test || {};
     renderIntegrationTests();
-    showNotice(`${labels[provider]} test ${data.test?.connected || data.test?.readable ? "passed" : "failed"}.`, !(data.test?.connected || data.test?.readable));
+    const passed = Boolean(data.test?.connected || data.test?.readable);
+    showNotice(passed ? `${labels[provider]} test passed.` : `${labels[provider]} test failed: ${data.test?.error || "Check the saved integration settings."}`, !passed);
   } finally {
     if (button) {
       button.disabled = false;
       button.textContent = previousText || `Test ${labels[provider]}`;
+      refreshIcons();
+    }
+  }
+}
+
+async function clearIntegrationProvider(provider, button) {
+  const companyId = $("#integrationCompanySelect")?.value;
+  if (!companyId) throw new Error("Select a company before clearing integrations.");
+  const labels = {
+    whatsapp: "WhatsApp",
+    googleSheets: "Google Sheets",
+    metaAds: "Meta Ads"
+  };
+  const paths = {
+    whatsapp: `/admin/company-integrations/${encodeURIComponent(companyId)}/whatsapp`,
+    googleSheets: `/admin/company-integrations/${encodeURIComponent(companyId)}/google-sheets`,
+    metaAds: `/admin/company-integrations/${encodeURIComponent(companyId)}/meta-ads`
+  };
+  const previousText = button?.textContent;
+  if (button) {
+    button.disabled = true;
+    button.textContent = `Clearing ${labels[provider]}...`;
+  }
+  try {
+    const data = await api(paths[provider], { method: "DELETE" });
+    adminState.integration = data.integration || null;
+    adminState.integrationTests = {};
+    renderIntegration();
+    showNotice(`${labels[provider]} integration cleared.`);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = previousText || `Clear ${labels[provider]}`;
       refreshIcons();
     }
   }
@@ -648,6 +682,15 @@ function bindEvents() {
   });
   $("#testMetaAdsIntegrationBtn")?.addEventListener("click", (event) => {
     testIntegration("metaAds", event.currentTarget).catch((error) => showNotice(error.message, true));
+  });
+  $("#clearGoogleSheetsIntegrationBtn")?.addEventListener("click", (event) => {
+    clearIntegrationProvider("googleSheets", event.currentTarget).catch((error) => showNotice(error.message, true));
+  });
+  $("#clearWhatsappIntegrationBtn")?.addEventListener("click", (event) => {
+    clearIntegrationProvider("whatsapp", event.currentTarget).catch((error) => showNotice(error.message, true));
+  });
+  $("#clearMetaAdsIntegrationBtn")?.addEventListener("click", (event) => {
+    clearIntegrationProvider("metaAds", event.currentTarget).catch((error) => showNotice(error.message, true));
   });
   $("#adminFeatureList")?.addEventListener("click", async (event) => {
     const button = event.target.closest("[data-feature-toggle]");

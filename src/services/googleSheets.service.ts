@@ -36,13 +36,12 @@ function normalizePrivateKey(value: string) {
 
 export async function validateGoogleSheetsConfig(companyId?: string | null) {
   const config = await companyIntegrationService.googleSheets(companyId);
+  if (!config.spreadsheetId?.trim()) throw new AppError("Sheet ID missing.", 400);
+  if (!config.serviceAccountEmail?.trim()) throw new AppError("Service account email missing.", 400);
+  if (!config.privateKey?.trim()) throw new AppError("Private key missing.", 400);
   const key = normalizePrivateKey(config.privateKey);
   if (!key.includes("-----BEGIN PRIVATE KEY-----") || !key.includes("-----END PRIVATE KEY-----")) {
-    throw new AppError(
-      "Google Sheets access failed",
-      400,
-      "Missing GOOGLE_PRIVATE_KEY or invalid private key format"
-    );
+    throw new AppError("Invalid private key format.", 400);
   }
 
   return {
@@ -80,8 +79,23 @@ function columnIndexToLetter(index: number) {
 }
 
 function googleSheetsErrorMessage(error: unknown, serviceAccountEmail?: string | null) {
-  const sheetsError = error as { code?: number; status?: number; message?: string };
+  if (error instanceof AppError) return error.message;
+
+  const sheetsError = error as {
+    code?: number;
+    status?: number;
+    message?: string;
+    errors?: Array<{ reason?: string; message?: string }>;
+    response?: { data?: { error?: { message?: string; errors?: Array<{ reason?: string; message?: string }> } } };
+  };
   const status = sheetsError.code ?? sheetsError.status;
+  const errors = sheetsError.errors || sheetsError.response?.data?.error?.errors || [];
+  const reason = errors.map((item) => item.reason).filter(Boolean).join(" ");
+  const providerMessage = sheetsError.response?.data?.error?.message || sheetsError.message || "";
+
+  if (/accessNotConfigured|serviceDisabled|SERVICE_DISABLED|API has not been used|disabled/i.test(`${reason} ${providerMessage}`)) {
+    return "Google Sheets API disabled. Enable the Google Sheets API for this project.";
+  }
 
   if (status === 403) {
     const email = serviceAccountEmail || env.GOOGLE_SERVICE_ACCOUNT_EMAIL || "GOOGLE_SERVICE_ACCOUNT_EMAIL";
@@ -89,10 +103,15 @@ function googleSheetsErrorMessage(error: unknown, serviceAccountEmail?: string |
   }
 
   if (status === 404) {
-    return "Google Sheet not found. Check GOOGLE_SHEETS_ID and GOOGLE_SHEETS_RANGE in .env.";
+    return "Google Sheet not found. Check the sheet ID and sharing settings.";
   }
 
-  return error instanceof Error ? error.message : "Google Sheets access failed.";
+  if (/private key|PEM|DECODER|unsupported|invalid key/i.test(providerMessage)) {
+    return "Invalid private key format.";
+  }
+
+  const safeMessage = providerMessage.replace(/-----BEGIN[\s\S]*?-----END [^-]+-----/g, "[redacted key]").slice(0, 220).trim();
+  return safeMessage ? `Google Sheets test failed: ${safeMessage}` : "Google Sheets test failed: Unknown error.";
 }
 
 export const googleSheetsService = {
@@ -198,11 +217,11 @@ export const googleSheetsService = {
       }
 
       if (status === 404) {
-        throw new AppError("Google Sheet not found. Check GOOGLE_SHEETS_ID and GOOGLE_SHEETS_RANGE in .env.", 400);
+        throw new AppError("Google Sheet not found. Check the sheet ID and sharing settings.", 400);
       }
 
       throw new AppError(
-        "Google Sheets access failed",
+        googleSheetsErrorMessage(error, authClient.config.serviceAccountEmail),
         500,
         error instanceof Error ? error.message : "Unknown Google Sheets error"
       );

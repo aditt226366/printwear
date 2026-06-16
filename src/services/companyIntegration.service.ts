@@ -3,6 +3,7 @@ import type { CompanyIntegration } from "@prisma/client";
 import { env } from "../config/env.js";
 import { prisma } from "../config/prisma.js";
 import { AppError } from "../utils/errors.js";
+import { localIntegrationFallbackEnabled } from "../utils/integrationConfig.js";
 import { apiUsageService } from "./apiUsage.service.js";
 
 type IntegrationInput = {
@@ -45,7 +46,7 @@ function clean(value?: string | null) {
 }
 
 function encryptionKey() {
-  const key = clean(env.INTEGRATION_ENCRYPTION_KEY);
+  const key = clean(process.env.INTEGRATION_ENCRYPTION_KEY);
   if (!key) throw new AppError("INTEGRATION_ENCRYPTION_KEY is required before saving integration secrets.", 500);
   return crypto.createHash("sha256").update(key).digest();
 }
@@ -60,18 +61,26 @@ function encryptSecret(value?: string | null) {
   return `v1:${iv.toString("base64")}:${tag.toString("base64")}:${ciphertext.toString("base64")}`;
 }
 
+function integrationDecryptError() {
+  return new AppError("Saved integration secret cannot be decrypted. Please re-enter and save the credentials.", 400);
+}
+
 function decryptSecret(value?: string | null) {
   if (!value) return null;
   const [version, ivValue, tagValue, ciphertextValue] = value.split(":");
   if (version !== "v1" || !ivValue || !tagValue || !ciphertextValue) {
-    throw new AppError("Stored integration secret format is invalid.", 500);
+    throw integrationDecryptError();
   }
-  const decipher = crypto.createDecipheriv("aes-256-gcm", encryptionKey(), Buffer.from(ivValue, "base64"));
-  decipher.setAuthTag(Buffer.from(tagValue, "base64"));
-  return Buffer.concat([
-    decipher.update(Buffer.from(ciphertextValue, "base64")),
-    decipher.final()
-  ]).toString("utf8");
+  try {
+    const decipher = crypto.createDecipheriv("aes-256-gcm", encryptionKey(), Buffer.from(ivValue, "base64"));
+    decipher.setAuthTag(Buffer.from(tagValue, "base64"));
+    return Buffer.concat([
+      decipher.update(Buffer.from(ciphertextValue, "base64")),
+      decipher.final()
+    ]).toString("utf8");
+  } catch {
+    throw integrationDecryptError();
+  }
 }
 
 function maskEncryptedSecret(value?: string | null) {
@@ -108,6 +117,29 @@ function envGoogleFallback(): GoogleSheetsCredentials | null {
     serviceAccountEmail: env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
     privateKey: env.GOOGLE_PRIVATE_KEY
   };
+}
+
+function shouldUseEnvFallback(companyId?: string | null) {
+  return !companyId || localIntegrationFallbackEnabled();
+}
+
+function missingGoogleSheetsConfig(row: CompanyIntegration | null) {
+  if (!row?.googleSheetsId) return "Sheet ID missing.";
+  if (!row.googleServiceAccountEmail) return "Service account email missing.";
+  if (!row.googlePrivateKeyEncrypted) return "Private key missing.";
+  return null;
+}
+
+function missingWhatsAppConfig(row: CompanyIntegration | null) {
+  if (!row?.whatsappPhoneNumberId) return "WhatsApp phone number ID missing.";
+  if (!row.whatsappAccessTokenEncrypted) return "WhatsApp access token missing.";
+  return null;
+}
+
+function missingMetaAdsConfig(row: CompanyIntegration | null) {
+  if (!row?.metaAdAccountId) return "Meta Ads account ID missing.";
+  if (!row.metaAdsAccessTokenEncrypted) return "Meta Ads access token missing.";
+  return null;
 }
 
 function envWhatsAppFallback(): WhatsAppCredentials | null {
@@ -184,52 +216,76 @@ export const companyIntegrationService = {
     return publicIntegration(row);
   },
 
+  async clearProvider(companyId: string, provider: "googleSheets" | "whatsapp" | "metaAds") {
+    await prisma.company.findUniqueOrThrow({ where: { id: companyId }, select: { id: true } });
+    const data = {
+      ...(provider === "googleSheets" ? { googlePrivateKeyEncrypted: null } : {}),
+      ...(provider === "whatsapp" ? { whatsappAccessTokenEncrypted: null } : {}),
+      ...(provider === "metaAds" ? { metaAdsAccessTokenEncrypted: null } : {})
+    };
+    const row = await prisma.companyIntegration.upsert({
+      where: { companyId },
+      create: { companyId, ...data },
+      update: data
+    });
+    return publicIntegration(row);
+  },
+
   async userStatus(companyId?: string | null) {
     return publicIntegration(await rowForCompany(companyId));
   },
 
   async googleSheets(companyId?: string | null) {
     const row = await rowForCompany(companyId);
-    if (row?.googleSheetsId && row.googleServiceAccountEmail && row.googlePrivateKeyEncrypted) {
+    const missingConfig = missingGoogleSheetsConfig(row);
+    if (!missingConfig) {
       return {
-        spreadsheetId: row.googleSheetsId,
-        serviceAccountEmail: row.googleServiceAccountEmail,
-        privateKey: decryptSecret(row.googlePrivateKeyEncrypted) ?? ""
+        spreadsheetId: row!.googleSheetsId!,
+        serviceAccountEmail: row!.googleServiceAccountEmail!,
+        privateKey: decryptSecret(row!.googlePrivateKeyEncrypted) ?? ""
       };
     }
-    const fallback = envGoogleFallback();
-    if (fallback) return fallback;
-    throw new AppError("Google Sheets not connected.", 400);
+    if (shouldUseEnvFallback(companyId)) {
+      const fallback = envGoogleFallback();
+      if (fallback) return fallback;
+    }
+    throw new AppError(missingConfig, 400);
   },
 
   async whatsApp(companyId?: string | null) {
     const row = await rowForCompany(companyId);
-    if (row?.whatsappPhoneNumberId && row.whatsappAccessTokenEncrypted) {
+    const missingConfig = missingWhatsAppConfig(row);
+    if (!missingConfig) {
       return {
-        phoneNumberId: row.whatsappPhoneNumberId,
-        businessAccountId: row.whatsappBusinessAccountId,
-        accessToken: decryptSecret(row.whatsappAccessTokenEncrypted) ?? "",
-        verifyToken: row.whatsappVerifyToken,
-        templateName: row.whatsappDefaultTemplateName,
-        templateLanguage: row.whatsappTemplateLanguage || "en"
+        phoneNumberId: row!.whatsappPhoneNumberId!,
+        businessAccountId: row!.whatsappBusinessAccountId,
+        accessToken: decryptSecret(row!.whatsappAccessTokenEncrypted) ?? "",
+        verifyToken: row!.whatsappVerifyToken,
+        templateName: row!.whatsappDefaultTemplateName,
+        templateLanguage: row!.whatsappTemplateLanguage || "en"
       };
     }
-    const fallback = envWhatsAppFallback();
-    if (fallback) return fallback;
-    throw new AppError("WhatsApp not connected for your company.", 400);
+    if (shouldUseEnvFallback(companyId)) {
+      const fallback = envWhatsAppFallback();
+      if (fallback) return fallback;
+    }
+    throw new AppError(missingConfig, 400);
   },
 
   async metaAds(companyId?: string | null) {
     const row = await rowForCompany(companyId);
-    if (row?.metaAdAccountId && row.metaAdsAccessTokenEncrypted) {
+    const missingConfig = missingMetaAdsConfig(row);
+    if (!missingConfig) {
       return {
-        adAccountId: row.metaAdAccountId,
-        accessToken: decryptSecret(row.metaAdsAccessTokenEncrypted) ?? ""
+        adAccountId: row!.metaAdAccountId!,
+        accessToken: decryptSecret(row!.metaAdsAccessTokenEncrypted) ?? ""
       };
     }
-    const fallback = envMetaFallback();
-    if (fallback) return fallback;
-    throw new AppError("Meta Ads not connected for your company.", 400);
+    if (shouldUseEnvFallback(companyId)) {
+      const fallback = envMetaFallback();
+      if (fallback) return fallback;
+    }
+    throw new AppError(missingConfig, 400);
   },
 
   async findCompanyByWhatsAppPhoneNumberId(phoneNumberId?: string | null) {

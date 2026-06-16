@@ -4,6 +4,7 @@ import { createApp } from "./app.js";
 import { automationService } from "./services/automation.service.js";
 import { authService } from "./services/auth.service.js";
 import { systemStatusService } from "./services/systemStatus.service.js";
+import { integrationEncryptionKeyConfigured } from "./utils/integrationConfig.js";
 import { logger } from "./utils/logger.js";
 
 const app = createApp();
@@ -23,6 +24,7 @@ function assertSupportedRuntime() {
 
 async function start() {
   assertSupportedRuntime();
+  logger.info({ integrationEncryptionKeyConfigured: integrationEncryptionKeyConfigured() }, "Integration config diagnostic");
   await authService.ensureSeedUsers();
   const schemaStatus = await systemStatusService.databaseSchema();
   logger.info(
@@ -31,7 +33,8 @@ async function start() {
       missingTables: schemaStatus.missingTables,
       missingMigrations: schemaStatus.missingMigrations,
       companyCount: schemaStatus.companyCount,
-      userCount: schemaStatus.userCount
+      userCount: schemaStatus.userCount,
+      integrationEncryptionKeyConfigured: integrationEncryptionKeyConfigured()
     },
     `Database schema verified: ${schemaStatus.schemaVerified}`
   );

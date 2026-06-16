@@ -2136,6 +2136,17 @@ input[type="file"] {
   font-weight: 700;
 }
 
+.integration-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.danger-secondary {
+  border-color: color-mix(in srgb, var(--coral) 42%, var(--paper));
+  color: color-mix(in srgb, var(--coral) 78%, var(--ink));
+}
+
 .integration-test-results {
   display: grid;
   gap: 10px;
