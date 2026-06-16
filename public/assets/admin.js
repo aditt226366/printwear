@@ -3,6 +3,7 @@ const adminState = {
   users: [],
   features: [],
   integration: null,
+  integrationTests: {},
   diagnostics: null,
   billing: { summary: {}, logs: [] },
   currentView: "users",
@@ -240,6 +241,7 @@ function renderUsers() {
 
 async function loadIntegration() {
   const companyId = $("#integrationCompanySelect")?.value || adminState.companies[0]?.id || "";
+  adminState.integrationTests = {};
   if (!companyId) {
     adminState.integration = null;
     return;
@@ -265,6 +267,58 @@ function renderIntegration() {
   $("#integrationMetaAdAccountId").value = integration.metaAdAccountId || "";
   $("#integrationMetaAdsAccessToken").value = "";
   $("#integrationMetaAdsAccessTokenMasked").textContent = integration.metaAdsAccessTokenMasked ? `Saved: ${integration.metaAdsAccessTokenMasked}` : "No token saved.";
+  renderIntegrationTests();
+}
+
+function renderIntegrationTests() {
+  const target = $("#integrationTestResults");
+  if (!target) return;
+  const rows = Object.entries(adminState.integrationTests);
+  if (!rows.length) {
+    target.innerHTML = `<div class="empty-state"><strong>No tests run yet.</strong><span>Save credentials, then test each provider.</span></div>`;
+    return;
+  }
+  target.innerHTML = rows.map(([provider, result]) => `
+    <article class="integration-test-result ${result.connected || result.readable ? "connected" : "failed"}">
+      <div>
+        <strong>${escapeHtml(pretty(provider))}</strong>
+        <small>${escapeHtml(result.error || "Connection verified.")}</small>
+      </div>
+      <mark class="${result.connected || result.readable ? "green" : "red"}">${result.connected || result.readable ? "Connected" : "Failed"}</mark>
+    </article>
+  `).join("");
+}
+
+async function testIntegration(provider, button) {
+  const companyId = $("#integrationCompanySelect")?.value;
+  if (!companyId) throw new Error("Select a company before testing integrations.");
+  const labels = {
+    whatsapp: "WhatsApp",
+    googleSheets: "Google Sheets",
+    metaAds: "Meta Ads"
+  };
+  const paths = {
+    whatsapp: `/admin/company-integrations/${encodeURIComponent(companyId)}/test/whatsapp`,
+    googleSheets: `/admin/company-integrations/${encodeURIComponent(companyId)}/test/google-sheets`,
+    metaAds: `/admin/company-integrations/${encodeURIComponent(companyId)}/test/meta-ads`
+  };
+  const previousText = button?.textContent;
+  if (button) {
+    button.disabled = true;
+    button.textContent = `Testing ${labels[provider]}...`;
+  }
+  try {
+    const data = await api(paths[provider], { method: "POST" });
+    adminState.integrationTests[provider] = data.test || {};
+    renderIntegrationTests();
+    showNotice(`${labels[provider]} test ${data.test?.connected || data.test?.readable ? "passed" : "failed"}.`, !(data.test?.connected || data.test?.readable));
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = previousText || `Test ${labels[provider]}`;
+      refreshIcons();
+    }
+  }
 }
 
 async function loadDiagnostics() {
@@ -480,7 +534,17 @@ function bindEvents() {
       })
     });
     showNotice("Integration settings saved. Secrets remain masked.");
+    adminState.integrationTests = {};
     await loadIntegration();
+  });
+  $("#testWhatsappIntegrationBtn")?.addEventListener("click", (event) => {
+    testIntegration("whatsapp", event.currentTarget).catch((error) => showNotice(error.message, true));
+  });
+  $("#testGoogleSheetsIntegrationBtn")?.addEventListener("click", (event) => {
+    testIntegration("googleSheets", event.currentTarget).catch((error) => showNotice(error.message, true));
+  });
+  $("#testMetaAdsIntegrationBtn")?.addEventListener("click", (event) => {
+    testIntegration("metaAds", event.currentTarget).catch((error) => showNotice(error.message, true));
   });
   $("#adminFeatureList")?.addEventListener("click", async (event) => {
     const button = event.target.closest("[data-feature-toggle]");

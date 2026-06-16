@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { companyIntegrationService } from "../services/companyIntegration.service.js";
+import { googleSheetsService } from "../services/googleSheets.service.js";
 import { asyncHandler } from "../utils/errors.js";
 import { sessionCompanyId } from "../utils/tenant.js";
 
@@ -31,4 +32,16 @@ export const updateCompanyIntegration = asyncHandler(async (req: Request, res: R
 
 export const getIntegrationStatus = asyncHandler(async (_req: Request, res: Response) => {
   res.json({ integration: await companyIntegrationService.userStatus(sessionCompanyId(res)) });
+});
+
+export const testWhatsAppIntegration = asyncHandler(async (req: Request, res: Response) => {
+  res.json({ test: await companyIntegrationService.testWhatsApp(req.params.companyId) });
+});
+
+export const testGoogleSheetsIntegration = asyncHandler(async (req: Request, res: Response) => {
+  res.json({ test: await googleSheetsService.status(req.params.companyId) });
+});
+
+export const testMetaAdsIntegration = asyncHandler(async (req: Request, res: Response) => {
+  res.json({ test: await companyIntegrationService.testMetaAds(req.params.companyId) });
 });

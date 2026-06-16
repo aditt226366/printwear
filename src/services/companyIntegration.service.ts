@@ -3,6 +3,7 @@ import type { CompanyIntegration } from "@prisma/client";
 import { env } from "../config/env.js";
 import { prisma } from "../config/prisma.js";
 import { AppError } from "../utils/errors.js";
+import { apiUsageService } from "./apiUsage.service.js";
 
 type IntegrationInput = {
   googleSheetsId?: string | null;
@@ -80,20 +81,26 @@ function maskSecret(value?: string | null) {
   return `••••••••${plain.slice(-4)}`;
 }
 
+function maskEncryptedSecret(value?: string | null) {
+  if (!value) return null;
+  const plain = decryptSecret(value);
+  return plain ? `********${plain.slice(-4)}` : null;
+}
+
 function publicIntegration(row: CompanyIntegration | null) {
   return {
     companyId: row?.companyId ?? null,
     googleSheetsId: row?.googleSheetsId ?? null,
     googleServiceAccountEmail: row?.googleServiceAccountEmail ?? null,
-    googlePrivateKeyMasked: maskSecret(row?.googlePrivateKeyEncrypted),
+    googlePrivateKeyMasked: maskEncryptedSecret(row?.googlePrivateKeyEncrypted),
     whatsappPhoneNumberId: row?.whatsappPhoneNumberId ?? null,
     whatsappBusinessAccountId: row?.whatsappBusinessAccountId ?? null,
-    whatsappAccessTokenMasked: maskSecret(row?.whatsappAccessTokenEncrypted),
+    whatsappAccessTokenMasked: maskEncryptedSecret(row?.whatsappAccessTokenEncrypted),
     whatsappVerifyToken: row?.whatsappVerifyToken ? `••••••••${row.whatsappVerifyToken.slice(-4)}` : null,
     whatsappDefaultTemplateName: row?.whatsappDefaultTemplateName ?? null,
     whatsappTemplateLanguage: row?.whatsappTemplateLanguage ?? "en",
     metaAdAccountId: row?.metaAdAccountId ?? null,
-    metaAdsAccessTokenMasked: maskSecret(row?.metaAdsAccessTokenEncrypted),
+    metaAdsAccessTokenMasked: maskEncryptedSecret(row?.metaAdsAccessTokenEncrypted),
     connected: {
       googleSheets: Boolean(row?.googleSheetsId && row.googleServiceAccountEmail && row.googlePrivateKeyEncrypted),
       whatsapp: Boolean(row?.whatsappPhoneNumberId && row.whatsappAccessTokenEncrypted),
@@ -257,5 +264,123 @@ export const companyIntegrationService = {
       select: { id: true }
     });
     return Boolean(row);
+  },
+
+  async testWhatsApp(companyId: string) {
+    const credentials = await this.whatsApp(companyId);
+    const endpoint = `/${credentials.phoneNumberId}`;
+    const url = new URL(`https://graph.facebook.com/${env.WHATSAPP_API_VERSION}${endpoint}`);
+    url.searchParams.set("fields", "id,display_phone_number,verified_name");
+
+    try {
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${credentials.accessToken}` }
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        id?: string;
+        display_phone_number?: string;
+        verified_name?: string;
+        error?: { message?: string };
+      };
+      void apiUsageService.log({
+        companyId,
+        provider: "META_WHATSAPP",
+        endpoint,
+        method: "GET",
+        statusCode: response.status,
+        success: response.ok,
+        metadata: { fields: "id,display_phone_number,verified_name", error: data.error?.message }
+      });
+
+      return {
+        provider: "whatsapp",
+        connected: response.ok,
+        phoneNumberId: credentials.phoneNumberId,
+        businessAccountId: credentials.businessAccountId ?? null,
+        displayPhoneNumber: data.display_phone_number ?? null,
+        verifiedName: data.verified_name ?? null,
+        error: response.ok ? null : data.error?.message || `WhatsApp API returned HTTP ${response.status}.`
+      };
+    } catch (error) {
+      void apiUsageService.log({
+        companyId,
+        provider: "META_WHATSAPP",
+        endpoint,
+        method: "GET",
+        statusCode: 500,
+        success: false,
+        metadata: { error: error instanceof Error ? error.message : "WhatsApp test failed" }
+      });
+      return {
+        provider: "whatsapp",
+        connected: false,
+        phoneNumberId: credentials.phoneNumberId,
+        businessAccountId: credentials.businessAccountId ?? null,
+        displayPhoneNumber: null,
+        verifiedName: null,
+        error: error instanceof Error ? error.message : "WhatsApp test failed."
+      };
+    }
+  },
+
+  async testMetaAds(companyId: string) {
+    const credentials = await this.metaAds(companyId);
+    const normalizedAccountId = credentials.adAccountId.startsWith("act_") ? credentials.adAccountId : `act_${credentials.adAccountId}`;
+    const endpoint = `/${normalizedAccountId}`;
+    const url = new URL(`https://graph.facebook.com/${env.WHATSAPP_API_VERSION}${endpoint}`);
+    url.searchParams.set("fields", "name,account_status,currency,timezone_name");
+
+    try {
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${credentials.accessToken}` }
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        name?: string;
+        account_status?: string | number;
+        currency?: string;
+        timezone_name?: string;
+        error?: { message?: string };
+      };
+      void apiUsageService.log({
+        companyId,
+        provider: "META_ADS",
+        endpoint,
+        method: "GET",
+        statusCode: response.status,
+        success: response.ok,
+        metadata: { fields: "name,account_status,currency,timezone_name", error: data.error?.message }
+      });
+
+      return {
+        provider: "metaAds",
+        connected: response.ok,
+        adAccountId: credentials.adAccountId,
+        accountName: data.name ?? null,
+        accountStatus: data.account_status ?? null,
+        currency: data.currency ?? null,
+        timezone: data.timezone_name ?? null,
+        error: response.ok ? null : data.error?.message || `Meta Ads API returned HTTP ${response.status}.`
+      };
+    } catch (error) {
+      void apiUsageService.log({
+        companyId,
+        provider: "META_ADS",
+        endpoint,
+        method: "GET",
+        statusCode: 500,
+        success: false,
+        metadata: { error: error instanceof Error ? error.message : "Meta Ads test failed" }
+      });
+      return {
+        provider: "metaAds",
+        connected: false,
+        adAccountId: credentials.adAccountId,
+        accountName: null,
+        accountStatus: null,
+        currency: null,
+        timezone: null,
+        error: error instanceof Error ? error.message : "Meta Ads test failed."
+      };
+    }
   }
 };

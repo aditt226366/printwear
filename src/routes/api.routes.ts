@@ -31,6 +31,9 @@ import {
 import {
   getCompanyIntegration,
   getIntegrationStatus,
+  testGoogleSheetsIntegration,
+  testMetaAdsIntegration,
+  testWhatsAppIntegration,
   updateCompanyIntegration
 } from "../controllers/companyIntegration.controller.js";
 import {
@@ -79,6 +82,9 @@ apiRoutes.get("/admin/billing", requireAdmin, getBilling);
 apiRoutes.get("/admin/billing/export", requireAdmin, exportBillingCsv);
 apiRoutes.get("/admin/company-integrations", requireAdmin, getCompanyIntegration);
 apiRoutes.put("/admin/company-integrations", requireAdmin, updateCompanyIntegration);
+apiRoutes.post("/admin/company-integrations/:companyId/test/whatsapp", requireAdmin, testWhatsAppIntegration);
+apiRoutes.post("/admin/company-integrations/:companyId/test/google-sheets", requireAdmin, testGoogleSheetsIntegration);
+apiRoutes.post("/admin/company-integrations/:companyId/test/meta-ads", requireAdmin, testMetaAdsIntegration);
 
 apiRoutes.get("/dashboard", getDashboard);
 apiRoutes.get("/integrations/status", getIntegrationStatus);
