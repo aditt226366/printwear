@@ -103,7 +103,11 @@ async function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function postToWhatsApp(body: unknown, attempt = 1): Promise<{ messageId?: string; rawResponse: unknown }> {
+async function postToWhatsApp(
+  body: unknown,
+  options: { companyId?: string | null } = {},
+  attempt = 1
+): Promise<{ messageId?: string; rawResponse: unknown }> {
   const config = validateWhatsAppConfig();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
@@ -133,6 +137,7 @@ async function postToWhatsApp(body: unknown, attempt = 1): Promise<{ messageId?:
 
     const json = (await response.json().catch(() => ({}))) as WhatsAppSendResponse;
     void apiUsageService.log({
+      companyId: options.companyId,
       provider: "META_WHATSAPP",
       endpoint: endpoint(),
       method: "POST",
@@ -159,7 +164,7 @@ async function postToWhatsApp(body: unknown, attempt = 1): Promise<{ messageId?:
       const retriable = response.status >= 500 || response.status === 429;
       if (retriable && attempt < 3) {
         await delay(500 * attempt);
-        return postToWhatsApp(body, attempt + 1);
+        return postToWhatsApp(body, options, attempt + 1);
       }
 
       throw new AppError(
@@ -180,7 +185,7 @@ async function postToWhatsApp(body: unknown, attempt = 1): Promise<{ messageId?:
 
     if (attempt < 3) {
       await delay(500 * attempt);
-      return postToWhatsApp(body, attempt + 1);
+      return postToWhatsApp(body, options, attempt + 1);
     }
 
     logger.error({ error, attempt }, "WhatsApp API request failed");
@@ -200,6 +205,7 @@ export const whatsappService = {
     templateName: string;
     templateLanguage?: string;
     parameters?: TemplateParameter[];
+    companyId?: string | null;
   }) {
     const config = validateWhatsAppConfig();
     const body: Record<string, unknown> = {
@@ -226,15 +232,16 @@ export const whatsappService = {
       };
     }
 
-    return postToWhatsApp(body);
+    return postToWhatsApp(body, { companyId: input.companyId });
   },
 
-  async sendTemplateMessage(phone: string, name: string) {
+  async sendTemplateMessage(phone: string, name: string, companyId?: string | null) {
     const config = validateWhatsAppConfig();
     return this.sendNamedTemplateMessage({
       phone,
       templateName: config.templateName,
       templateLanguage: config.templateLanguage,
+      companyId,
       parameters: [
         {
           type: "text",
@@ -244,7 +251,7 @@ export const whatsappService = {
     });
   },
 
-  async sendTextMessage(phone: string, text: string) {
+  async sendTextMessage(phone: string, text: string, companyId?: string | null) {
     const body = {
       messaging_product: "whatsapp",
       recipient_type: "individual",
@@ -256,7 +263,7 @@ export const whatsappService = {
       }
     };
 
-    return postToWhatsApp(body);
+    return postToWhatsApp(body, { companyId });
   },
 
   parseIncomingWebhook(payload: unknown): ParsedIncomingMessage[] {

@@ -210,8 +210,8 @@ function renderFeatures() {
 async function loadBilling() {
   const params = new URLSearchParams();
   if ($("#billingCompanySelect")?.value) params.set("companyId", $("#billingCompanySelect").value);
-  if ($("#billingStart")?.value) params.set("start", new Date($("#billingStart").value).toISOString());
-  if ($("#billingEnd")?.value) params.set("end", new Date($("#billingEnd").value).toISOString());
+  if ($("#billingStart")?.value) params.set("from", new Date($("#billingStart").value).toISOString());
+  if ($("#billingEnd")?.value) params.set("to", new Date($("#billingEnd").value).toISOString());
   const data = await api(`/admin/billing?${params.toString()}`);
   adminState.billing = data;
   renderBilling();
@@ -226,12 +226,12 @@ function renderBilling() {
     ["Google Sheets API calls", summary.googleSheetsApiCalls || 0],
     ["Internal API calls", summary.internalApiCalls || 0],
     ["Total API calls", summary.totalApiCalls || 0],
-    ["Estimated cost", Number(summary.estimatedCost || 0).toFixed(4)]
+    ["Estimated cost", summary.estimatedCost || "-NIL-"]
   ].map(([label, value]) => `<span><strong>${escapeHtml(value)}</strong><small>${escapeHtml(label)}</small></span>`).join("");
 
   const logs = adminState.billing.logs || [];
   $("#billingTable").innerHTML = logs.length ? `
-    <div class="data-row billing-head"><span>Date/time</span><span>Company</span><span>Provider</span><span>Endpoint</span><span>Status</span><span>Success</span><span>Units</span><span>Cost</span></div>
+    <div class="data-row billing-head"><span>Date/time</span><span>Company</span><span>Provider</span><span>Endpoint</span><span>Status</span><span>Success</span><span>Units</span></div>
     ${logs.map((log) => `
       <div class="data-row billing-row">
         <span>${formatDate(log.createdAt)}</span>
@@ -241,7 +241,6 @@ function renderBilling() {
         <span>${escapeHtml(log.statusCode)}</span>
         <span><mark class="${log.success ? "green" : "red"}">${log.success ? "Success" : "Failure"}</mark></span>
         <span>${escapeHtml(log.requestUnits)}</span>
-        <span>${escapeHtml(log.costEstimate ?? "--")}</span>
       </div>
     `).join("")}
   ` : `<div class="empty-state"><strong>No usage logs yet.</strong><span>External API calls will appear here after they run.</span></div>`;
@@ -362,8 +361,8 @@ function bindEvents() {
   $("#exportBillingBtn")?.addEventListener("click", () => {
     const params = new URLSearchParams();
     if ($("#billingCompanySelect")?.value) params.set("companyId", $("#billingCompanySelect").value);
-    if ($("#billingStart")?.value) params.set("start", new Date($("#billingStart").value).toISOString());
-    if ($("#billingEnd")?.value) params.set("end", new Date($("#billingEnd").value).toISOString());
+    if ($("#billingStart")?.value) params.set("from", new Date($("#billingStart").value).toISOString());
+    if ($("#billingEnd")?.value) params.set("to", new Date($("#billingEnd").value).toISOString());
     window.location.href = `/api/admin/billing/export?${params.toString()}`;
   });
 }

@@ -251,7 +251,7 @@ export const dashboardService = {
       throw new Error("Lead not found");
     }
 
-    const sent = await whatsappService.sendTextMessage(lead.phone, text);
+    const sent = await whatsappService.sendTextMessage(lead.phone, text, lead.companyId);
     const message = await messageService.createOutboundMessage({
       leadId,
       whatsappMessageId: sent.messageId,

@@ -222,7 +222,7 @@ async function processInboundMessage(incoming: ReturnType<typeof whatsappService
       },
       "Claude called for inbound WhatsApp reply"
     );
-    reply = await claudeService.generateReply(customerMessage, knowledgeContext, conversationHistory);
+    reply = await claudeService.generateReply(customerMessage, knowledgeContext, conversationHistory, lead.companyId);
   } catch (error) {
     logger.error({ error, leadId: lead.id, whatsappMessageId: incoming.messageId }, "Claude error while generating reply");
     webhookStatusService.markWhatsAppFailed({
@@ -240,7 +240,7 @@ async function processInboundMessage(incoming: ReturnType<typeof whatsappService
   }
 
   try {
-    const sent = await whatsappService.sendTextMessage(lead.phone, reply);
+    const sent = await whatsappService.sendTextMessage(lead.phone, reply, lead.companyId);
     logger.info(
       {
         leadId: lead.id,

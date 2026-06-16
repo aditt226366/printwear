@@ -37,7 +37,7 @@ export const orderActionService = {
       throw new Error("Order not found");
     }
 
-    const sent = await whatsappService.sendTextMessage(order.lead.phone, config.text);
+    const sent = await whatsappService.sendTextMessage(order.lead.phone, config.text, order.lead.companyId);
     const message = await messageService.createOutboundMessage({
       leadId: order.leadId,
       whatsappMessageId: sent.messageId,

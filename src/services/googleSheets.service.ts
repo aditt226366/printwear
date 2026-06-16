@@ -75,7 +75,7 @@ function columnIndexToLetter(index: number) {
 }
 
 export const googleSheetsService = {
-  async getNewLeads(): Promise<SheetLead[]> {
+  async getNewLeads(companyId?: string | null): Promise<SheetLead[]> {
     logger.info({ range: env.GOOGLE_SHEETS_RANGE }, "Starting Google Sheets lead read");
     const sheets = google.sheets({ version: "v4", auth: getAuthClient() });
     const spreadsheetId = requireEnv("GOOGLE_SHEETS_ID");
@@ -88,6 +88,7 @@ export const googleSheetsService = {
         range: env.GOOGLE_SHEETS_RANGE
       });
       void apiUsageService.log({
+        companyId,
         provider: "GOOGLE_SHEETS",
         endpoint: "spreadsheets.values.get",
         method: "GET",
@@ -99,6 +100,7 @@ export const googleSheetsService = {
       const sheetsError = error as { code?: number; status?: number };
       const status = sheetsError.code ?? sheetsError.status;
       void apiUsageService.log({
+        companyId,
         provider: "GOOGLE_SHEETS",
         endpoint: "spreadsheets.values.get",
         method: "GET",
@@ -165,7 +167,7 @@ export const googleSheetsService = {
     return leads;
   },
 
-  async updateLeadStatus(rowNumber: number, status: string) {
+  async updateLeadStatus(rowNumber: number, status: string, companyId?: string | null) {
     logger.info({ rowNumber, status }, "Updating Google Sheets lead status");
     const sheets = google.sheets({ version: "v4", auth: getAuthClient() });
     const spreadsheetId = requireEnv("GOOGLE_SHEETS_ID");
@@ -182,6 +184,7 @@ export const googleSheetsService = {
         }
       });
       void apiUsageService.log({
+        companyId,
         provider: "GOOGLE_SHEETS",
         endpoint: "spreadsheets.values.update",
         method: "PUT",
@@ -193,6 +196,7 @@ export const googleSheetsService = {
     } catch (error) {
       const sheetsError = error as { code?: number; status?: number };
       void apiUsageService.log({
+        companyId,
         provider: "GOOGLE_SHEETS",
         endpoint: "spreadsheets.values.update",
         method: "PUT",

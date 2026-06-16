@@ -26,14 +26,23 @@ function userPublicSelect() {
   } satisfies Prisma.AppUserSelect;
 }
 
-function usageWhere(input: { companyId?: string; start?: string; end?: string }) {
+function parseDateFilter(value?: string) {
+  if (!value) return undefined;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) throw new AppError("Invalid billing date filter", 400);
+  return date;
+}
+
+function usageWhere(input: { companyId?: string; from?: string; to?: string }) {
+  const from = parseDateFilter(input.from);
+  const to = parseDateFilter(input.to);
   return {
     ...(input.companyId ? { companyId: input.companyId } : {}),
-    ...(input.start || input.end
+    ...(from || to
       ? {
           createdAt: {
-            ...(input.start ? { gte: new Date(input.start) } : {}),
-            ...(input.end ? { lte: new Date(input.end) } : {})
+            ...(from ? { gte: from } : {}),
+            ...(to ? { lte: to } : {})
           }
         }
       : {})
@@ -145,7 +154,7 @@ export const adminManagementService = {
     });
   },
 
-  async billing(input: { companyId?: string; start?: string; end?: string }) {
+  async billing(input: { companyId?: string; from?: string; to?: string }) {
     const where = usageWhere(input);
     const logs = await prisma.apiUsageLog.findMany({
       where,
@@ -163,13 +172,12 @@ export const adminManagementService = {
       googleSheetsApiCalls: 0,
       internalApiCalls: 0,
       totalApiCalls: 0,
-      estimatedCost: 0
+      estimatedCost: "-NIL-"
     };
 
     for (const log of logs) {
       const units = Number(log.requestUnits || 0);
       summary.totalApiCalls += units;
-      summary.estimatedCost += Number(log.costEstimate || 0);
       if (log.provider === ApiProvider.META_WHATSAPP) summary.whatsappApiCalls += units;
       if (log.provider === ApiProvider.META_ADS) summary.metaAdsApiCalls += units;
       if (log.provider === ApiProvider.CLAUDE) summary.claudeApiCalls += units;
@@ -177,13 +185,26 @@ export const adminManagementService = {
       if (log.provider === ApiProvider.INTERNAL) summary.internalApiCalls += units;
     }
 
-    return { summary, logs };
+    return {
+      summary,
+      logs: logs.map((log) => ({
+        id: log.id,
+        createdAt: log.createdAt,
+        company: log.company,
+        provider: log.provider,
+        endpoint: log.endpoint,
+        method: log.method,
+        statusCode: log.statusCode,
+        success: log.success,
+        requestUnits: log.requestUnits
+      }))
+    };
   },
 
-  async billingCsv(input: { companyId?: string; start?: string; end?: string }) {
+  async billingCsv(input: { companyId?: string; from?: string; to?: string }) {
     const { logs } = await this.billing(input);
     const rows = [
-      ["createdAt", "company", "provider", "endpoint", "method", "statusCode", "success", "requestUnits", "costEstimate"],
+      ["createdAt", "company", "provider", "endpoint", "method", "statusCode", "success", "requestUnits"],
       ...logs.map((log) => [
         log.createdAt.toISOString(),
         log.company.name,
@@ -192,8 +213,7 @@ export const adminManagementService = {
         log.method,
         String(log.statusCode),
         String(log.success),
-        String(log.requestUnits),
-        String(log.costEstimate ?? "")
+        String(log.requestUnits)
       ])
     ];
     return rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");

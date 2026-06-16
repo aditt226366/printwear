@@ -153,7 +153,7 @@ export const orderSummaryService = {
     const [lead, existing] = await Promise.all([
       prisma.lead.findUnique({
         where: { id: leadId },
-        select: { id: true, name: true, phone: true }
+        select: { id: true, name: true, phone: true, companyId: true }
       }),
       prisma.orderSummary.findUnique({ where: { leadId } })
     ]);
@@ -173,7 +173,7 @@ export const orderSummaryService = {
     let claudeExtraction: ExtractedOrderSummary | null = null;
 
     try {
-      claudeExtraction = await claudeService.extractOrderSummary(conversationText, existing ?? {});
+      claudeExtraction = await claudeService.extractOrderSummary(conversationText, existing ?? {}, lead.companyId);
     } catch (error) {
       logger.warn({ error, leadId }, "Claude order extraction failed; using structured parser fallback");
     }

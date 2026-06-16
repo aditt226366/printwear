@@ -40,8 +40,8 @@ const resetPasswordSchema = z.object({
 function billingFilters(req: Request) {
   return {
     companyId: String(req.query.companyId || ""),
-    start: String(req.query.start || ""),
-    end: String(req.query.end || "")
+    from: String(req.query.from || ""),
+    to: String(req.query.to || "")
   };
 }
 

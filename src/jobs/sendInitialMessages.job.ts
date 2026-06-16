@@ -60,7 +60,7 @@ export async function sendInitialMessagesJob(companyId?: string) {
       });
 
       logger.info({ leadId: lead.id }, "Sending WhatsApp welcome template");
-      const response = await whatsappService.sendTemplateMessage(lead.phone, lead.name);
+      const response = await whatsappService.sendTemplateMessage(lead.phone, lead.name, lead.companyId);
 
       logger.info({ leadId: lead.id, messageId: response.messageId }, "Writing welcome message result to database");
       const result = await prisma.$transaction(async (tx) => {
@@ -112,7 +112,7 @@ export async function sendInitialMessagesJob(companyId?: string) {
       });
 
       if (lead.googleSheetRowNumber) {
-        await googleSheetsService.updateLeadStatus(lead.googleSheetRowNumber, "messaged");
+        await googleSheetsService.updateLeadStatus(lead.googleSheetRowNumber, "messaged", lead.companyId);
       }
 
       await leadService.refreshLeadScore(lead.id);

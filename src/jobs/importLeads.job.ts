@@ -7,7 +7,7 @@ export async function importLeadsJob(companyId?: string) {
   validateGoogleSheetsConfig();
   logger.info("Google Sheets environment validated for lead import");
 
-  const sheetLeads = await googleSheetsService.getNewLeads();
+  const sheetLeads = await googleSheetsService.getNewLeads(companyId);
   let imported = 0;
   let duplicates = 0;
   let invalid = 0;

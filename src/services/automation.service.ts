@@ -345,6 +345,7 @@ async function refreshCampaignCounts(campaignId: string) {
 
 async function sendTemplateToLead(input: {
   leadId: string;
+  companyId: string;
   phone: string;
   customerName: string;
   templateName: string;
@@ -355,6 +356,7 @@ async function sendTemplateToLead(input: {
     phone: input.phone,
     templateName: input.templateName,
     templateLanguage: input.templateLanguage,
+    companyId: input.companyId,
     parameters: [{ type: "text", text: input.customerName || "there" }]
   });
 
@@ -554,6 +556,16 @@ export const automationService = {
     }
 
     logger.info({ imported, skipped }, "Contacts imported from CSV");
+    void apiUsageService.log({
+      companyId,
+      provider: "INTERNAL",
+      endpoint: "contacts.import_csv",
+      method: "POST",
+      statusCode: 200,
+      success: true,
+      requestUnits: imported,
+      metadata: { skipped }
+    });
     await messageService.createSendLog({ action: "contacts_csv_import", status: "sent", errorMessage: `Imported ${imported}; skipped ${skipped}` });
     return { imported, skipped };
   },
@@ -619,6 +631,7 @@ export const automationService = {
 
     logger.info({ jobId: job.id, count: leads.length, templateName: input.templateName }, "bulk send started");
     void apiUsageService.log({
+      companyId,
       provider: "INTERNAL",
       endpoint: "bulk_message_job.create",
       method: "POST",
@@ -652,6 +665,7 @@ export const automationService = {
         try {
           const whatsappMessageId = await sendTemplateToLead({
             leadId: recipient.leadId,
+            companyId: job.companyId,
             phone: recipient.phone,
             customerName: recipient.lead.name,
             templateName: job.templateName,
@@ -776,6 +790,7 @@ export const automationService = {
 
     logger.info({ campaignId: campaign.id, status, scheduledAt: campaign.scheduledAt }, "campaign scheduled");
     void apiUsageService.log({
+      companyId,
       provider: "INTERNAL",
       endpoint: "campaign.create",
       method: "POST",
@@ -827,6 +842,7 @@ export const automationService = {
 
       logger.info({ campaignId, count: campaign.recipients.length }, "campaign executed");
       void apiUsageService.log({
+        companyId: campaign.companyId,
         provider: "INTERNAL",
         endpoint: "campaign.execute",
         method: "POST",
@@ -843,6 +859,7 @@ export const automationService = {
         try {
           const whatsappMessageId = await sendTemplateToLead({
             leadId: recipient.leadId,
+            companyId: campaign.companyId,
             phone: recipient.phone,
             customerName: recipient.lead.name,
             templateName: campaign.templateName,
@@ -907,7 +924,7 @@ export const automationService = {
     };
   },
 
-  async metaAdsStatus() {
+  async metaAdsStatus(companyId?: string | null) {
     const adAccountId = (env.META_AD_ACCOUNT_ID || "").trim();
     const accessToken = (env.META_ADS_ACCESS_TOKEN || "").trim();
     const normalizedAccountId = adAccountId.startsWith("act_") ? adAccountId : adAccountId ? `act_${adAccountId}` : "";
@@ -939,6 +956,7 @@ export const automationService = {
         error?: { message?: string; code?: number; type?: string };
       };
       void apiUsageService.log({
+        companyId,
         provider: "META_ADS",
         endpoint: `/${normalizedAccountId}`,
         method: "GET",
@@ -1018,7 +1036,7 @@ export const automationService = {
     definition: WorkflowDefinition;
   }, companyId: string) {
     await assertAutomationSetup();
-    return prisma.aiWorkflow.create({
+    const workflow = await prisma.aiWorkflow.create({
       data: {
         companyId,
         name: input.name,
@@ -1028,6 +1046,16 @@ export const automationService = {
         definition: input.definition as Prisma.InputJsonObject
       }
     });
+    void apiUsageService.log({
+      companyId,
+      provider: "INTERNAL",
+      endpoint: "ai_workflow.create",
+      method: "POST",
+      statusCode: 201,
+      success: true,
+      metadata: { workflowId: workflow.id }
+    });
+    return workflow;
   },
 
   async updateWorkflow(id: string, input: Partial<{
@@ -1042,7 +1070,7 @@ export const automationService = {
       const existing = await prisma.aiWorkflow.findFirst({ where: { id, companyId }, select: { id: true } });
       if (!existing) throw new AppError("Workflow not found", 404);
     }
-    return prisma.aiWorkflow.update({
+    const workflow = await prisma.aiWorkflow.update({
       where: { id },
       data: {
         ...(input.name !== undefined ? { name: input.name } : {}),
@@ -1052,6 +1080,16 @@ export const automationService = {
         ...(input.definition !== undefined ? { definition: input.definition as Prisma.InputJsonObject } : {})
       }
     });
+    void apiUsageService.log({
+      companyId: workflow.companyId,
+      provider: "INTERNAL",
+      endpoint: "ai_workflow.update",
+      method: "PATCH",
+      statusCode: 200,
+      success: true,
+      metadata: { workflowId: workflow.id }
+    });
+    return workflow;
   },
 
   async executeMatchingWorkflows(input: { leadId: string; phone: string; text: string; source?: string }) {
@@ -1081,6 +1119,15 @@ export const automationService = {
       logger.info({ workflowId: workflow.id, leadId: input.leadId }, "workflow triggered");
       await prisma.workflowExecutionLog.create({
         data: { workflowId: workflow.id, leadId: input.leadId, status: WorkflowRunStatus.STARTED }
+      });
+      void apiUsageService.log({
+        companyId: lead.companyId,
+        provider: "INTERNAL",
+        endpoint: "ai_workflow.execute",
+        method: "POST",
+        statusCode: 202,
+        success: true,
+        metadata: { workflowId: workflow.id, leadId: input.leadId }
       });
 
       try {
@@ -1120,7 +1167,7 @@ export const automationService = {
 
       if (current.type === "text") {
         const text = stringConfig(current, "text", "Thanks for your message. Our team will help shortly.");
-        const sent = await whatsappService.sendTextMessage(lead.phone, text);
+        const sent = await whatsappService.sendTextMessage(lead.phone, text, lead.companyId);
         await messageService.createOutboundMessage({
           leadId,
           whatsappMessageId: sent.messageId,
@@ -1136,6 +1183,7 @@ export const automationService = {
         if (!templateName) throw new AppError("Workflow template block needs a template name", 400);
         await sendTemplateToLead({
           leadId,
+          companyId: lead.companyId,
           phone: lead.phone,
           customerName: lead.name,
           templateName,

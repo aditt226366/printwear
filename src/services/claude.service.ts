@@ -37,7 +37,7 @@ function parseJsonObject(text: string) {
 }
 
 export const claudeService = {
-  async generateReply(customerMessage: string, knowledgeContext: string, conversationHistory: string) {
+  async generateReply(customerMessage: string, knowledgeContext: string, conversationHistory: string, companyId?: string | null) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 20_000);
 
@@ -66,6 +66,7 @@ export const claudeService = {
 
       const json = (await response.json().catch(() => ({}))) as ClaudeResponse;
       void apiUsageService.log({
+        companyId,
         provider: "CLAUDE",
         endpoint: "https://api.anthropic.com/v1/messages",
         method: "POST",
@@ -89,7 +90,7 @@ export const claudeService = {
     }
   },
 
-  async extractOrderSummary(conversationHistory: string, currentSummary: ExtractedOrderSummary = {}) {
+  async extractOrderSummary(conversationHistory: string, currentSummary: ExtractedOrderSummary = {}, companyId?: string | null) {
     if (!env.ANTHROPIC_API_KEY) {
       return null;
     }
@@ -123,6 +124,7 @@ export const claudeService = {
 
       const json = (await response.json().catch(() => ({}))) as ClaudeResponse;
       void apiUsageService.log({
+        companyId,
         provider: "CLAUDE",
         endpoint: "https://api.anthropic.com/v1/messages",
         method: "POST",

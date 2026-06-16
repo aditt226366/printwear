@@ -149,7 +149,7 @@ export const listAdDrafts = asyncHandler(async (_req: Request, res: Response) =>
 });
 
 export const getAdsStatus = asyncHandler(async (_req: Request, res: Response) => {
-  res.json(await automationService.metaAdsStatus());
+  res.json(await automationService.metaAdsStatus(companyScope(res)));
 });
 
 export const createAdDraft = asyncHandler(async (req: Request, res: Response) => {

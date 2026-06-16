@@ -15,24 +15,20 @@ type UsageInput = {
   metadata?: Record<string, unknown>;
 };
 
-let defaultCompanyId: string | null = null;
-
 async function resolveCompanyId(companyId?: string | null) {
   if (companyId) return companyId;
-  if (defaultCompanyId) return defaultCompanyId;
-  const company = await prisma.company.upsert({
-    where: { slug: "printwear" },
-    update: {},
-    create: { name: "Printwear", slug: "printwear" }
-  });
-  defaultCompanyId = company.id;
-  return company.id;
+  return null;
 }
 
 export const apiUsageService = {
   async log(input: UsageInput) {
     try {
       const companyId = await resolveCompanyId(input.companyId);
+      if (!companyId) {
+        logger.warn({ provider: input.provider, endpoint: input.endpoint }, "API usage log skipped because companyId is missing");
+        return;
+      }
+
       await prisma.apiUsageLog.create({
         data: {
           companyId,
