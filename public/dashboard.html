@@ -43,7 +43,7 @@
         <button id="profileMenuButton" class="profile-button" type="button" aria-label="Profile menu">
           <span id="profileInitials">AD</span>
         </button>
-        <form id="profileLogoutMenu" class="profile-menu hidden" action="/logout" method="post">
+        <form id="profileLogoutMenu" class="profile-menu hidden" action="/auth/logout" method="post" data-logout-form>
           <button type="submit"><i data-lucide="log-out"></i>Logout</button>
         </form>
       </div>
@@ -739,7 +739,7 @@
               <span>Email: <strong id="settingsAccountEmail">--</strong></span>
               <span>Role: <strong id="settingsAccountRole">--</strong></span>
             </div>
-            <form action="/logout" method="post">
+            <form action="/auth/logout" method="post" data-logout-form>
               <button class="secondary-button" type="submit"><i data-lucide="log-out"></i>Sign out</button>
             </form>
           </article>

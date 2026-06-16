@@ -2457,7 +2457,67 @@ function startDashboardPolling() {
   }, DASHBOARD_POLL_INTERVAL_MS);
 }
 
+function clearClientSessionState() {
+  state.session = null;
+  state.features = [];
+  state.enabledFeatureKeys = new Set();
+  try {
+    window.sessionStorage?.clear();
+    window.localStorage?.removeItem("crm_session");
+  } catch {
+    // Storage cleanup is best-effort; the server cookie is the source of truth.
+  }
+}
+
+async function logoutFromClient(form) {
+  const button = form?.querySelector("button[type='submit'], button");
+  const previousText = button?.textContent;
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Logging out...";
+  }
+
+  try {
+    const response = await fetch("/auth/logout", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store"
+    });
+    const data = await response.json().catch(() => ({}));
+    clearClientSessionState();
+    window.location.replace(data.redirectTo || "/login");
+  } catch {
+    clearClientSessionState();
+    window.location.replace("/login");
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = previousText || "Logout";
+    }
+  }
+}
+
+function bindSessionRestoreGuard() {
+  window.addEventListener("pageshow", async (event) => {
+    if (!event.persisted) return;
+    try {
+      const response = await fetch("/api/session", { credentials: "same-origin", cache: "no-store" });
+      if (!response.ok) window.location.replace("/login");
+    } catch {
+      window.location.replace("/login");
+    }
+  });
+}
+
 function bindEvents() {
+  document.querySelectorAll("[data-logout-form]").forEach((form) => {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      logoutFromClient(form);
+    });
+  });
+
   $("#profileMenuButton")?.addEventListener("click", () => {
     $("#profileLogoutMenu")?.classList.toggle("hidden");
   });
@@ -3010,6 +3070,7 @@ async function startDashboard() {
   try {
     await loadSessionAndFeatures();
     bindEvents();
+    bindSessionRestoreGuard();
     refreshIcons();
     if (featureEnabledForView("chats")) connectChatEvents();
     const requestedView = window.location.hash.replace("#", "");

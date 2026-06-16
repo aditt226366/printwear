@@ -84,6 +84,62 @@ async function api(path, options = {}) {
   return data;
 }
 
+function clearClientSessionState() {
+  adminState.companies = [];
+  adminState.users = [];
+  adminState.features = [];
+  adminState.integration = null;
+  adminState.diagnostics = null;
+  adminState.billing = { summary: {}, logs: [] };
+  try {
+    window.sessionStorage?.clear();
+    window.localStorage?.removeItem("crm_session");
+  } catch {
+    // Storage cleanup is best-effort; the server cookie is the source of truth.
+  }
+}
+
+async function logoutFromClient(form) {
+  const button = form?.querySelector("button[type='submit'], button");
+  const previousText = button?.textContent;
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Logging out...";
+  }
+
+  try {
+    const response = await fetch("/auth/logout", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store"
+    });
+    const data = await response.json().catch(() => ({}));
+    clearClientSessionState();
+    window.location.replace(data.redirectTo || "/login");
+  } catch {
+    clearClientSessionState();
+    window.location.replace("/login");
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = previousText || "Logout";
+    }
+  }
+}
+
+function bindSessionRestoreGuard() {
+  window.addEventListener("pageshow", async (event) => {
+    if (!event.persisted) return;
+    try {
+      const response = await fetch("/api/session", { credentials: "same-origin", cache: "no-store" });
+      if (!response.ok) window.location.replace("/login");
+    } catch {
+      window.location.replace("/login");
+    }
+  });
+}
+
 function refreshIcons() {
   window.lucide?.createIcons?.();
 }
@@ -318,6 +374,13 @@ function renderBilling() {
 }
 
 function bindEvents() {
+  document.querySelectorAll("[data-logout-form]").forEach((form) => {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      logoutFromClient(form);
+    });
+  });
+
   document.querySelectorAll("[data-admin-view]").forEach((button) => button.addEventListener("click", () => switchAdminView(button.dataset.adminView)));
   $("#companyName")?.addEventListener("input", (event) => {
     if (!$("#companySlug")?.dataset.edited) $("#companySlug").value = event.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
@@ -465,6 +528,7 @@ function bindEvents() {
 
 async function start() {
   bindEvents();
+  bindSessionRestoreGuard();
   await loadLucide();
   await loadCompanies();
   await loadUsers();

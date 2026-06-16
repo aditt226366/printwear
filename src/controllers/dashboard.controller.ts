@@ -10,9 +10,11 @@ export const showDashboard = asyncHandler(async (_req: Request, res: Response) =
     return;
   }
 
+  res.setHeader("Cache-Control", "no-store");
   res.sendFile(path.join(publicDir, "dashboard.html"));
 });
 
 export const showAdminPanel = asyncHandler(async (_req: Request, res: Response) => {
+  res.setHeader("Cache-Control", "no-store");
   res.sendFile(path.join(publicDir, "admin.html"));
 });

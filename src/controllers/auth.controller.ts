@@ -84,3 +84,9 @@ export const logout = asyncHandler(async (_req: Request, res: Response) => {
   authService.clearSessionCookie(res);
   res.redirect("/login");
 });
+
+export const logoutJson = asyncHandler(async (_req: Request, res: Response) => {
+  authService.clearSessionCookie(res);
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ success: true, redirectTo: "/login" });
+});
