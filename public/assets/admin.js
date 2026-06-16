@@ -166,7 +166,7 @@ function switchAdminView(view) {
   if (view === "diagnostics") loadDiagnostics().catch((error) => showNotice(error.message, true));
 }
 
-function fillCompanySelects() {
+function fillCompanySelects(selectedUserCompanyId = "") {
   const options = adminState.companies.map((company) => `<option value="${escapeHtml(company.id)}">${escapeHtml(company.name)}</option>`).join("");
   ["userCompany", "featureCompanySelect", "integrationCompanySelect", "billingCompanySelect", "userCompanyFilter"].forEach((id) => {
     const select = $(`#${id}`);
@@ -175,12 +175,20 @@ function fillCompanySelects() {
     select.innerHTML = ["billingCompanySelect", "userCompanyFilter"].includes(id) ? `<option value="">All companies</option>${options}` : options;
     if (current) select.value = current;
   });
+  if (selectedUserCompanyId && $("#userCompany")) {
+    $("#userCompany").value = selectedUserCompanyId;
+  }
 }
 
-async function loadCompanies() {
+function upsertCompany(company) {
+  if (!company?.id) return;
+  adminState.companies = [company, ...adminState.companies.filter((item) => item.id !== company.id)];
+}
+
+async function loadCompanies(selectedUserCompanyId = "") {
   const data = await api("/admin/companies");
   adminState.companies = data.companies || [];
-  fillCompanySelects();
+  fillCompanySelects(selectedUserCompanyId);
 }
 
 async function loadUsers() {
@@ -444,17 +452,23 @@ function bindEvents() {
   });
   $("#companyForm")?.addEventListener("submit", async (event) => {
     event.preventDefault();
-    await api("/admin/companies", {
-      method: "POST",
-      body: JSON.stringify({
-        name: $("#companyName").value,
-        slug: $("#companySlug").value,
-        status: $("#companyStatus").value
-      })
-    });
-    event.target.reset();
-    showNotice("Company created.");
-    await loadCompanies();
+    try {
+      const data = await api("/admin/companies", {
+        method: "POST",
+        body: JSON.stringify({
+          name: $("#companyName").value,
+          slug: $("#companySlug").value,
+          status: $("#companyStatus").value
+        })
+      });
+      upsertCompany(data.company);
+      fillCompanySelects(data.company?.id || "");
+      event.target.reset();
+      $("#companySlug")?.removeAttribute("data-edited");
+      showNotice("Company created.");
+    } catch (error) {
+      showNotice(error.message, true);
+    }
   });
   $("#userForm")?.addEventListener("submit", async (event) => {
     event.preventDefault();

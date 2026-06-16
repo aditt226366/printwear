@@ -70,28 +70,35 @@ export const adminManagementService = {
     const started = performance.now();
     const slug = slugify(input.slug || input.name);
     const company = await prisma.$transaction(async (tx) => {
-      const created = await tx.company.create({
-        data: {
-          name: input.name,
-          slug,
-          status: input.status ? CompanyStatus[input.status] : CompanyStatus.ACTIVE,
-          logoUrl: input.logoUrl || null,
-          whatsappNumber: input.whatsappNumber || null,
-          brandColor: input.brandColor || null,
-          timezone: input.timezone || null,
-          businessType: input.businessType || null
+      try {
+        const created = await tx.company.create({
+          data: {
+            name: input.name,
+            slug,
+            status: input.status ? CompanyStatus[input.status] : CompanyStatus.ACTIVE,
+            logoUrl: input.logoUrl || null,
+            whatsappNumber: input.whatsappNumber || null,
+            brandColor: input.brandColor || null,
+            timezone: input.timezone || null,
+            businessType: input.businessType || null
+          }
+        });
+        await tx.companyFeature.createMany({
+          data: DEFAULT_FEATURES.map((feature) => ({
+            companyId: created.id,
+            featureKey: feature.key,
+            featureName: feature.label,
+            enabled: feature.enabled
+          })),
+          skipDuplicates: true
+        });
+        return created;
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+          throw new AppError("A company with this slug already exists.", 409);
         }
-      });
-      await tx.companyFeature.createMany({
-        data: DEFAULT_FEATURES.map((feature) => ({
-          companyId: created.id,
-          featureKey: feature.key,
-          featureName: feature.label,
-          enabled: feature.enabled
-        })),
-        skipDuplicates: true
-      });
-      return created;
+        throw error;
+      }
     });
     logger.info({ createCompanyMs: Math.round(performance.now() - started), companyId: company.id }, "Company created");
     return company;
