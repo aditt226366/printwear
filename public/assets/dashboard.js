@@ -52,6 +52,7 @@ const state = {
 
 const DASHBOARD_POLL_INTERVAL_MS = 4000;
 const REQUEST_TIMEOUT_MS = 12000;
+const DASHBOARD_START_FALLBACK_MS = 14000;
 
 const views = {
   overview: document.querySelector("#overviewView"),
@@ -1192,6 +1193,36 @@ function emptyState(title, text) {
   return `<article class="empty-card"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(text)}</span></article>`;
 }
 
+function emptyOverviewData() {
+  return {
+    stats: {
+      totalLeads: 0,
+      hotLeads: 0,
+      warmLeads: 0,
+      scrapLeads: 0,
+      activeChats: 0,
+      inboundMessages: 0,
+      outboundMessages: 0
+    },
+    recentLeads: [],
+    recentConversations: [],
+    humanActionQueue: [],
+    orderPipeline: {}
+  };
+}
+
+function renderDashboardFallback(message = "Dashboard data is not available yet.") {
+  state.dashboardLoaded = true;
+  state.humanActionQueue = [];
+  state.orderPipeline = {};
+  state.leads = state.leads || [];
+  renderLeadCards();
+  renderChatList();
+  renderHumanActionQueue();
+  renderOverview({ ...emptyOverviewData(), notice: message });
+  setConnectionStatus("error", message);
+}
+
 function renderLeadCards() {
   const leads = getFilteredLeads(false);
   const filterName = state.temperatureFilter ? pretty(state.temperatureFilter) : "all";
@@ -1419,7 +1450,11 @@ async function loadOverview() {
     renderOverview(data);
   } catch (error) {
     logDashboardError("Overview load failed", error);
-    setConnectionStatus("error", "Reconnecting...");
+    if (!state.overviewLoaded) {
+      renderDashboardFallback("Dashboard data is still loading. Actions will stay disabled until the server responds.");
+    } else {
+      setConnectionStatus("error", "Reconnecting...");
+    }
     showNotice("Dashboard data could not load. Existing data will stay visible while we reconnect.", true);
   }
 }
@@ -1586,14 +1621,19 @@ function renderSelectOptions(select, values, currentValue, label) {
 }
 
 async function loadSessionAndFeatures() {
-  const [sessionData, featureData, integrationData] = await Promise.all([
+  const [sessionData, featureData] = await Promise.all([
     publicApi("/session"),
-    publicApi("/features/enabled"),
-    publicApi("/integrations/status")
+    publicApi("/features/enabled")
   ]);
   state.session = sessionData.session || null;
   state.features = featureData.features || [];
-  state.integration = integrationData.integration || null;
+  try {
+    const integrationData = await publicApi("/integrations/status");
+    state.integration = integrationData.integration || null;
+  } catch (error) {
+    logDashboardError("Integration status load failed", error);
+    state.integration = null;
+  }
   state.enabledFeatureKeys = new Set(state.features.map((feature) => feature.key));
   applyFeatureVisibility();
   applyIntegrationAvailability();
@@ -1624,7 +1664,7 @@ function firstAvailableView() {
 function applyFeatureVisibility() {
   document.body.dataset.role = state.session?.role || "USER";
   const company = state.session?.company;
-  const companyName = company?.name || (isAdmin() ? "Platform" : "Company");
+  const companyName = company?.name || (isAdmin() ? "Platform" : state.session?.username || "Workspace");
   const companyMark = companyInitials(companyName);
   setText("companyBrandMark", companyMark);
   setText("companyBrandTitle", companyName);
@@ -1662,7 +1702,7 @@ function applyIntegrationAvailability() {
   const googleSheetsConnected = integrationConnected("googleSheets");
   const metaAdsConnected = integrationConnected("metaAds");
 
-  ["sendSelectedBulkBtn"].forEach((id) => {
+  ["sendSelectedBulkBtn", "sendInitialBtn"].forEach((id) => {
     const button = $(`#${id}`);
     if (!button) return;
     button.disabled = !whatsAppConnected;
@@ -1675,6 +1715,7 @@ function applyIntegrationAvailability() {
     button.title = googleSheetsConnected ? "" : "Google Sheets not connected.";
   });
   state.metaAdsConnected = state.metaAdsConnected && metaAdsConnected;
+  renderAds();
 }
 
 function renderFeatureToggles() {
@@ -3067,6 +3108,12 @@ async function performOrderAction(orderId, action, button) {
 }
 
 async function startDashboard() {
+  const fallbackTimer = window.setTimeout(() => {
+    if (!state.overviewLoaded) {
+      renderDashboardFallback("Dashboard is taking longer than expected. You can keep working while it reconnects.");
+      showNotice("Dashboard is taking longer than expected. Retrying in the background.", true);
+    }
+  }, DASHBOARD_START_FALLBACK_MS);
   try {
     await loadSessionAndFeatures();
     bindEvents();
@@ -3077,6 +3124,9 @@ async function startDashboard() {
     switchView(views[requestedView] ? requestedView : featureEnabledForView("overview") ? "overview" : firstAvailableView());
     startDashboardPolling();
   } catch (error) {
+    if (!state.overviewLoaded) {
+      renderDashboardFallback("Dashboard could not start. Please refresh or sign in again.");
+    }
     showNotice(error.message || "Dashboard could not start.", true);
   }
 

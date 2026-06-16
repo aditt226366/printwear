@@ -197,6 +197,43 @@ async function loadUsers() {
   renderUsers();
 }
 
+async function createUserFromForm(form) {
+  if (!form || form.dataset.submitting === "true") return;
+  const button = form.querySelector("button[type='submit']");
+  const previousHtml = button?.innerHTML;
+  form.dataset.submitting = "true";
+  if (button) {
+    button.disabled = true;
+    button.innerHTML = `<i data-lucide="loader-circle"></i>Creating user`;
+    refreshIcons();
+  }
+  try {
+    await api("/admin/users", {
+      method: "POST",
+      body: JSON.stringify({
+        companyId: $("#userCompany").value,
+        name: $("#userName").value,
+        username: $("#userUsername").value,
+        password: $("#userPassword").value,
+        confirmPassword: $("#userConfirmPassword").value,
+        status: $("#userStatus").value
+      })
+    });
+    form.reset();
+    showNotice("User created.");
+    await loadUsers();
+  } catch (error) {
+    showNotice(error.message, true);
+  } finally {
+    delete form.dataset.submitting;
+    if (button) {
+      button.disabled = false;
+      button.innerHTML = previousHtml || `<i data-lucide="user-plus"></i>Create user`;
+      refreshIcons();
+    }
+  }
+}
+
 function filteredUsers() {
   const search = adminState.userFilters.search.toLowerCase().trim();
   return adminState.users.filter((user) => {
@@ -472,20 +509,14 @@ function bindEvents() {
   });
   $("#userForm")?.addEventListener("submit", async (event) => {
     event.preventDefault();
-    await api("/admin/users", {
-      method: "POST",
-      body: JSON.stringify({
-        companyId: $("#userCompany").value,
-        name: $("#userName").value,
-        username: $("#userUsername").value,
-        password: $("#userPassword").value,
-        confirmPassword: $("#userConfirmPassword").value,
-        status: $("#userStatus").value
-      })
-    });
-    event.target.reset();
-    showNotice("User created.");
-    await loadUsers();
+    await createUserFromForm(event.currentTarget);
+  });
+  $("#userForm button[type='submit']")?.addEventListener("click", (event) => {
+    event.preventDefault();
+    const form = event.currentTarget.form;
+    if (!form || form.dataset.submitting === "true") return;
+    if (typeof form.requestSubmit === "function") form.requestSubmit();
+    else form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   });
   $("#userSearch")?.addEventListener("input", (event) => {
     adminState.userFilters.search = event.target.value;

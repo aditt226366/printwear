@@ -74,17 +74,8 @@ function decryptSecret(value?: string | null) {
   ]).toString("utf8");
 }
 
-function maskSecret(value?: string | null) {
-  if (!value) return null;
-  const plain = decryptSecret(value);
-  if (!plain) return null;
-  return `••••••••${plain.slice(-4)}`;
-}
-
 function maskEncryptedSecret(value?: string | null) {
-  if (!value) return null;
-  const plain = decryptSecret(value);
-  return plain ? `********${plain.slice(-4)}` : null;
+  return value ? "Saved secret" : null;
 }
 
 function publicIntegration(row: CompanyIntegration | null) {
@@ -96,7 +87,7 @@ function publicIntegration(row: CompanyIntegration | null) {
     whatsappPhoneNumberId: row?.whatsappPhoneNumberId ?? null,
     whatsappBusinessAccountId: row?.whatsappBusinessAccountId ?? null,
     whatsappAccessTokenMasked: maskEncryptedSecret(row?.whatsappAccessTokenEncrypted),
-    whatsappVerifyToken: row?.whatsappVerifyToken ? `••••••••${row.whatsappVerifyToken.slice(-4)}` : null,
+    whatsappVerifyToken: row?.whatsappVerifyToken ? `********${row.whatsappVerifyToken.slice(-4)}` : null,
     whatsappDefaultTemplateName: row?.whatsappDefaultTemplateName ?? null,
     whatsappTemplateLanguage: row?.whatsappTemplateLanguage ?? "en",
     metaAdAccountId: row?.metaAdAccountId ?? null,
