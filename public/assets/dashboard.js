@@ -1736,7 +1736,6 @@ function renderCompanyContextMissing() {
   state.humanActionQueue = [];
   state.orderPipeline = {};
   state.leads = [];
-  setText("companyBrandMark", "--");
   setText("companyBrandTitle", "Company context missing");
   setText("dashboardHeroTitle", COMPANY_CONTEXT_MISSING_MESSAGE);
   setText("dashboardHeroSummary", "Your account is not assigned to a company workspace.");
@@ -2360,7 +2359,6 @@ function applyFeatureVisibility() {
   const missingCompanyContext = Boolean(state.session && !isAdmin() && !company?.id);
   const companyName = isAdmin() ? "Platform" : missingCompanyContext ? "Company context missing" : company?.name || "CRM OS";
   const companyMark = companyInitials(companyName);
-  setText("companyBrandMark", companyMark);
   setText("companyBrandTitle", companyName);
   setText("dashboardHeroTitle", missingCompanyContext ? COMPANY_CONTEXT_MISSING_MESSAGE : `${companyName} CRM Command Center`);
   if (company?.brandColor) document.documentElement.style.setProperty("--tenant-accent", company.brandColor);

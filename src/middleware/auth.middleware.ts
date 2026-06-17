@@ -40,7 +40,6 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction) {
             <main class="login-page">
               <section class="login-panel">
                 <div class="login-brand">
-                  <span class="brand-mark">PA</span>
                   <div>
                     <p class="eyebrow">Platform Administration</p>
                     <h1>Admin access required</h1>
