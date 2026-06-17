@@ -6,7 +6,7 @@ const adminState = {
   integrationTests: {},
   diagnostics: null,
   billing: { summary: {}, logs: [] },
-  currentView: "companies",
+  currentView: "overview",
   userFilters: {
     search: "",
     companyId: "",
@@ -31,6 +31,11 @@ const featureDescriptions = {
 
 function $(selector) {
   return document.querySelector(selector);
+}
+
+function setText(id, value) {
+  const element = document.querySelector(`#${id}`);
+  if (element) element.textContent = value;
 }
 
 function escapeHtml(value) {
@@ -250,6 +255,7 @@ async function loadCompanies(selectedUserCompanyId = "") {
 
 function renderCompanies() {
   const table = $("#adminCompaniesTable");
+  setText("adminCompanyCount", adminState.companies.length);
   if (!table) return;
   if (!adminState.companies.length) {
     table.innerHTML = `<div class="empty-state"><strong>No accounts yet.</strong><span>Add an account to provision access, entitlements, connections, and usage tracking.</span></div>`;
@@ -334,6 +340,7 @@ function filteredUsers() {
 
 function renderUsers() {
   const table = $("#adminUsersTable");
+  setText("adminUserCount", adminState.users.length);
   if (!table) return;
   if (!adminState.users.length) {
     table.innerHTML = `<div class="empty-state"><strong>No members yet.</strong><span>Add an account and member to begin.</span></div>`;
@@ -517,6 +524,7 @@ function renderDiagnostics() {
   const status = adminState.diagnostics || {};
   const missingTables = status.missingTables || [];
   const missingMigrations = status.missingMigrations || [];
+  setText("adminRuntimeStatus", status.databaseConnected && !missingTables.length ? "Ready" : "Check");
   $("#diagnosticsSummary").innerHTML = [
     ["Database connected", status.databaseConnected ? "Yes" : "No"],
     ["Migration applied", status.migrationApplied ? "Yes" : "No"],

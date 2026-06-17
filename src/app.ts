@@ -53,7 +53,7 @@ export function createApp() {
   app.get("/", (req, res) => {
     const session = authService.readSession(req);
     if (!session) {
-      res.redirect("/login");
+      res.sendFile(path.join(publicDir, "landing.html"));
       return;
     }
 

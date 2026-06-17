@@ -29,6 +29,10 @@ export const getSession = asyncHandler(async (_req: Request, res: Response) => {
 
 export const getEnabledFeatures = asyncHandler(async (_req: Request, res: Response) => {
   const session = res.locals.session;
+  if (session.role !== "ADMIN" && !session.companyId) {
+    res.status(409).json({ error: "Company context missing. Please contact admin.", code: "COMPANY_CONTEXT_MISSING", features: [] });
+    return;
+  }
   const features = session.role === "ADMIN" ? await featureFlagService.list(session.companyId) : await featureFlagService.enabledForUser(session.companyId);
   res.json({ features });
 });

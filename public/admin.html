@@ -6,54 +6,75 @@
     <title>Platform Administration</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,650;9..144,800&family=IBM+Plex+Mono:wght@500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/assets/styles.css?v=20260617-console" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/assets/styles.css?v=20260617-premium" />
   </head>
   <body class="app-shell admin-shell">
-    <header class="topbar admin-topbar">
+    <aside class="topbar admin-topbar app-sidebar">
       <div class="brand-block">
         <span class="brand-mark">PA</span>
         <div>
-          <strong>Operating Console</strong>
-          <span>Accounts, access, entitlements, connections, usage and system health.</span>
+          <strong>Platform Administration</strong>
+          <span>Control panel</span>
         </div>
       </div>
       <nav class="top-nav" aria-label="Admin sections">
-        <button class="nav-item active" data-admin-view="companies"><i data-lucide="building-2"></i>Accounts</button>
-        <button class="nav-item" data-admin-view="users"><i data-lucide="users"></i>Access</button>
-        <button class="nav-item" data-admin-view="features"><i data-lucide="sliders-horizontal"></i>Entitlements</button>
-        <button class="nav-item" data-admin-view="integrations"><i data-lucide="plug-zap"></i>Connections</button>
-        <button class="nav-item" data-admin-view="billing"><i data-lucide="receipt-text"></i>Usage</button>
+        <button class="nav-item active" data-admin-view="overview"><i data-lucide="layout-dashboard"></i>Overview</button>
+        <button class="nav-item" data-admin-view="companies"><i data-lucide="building-2"></i>Companies</button>
+        <button class="nav-item" data-admin-view="users"><i data-lucide="users"></i>Users</button>
+        <button class="nav-item" data-admin-view="features"><i data-lucide="sliders-horizontal"></i>Features</button>
+        <button class="nav-item" data-admin-view="integrations"><i data-lucide="plug-zap"></i>Integrations</button>
+        <button class="nav-item" data-admin-view="billing"><i data-lucide="receipt-text"></i>Billing</button>
         <button class="nav-item" data-admin-view="diagnostics"><i data-lucide="activity"></i>System Health</button>
       </nav>
-      <div class="topbar-right">
-        <form action="/auth/logout" method="post" data-logout-form><button class="secondary-button" type="submit"><i data-lucide="log-out"></i>Logout</button></form>
-      </div>
-    </header>
+    </aside>
 
     <main class="workspace admin-workspace">
+      <div class="topbar-right">
+        <div class="global-search">
+          <i data-lucide="search"></i>
+          <input id="adminGlobalSearch" placeholder="Search companies, users, features..." />
+        </div>
+        <form action="/auth/logout" method="post" data-logout-form><button class="secondary-button" type="submit"><i data-lucide="log-out"></i>Logout</button></form>
+      </div>
       <section id="adminNotice" class="notice hidden"></section>
 
-      <section id="adminCompaniesView" class="view active-view">
+      <section id="adminOverviewView" class="view active-view">
         <div class="page-heading-row premium-heading">
           <div>
-            <p class="eyebrow">Accounts</p>
-            <h1>Account operations</h1>
+            <p class="eyebrow">Platform Administration</p>
+            <h1>Overview</h1>
+            <span>Company access, feature visibility, integrations, usage and system readiness in one control panel.</span>
+          </div>
+        </div>
+        <section class="admin-overview-grid">
+          <article class="metric-card premium-card"><span>Companies</span><strong id="adminCompanyCount">0</strong><small>Tenant workspaces</small></article>
+          <article class="metric-card premium-card"><span>Users</span><strong id="adminUserCount">0</strong><small>Admin and tenant members</small></article>
+          <article class="metric-card premium-card"><span>Runtime</span><strong id="adminRuntimeStatus">--</strong><small>System health</small></article>
+          <article class="metric-card premium-card"><span>Cost</span><strong>NIL</strong><small>Current billing policy</small></article>
+        </section>
+      </section>
+
+      <section id="adminCompaniesView" class="view">
+        <div class="page-heading-row premium-heading">
+          <div>
+            <p class="eyebrow">Companies</p>
+            <h1>Company operations</h1>
             <span>Add tenant accounts and review which workspaces are active, inactive, or still being set up.</span>
           </div>
         </div>
         <section class="admin-grid">
           <article class="panel premium-card">
-            <div class="panel-heading"><div><p class="eyebrow">Primary action</p><h2>Add account</h2></div></div>
+            <div class="panel-heading"><div><p class="eyebrow">Create company</p><h2>New company</h2></div></div>
             <form id="companyForm" class="automation-form" novalidate>
               <label>Company name<input id="companyName" required placeholder="ABC Uniforms" /></label>
               <label>Slug<input id="companySlug" placeholder="abc-uniforms" /></label>
               <label>Status<select id="companyStatus"><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></label>
-              <button class="primary-button" type="submit"><i data-lucide="building-2"></i>Add account</button>
+              <button class="primary-button" type="submit"><i data-lucide="building-2"></i>Create company</button>
             </form>
           </article>
           <article class="panel premium-card">
-            <div class="panel-heading"><div><p class="eyebrow">Primary insight</p><h2>Account list</h2></div></div>
+            <div class="panel-heading"><div><p class="eyebrow">Company table</p><h2>Companies</h2></div></div>
             <div id="adminCompaniesTable" class="data-table admin-users-table"></div>
           </article>
         </section>
@@ -62,8 +83,8 @@
       <section id="adminUsersView" class="view">
         <div class="page-heading-row premium-heading">
           <div>
-            <p class="eyebrow">Access</p>
-            <h1>Member access</h1>
+            <p class="eyebrow">Users</p>
+            <h1>User access</h1>
             <span>Add members, control roles, reset credentials, and suspend or restore access securely.</span>
           </div>
         </div>
@@ -71,9 +92,10 @@
           <article class="panel premium-card">
             <div class="panel-heading"><div><p class="eyebrow">Primary action</p><h2>Add member</h2></div></div>
             <form id="userForm" class="automation-form" novalidate>
-              <label>Account<select id="userCompany" required></select></label>
+              <label>Company<select id="userCompany" required></select></label>
               <div class="form-row"><label>Name<input id="userName" required /></label><label>Username<input id="userUsername" required /></label></div>
               <div class="form-row"><label>Password<input id="userPassword" type="password" required /></label><label>Confirm password<input id="userConfirmPassword" type="password" required /></label></div>
+              <label>Role<select id="userRole" disabled><option value="USER">User</option></select></label>
               <label>Status<select id="userStatus"><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></label>
               <button class="primary-button" type="submit"><i data-lucide="user-plus"></i>Add member</button>
             </form>

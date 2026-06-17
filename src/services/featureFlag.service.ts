@@ -84,6 +84,7 @@ export const featureFlagService = {
   },
 
   async enabledForUser(companyId?: string | null) {
+    if (!companyId) return [];
     return (await this.list(companyId)).filter((feature) => feature.enabled);
   },
 

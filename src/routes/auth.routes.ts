@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { login, logout, logoutJson, showLogin } from "../controllers/auth.controller.js";
 import { showAdminPanel, showDashboard } from "../controllers/dashboard.controller.js";
-import { requireAdmin, requireSession } from "../middleware/auth.middleware.js";
+import { requireAdmin, requireUser } from "../middleware/auth.middleware.js";
 
 export const authRoutes = Router();
 
@@ -11,5 +11,5 @@ authRoutes.post("/auth/login", login);
 authRoutes.post("/auth/logout", logoutJson);
 authRoutes.post("/logout", logout);
 authRoutes.get("/admin", requireAdmin, showAdminPanel);
-authRoutes.get("/dashboard", requireSession, showDashboard);
-authRoutes.get("/command-center", requireSession, showDashboard);
+authRoutes.get("/dashboard", requireUser, showDashboard);
+authRoutes.get("/command-center", requireUser, showDashboard);

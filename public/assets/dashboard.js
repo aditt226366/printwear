@@ -8,6 +8,7 @@ const state = {
   enabledFeatureKeys: new Set(),
   leadSearch: "",
   chatSearch: "",
+  chatFilter: "all",
   temperatureFilter: "",
   currentView: "overview",
   overviewLoaded: false,
@@ -58,6 +59,7 @@ const state = {
 const DASHBOARD_POLL_INTERVAL_MS = 4000;
 const REQUEST_TIMEOUT_MS = 12000;
 const DASHBOARD_START_FALLBACK_MS = 14000;
+const COMPANY_CONTEXT_MISSING_MESSAGE = "Company context missing. Please contact admin.";
 
 const views = {
   overview: document.querySelector("#overviewView"),
@@ -299,6 +301,7 @@ function isNearBottom(element, threshold = 96) {
 
 function showNotice(message, isError = false) {
   const notice = $("#notice");
+  if (!notice) return;
   notice.textContent = message;
   notice.classList.toggle("error", isError);
   notice.classList.remove("hidden");
@@ -389,7 +392,9 @@ async function publicApi(path, options = {}) {
     }
     if (response.status === 404) throw new Error(errorText || "That record could not be found.");
     if (response.status === 401) throw new Error("Your session has expired. Please sign in again.");
+    if (response.status === 409 && errorText === COMPANY_CONTEXT_MISSING_MESSAGE) throw new Error(COMPANY_CONTEXT_MISSING_MESSAGE);
     if (response.status === 403) {
+      if (errorText === COMPANY_CONTEXT_MISSING_MESSAGE) throw new Error(COMPANY_CONTEXT_MISSING_MESSAGE);
       throw new Error(errorDetails.feature ? "Feature disabled by admin." : "Your session is not authorized for this action.");
     }
     if (errorText && !/internal server error/i.test(errorText)) {
@@ -954,10 +959,53 @@ function renderResponsePerformance(stats = {}) {
   );
 }
 
+function renderLeadSourceDistribution() {
+  const target = $("#leadSourceDistribution");
+  if (!target) return;
+  const counts = state.leads.reduce((map, lead) => {
+    const source = lead.source || "WhatsApp";
+    map.set(source, (map.get(source) || 0) + 1);
+    return map;
+  }, new Map());
+  const rows = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const total = Math.max(1, rows.reduce((sum, [, count]) => sum + count, 0));
+  setHtmlIfChanged(
+    target,
+    rows.length
+      ? `<div class="source-bars">${rows.map(([source, count]) => `
+        <div class="source-bar-row">
+          <span>${escapeHtml(source)}</span>
+          <i><em style="width:${Math.max(6, Math.round((count / total) * 100))}%"></em></i>
+          <strong>${count}</strong>
+        </div>
+      `).join("")}</div>`
+      : emptyState("No lead sources yet.", "Lead source distribution appears after real leads are imported.")
+  );
+}
+
+function renderMessageActivityTrend(stats = {}) {
+  const target = $("#messageActivityTrend");
+  if (!target) return;
+  const inbound = Number(stats.inboundMessages || 0);
+  const outbound = Number(stats.outboundMessages || 0);
+  const total = Math.max(1, inbound + outbound);
+  setHtmlIfChanged(
+    target,
+    `
+      <div class="activity-bars">
+        <div><span>Inbound</span><strong>${inbound}</strong><i><em style="width:${Math.max(4, Math.round((inbound / total) * 100))}%"></em></i></div>
+        <div><span>Outbound</span><strong>${outbound}</strong><i><em style="width:${Math.max(4, Math.round((outbound / total) * 100))}%"></em></i></div>
+      </div>
+    `
+  );
+}
+
 function renderAnalytics(stats = {}) {
   renderLeadGrowthChart(stats);
   renderTemperatureDistribution(stats);
   renderResponsePerformance(stats);
+  renderLeadSourceDistribution();
+  renderMessageActivityTrend(stats);
   const reportsLeadMix = $("#reportsLeadMix");
   const reportsResponse = $("#reportsResponse");
   if (reportsLeadMix) setHtmlIfChanged(reportsLeadMix, $("#temperatureDistribution")?.innerHTML || "");
@@ -1494,13 +1542,14 @@ function renderDerivedOverview() {
 
   setText(
     "dashboardHeroSummary",
-    `Live WhatsApp sales, orders, and human takeover intelligence. ${activeChats} active chat${activeChats === 1 ? "" : "s"}, ${ordersDone} order${ordersDone === 1 ? "" : "s"} done.`
+    `Lead analytics from real WhatsApp activity. ${activeChats} active chat${activeChats === 1 ? "" : "s"} and ${totalMessages} message${totalMessages === 1 ? "" : "s"} logged.`
   );
   setText("hotLeadTrend", `${Math.round((stats.hotLeads / total) * 100)}% hot`);
   setText("warmLeadTrend", `${Math.round((stats.warmLeads / total) * 100)}% warm`);
   setText("scrapLeadTrend", `${Math.round((stats.scrapLeads / total) * 100)}% scrap`);
   setText("humanTakeoverTrend", humanCount ? `${humanCount} waiting` : "Clear");
   setText("ordersDoneTrend", ordersDone ? `${ordersDone} ready` : "No completed orders");
+  animateCounter("totalLeads", stats.totalLeads || state.leads.length || 0);
   animateCounter("hotLeads", stats.hotLeads);
   animateCounter("warmLeads", stats.warmLeads);
   animateCounter("scrapLeads", stats.scrapLeads);
@@ -1509,6 +1558,7 @@ function renderDerivedOverview() {
   setText("hotLeadInsight", `${stats.hotLeads} lead${stats.hotLeads === 1 ? "" : "s"} with 6+ messages deserve same-day follow-up.`);
   setText("warmLeadInsight", `${stats.warmLeads} account${stats.warmLeads === 1 ? "" : "s"} with 2-5 messages need nurture.`);
   setText("scrapLeadInsight", `${stats.scrapLeads} record${stats.scrapLeads === 1 ? "" : "s"} under 2 messages stay low priority.`);
+  setText("totalLeadInsight", `${stats.totalLeads || state.leads.length || 0} real lead${(stats.totalLeads || state.leads.length || 0) === 1 ? "" : "s"} currently tracked.`);
   setText("humanQueueInsight", humanCount ? `${humanCount} conversation${humanCount === 1 ? "" : "s"} need manual attention.` : "No human takeover needed right now.");
   setText("ordersDoneInsight", `${ordersDone} confirmed, dispatched, delivered, or completed order${ordersDone === 1 ? "" : "s"}.`);
 
@@ -1566,16 +1616,89 @@ function emptyOverviewData() {
   };
 }
 
+function emptyCommandCenterData(segment = state.selectedPulseSegment || "all_attention") {
+  const segmentKeys = ["all_attention", "inbox", "orders", "ai_handoffs", "human_queue", "campaign_replies"];
+  const now = new Date().toISOString();
+  return {
+    question: "What needs attention now?",
+    selectedPulseSegment: segment,
+    lastUpdatedAt: now,
+    pulse: {
+      activeSegment: segment,
+      segments: segmentKeys.map((key) => ({
+        key,
+        label: commandCenterSegmentLabel(key),
+        count: 0,
+        intensity: key === segment ? 12 : 8,
+        severity: "quiet",
+        active: key === segment
+      }))
+    },
+    priorityQueue: {
+      activeFilter: segment,
+      selectedPriorityItemId: null,
+      totalCount: 0,
+      items: []
+    },
+    context: {
+      activeSegment: segment,
+      selectedPriorityItemId: null,
+      default: null,
+      items: []
+    },
+    secondarySignals: [],
+    timeline: { events: [] }
+  };
+}
+
 function renderDashboardFallback(message = "Command Center data is not available yet.") {
   state.dashboardLoaded = true;
   state.humanActionQueue = [];
   state.orderPipeline = {};
   state.leads = state.leads || [];
+  state.commandCenter = emptyCommandCenterData();
   renderLeadCards();
   renderChatList();
   renderHumanActionQueue();
   renderOverview({ ...emptyOverviewData(), notice: message });
   setConnectionStatus("error", message);
+}
+
+function renderCompanyContextMissing() {
+  state.dashboardLoaded = true;
+  state.overviewLoaded = true;
+  state.latestOverview = emptyOverviewData();
+  state.commandCenter = emptyCommandCenterData();
+  state.humanActionQueue = [];
+  state.orderPipeline = {};
+  state.leads = [];
+  setText("companyBrandMark", "--");
+  setText("companyBrandTitle", "Company context missing");
+  setText("dashboardHeroTitle", COMPANY_CONTEXT_MISSING_MESSAGE);
+  setText("dashboardHeroSummary", "Your account is not assigned to a company workspace.");
+  $("#overviewSkeleton")?.classList.add("hidden");
+  $("#overviewContent")?.classList.remove("hidden");
+  renderLeadCards();
+  renderChatList();
+  renderHumanActionQueue();
+  renderOverview(emptyOverviewData());
+  setText("dashboardHeroTitle", COMPANY_CONTEXT_MISSING_MESSAGE);
+  setText("dashboardHeroSummary", "Your account is not assigned to a company workspace.");
+  setConnectionStatus("error", COMPANY_CONTEXT_MISSING_MESSAGE);
+}
+
+function applyDashboardSnapshot(data = emptyOverviewData(), commandCenter = emptyCommandCenterData()) {
+  const recentLeads = data.recentLeads || data.recentConversations || [];
+  data.recentLeads = recentLeads;
+  state.dashboardLoaded = true;
+  state.commandCenter = commandCenter || emptyCommandCenterData();
+  state.humanActionQueue = data.humanActionQueue || data.items || [];
+  state.orderPipeline = data.orderPipeline || data.pipeline || {};
+  state.leads = state.leads.length ? mergeLeads(state.leads, recentLeads) : recentLeads;
+  renderLeadCards();
+  renderChatList();
+  renderHumanActionQueue();
+  renderOverview(data);
 }
 
 async function loadCommandCenter(segment = state.selectedPulseSegment) {
@@ -1751,9 +1874,18 @@ function renderLeadCards() {
 function renderChatList() {
   const list = $("#chatConversationList");
   if (!list) return;
-  const leads = getFilteredLeads(true).sort(
+  const leads = getFilteredLeads(true).filter((lead) => {
+    if (state.chatFilter === "unread") return Number(lead.unreadCount || 0) > 0;
+    if (state.chatFilter === "human") return isHumanQueueLead(lead);
+    if (state.chatFilter === "orders") return Boolean(lead.orderSummary || lead.orderStatus || lead.orderId);
+    if (state.chatFilter === "campaign") return /campaign|broadcast|ad/i.test(`${lead.source || ""} ${lead.tags || ""} ${lead.lastMessage || ""}`);
+    return true;
+  }).sort(
     (a, b) => new Date(b.lastMessageAt || b.updatedAt).getTime() - new Date(a.lastMessageAt || a.updatedAt).getTime()
   );
+  document.querySelectorAll("[data-chat-filter]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.chatFilter === state.chatFilter);
+  });
 
   renderKeyedChildren(
     list,
@@ -1779,7 +1911,7 @@ function renderChatList() {
             </button>
           `;
     },
-    emptyState("No chats found", "Try a different search or import leads to start conversations.")
+    emptyState("No chats found", "Try another filter or import leads to start conversations.")
   );
 
   bindDelegatedClick(list, "chatLeadSelect", "[data-chat-lead]", (button) => loadConversation(button.dataset.chatLead));
@@ -1905,21 +2037,28 @@ function renderConversation(data, options = {}) {
 
 async function loadOverview() {
   try {
-    const [data, commandCenter] = await Promise.all([
+    const [dashboardResult, commandCenterResult] = await Promise.allSettled([
       dashboardApi(),
       commandCenterApi(state.selectedPulseSegment)
     ]);
-    const recentLeads = data.recentLeads || data.recentConversations || [];
-    data.recentLeads = recentLeads;
-    state.dashboardLoaded = true;
-    state.commandCenter = commandCenter;
-    state.humanActionQueue = data.humanActionQueue || data.items || [];
-    state.orderPipeline = data.orderPipeline || data.pipeline || {};
-    state.leads = state.leads.length ? mergeLeads(state.leads, recentLeads) : recentLeads;
-    renderLeadCards();
-    renderChatList();
-    renderHumanActionQueue();
-    renderOverview(data);
+
+    if (dashboardResult.status === "rejected") {
+      throw dashboardResult.reason;
+    }
+
+    const commandCenter = commandCenterResult.status === "fulfilled"
+      ? commandCenterResult.value
+      : emptyCommandCenterData();
+
+    if (commandCenterResult.status === "rejected") {
+      logDashboardError("Command Center live signals failed", commandCenterResult.reason);
+      if (!state.overviewLoaded) {
+        showNotice("Live attention signals are unavailable. Lead analytics are still loaded.", true);
+      }
+    }
+
+    applyDashboardSnapshot(dashboardResult.value, commandCenter);
+    setConnectionStatus("connected");
   } catch (error) {
     logDashboardError("Overview load failed", error);
     if (!state.overviewLoaded) {
@@ -2093,11 +2232,25 @@ function renderSelectOptions(select, values, currentValue, label) {
 }
 
 async function loadSessionAndFeatures() {
-  const [sessionData, featureData] = await Promise.all([
-    publicApi("/session"),
-    publicApi("/features/enabled")
-  ]);
+  const sessionData = await publicApi("/session");
   state.session = sessionData.session || null;
+  if (isAdmin()) {
+    const error = new Error("Redirecting to admin panel.");
+    error.redirecting = true;
+    window.location.replace("/admin");
+    throw error;
+  }
+
+  if (!state.session?.company?.id) {
+    state.features = [];
+    state.enabledFeatureKeys = new Set();
+    applyFeatureVisibility();
+    const error = new Error(COMPANY_CONTEXT_MISSING_MESSAGE);
+    error.companyContextMissing = true;
+    throw error;
+  }
+
+  const featureData = await publicApi("/features/enabled");
   state.features = featureData.features || [];
   try {
     const integrationData = await publicApi("/integrations/status");
@@ -2136,11 +2289,12 @@ function firstAvailableView() {
 function applyFeatureVisibility() {
   document.body.dataset.role = state.session?.role || "USER";
   const company = state.session?.company;
-  const companyName = company?.name || (isAdmin() ? "Platform" : state.session?.username || "Workspace");
+  const missingCompanyContext = Boolean(state.session && !isAdmin() && !company?.id);
+  const companyName = isAdmin() ? "Platform" : missingCompanyContext ? "Company context missing" : company?.name || "CRM OS";
   const companyMark = companyInitials(companyName);
   setText("companyBrandMark", companyMark);
   setText("companyBrandTitle", companyName);
-  setText("dashboardHeroTitle", `${companyName} CRM Command Center`);
+  setText("dashboardHeroTitle", missingCompanyContext ? COMPANY_CONTEXT_MISSING_MESSAGE : `${companyName} CRM Command Center`);
   if (company?.brandColor) document.documentElement.style.setProperty("--tenant-accent", company.brandColor);
   const initials = (state.session?.email || state.session?.username || companyMark || "AD")
     .split("@")[0]
@@ -2968,16 +3122,27 @@ async function pollDashboardData() {
       await loadConversation(selectedLeadId, { forceBottom });
     }
     if ((state.currentView === "overview" && featureEnabledForView("overview")) || (state.currentView === "reports" && featureEnabledForView("reports"))) {
-      const [data, commandCenter] = await Promise.all([
+      const [dashboardResult, commandCenterResult] = await Promise.allSettled([
         dashboardApi(),
         commandCenterApi(state.selectedPulseSegment)
       ]);
-      state.latestOverview = data;
-      state.commandCenter = commandCenter;
-      state.humanActionQueue = data.humanActionQueue || data.items || [];
-      state.orderPipeline = data.orderPipeline || data.pipeline || {};
-      renderDerivedOverview();
-      renderCommandCenter(commandCenter);
+      if (dashboardResult.status === "fulfilled") {
+        const data = dashboardResult.value;
+        state.latestOverview = data;
+        state.humanActionQueue = data.humanActionQueue || data.items || [];
+        state.orderPipeline = data.orderPipeline || data.pipeline || {};
+        renderDerivedOverview();
+      } else {
+        throw dashboardResult.reason;
+      }
+
+      if (commandCenterResult.status === "fulfilled") {
+        state.commandCenter = commandCenterResult.value;
+        renderCommandCenter(commandCenterResult.value);
+      } else {
+        logDashboardError("Command Center polling signals failed", commandCenterResult.reason);
+        renderCommandCenter(state.commandCenter || emptyCommandCenterData());
+      }
     } else if (state.currentView === "orders" && featureEnabledForView("orders")) {
       await loadOrderData();
     } else if (state.currentView === "human" && featureEnabledForView("human")) {
@@ -3113,6 +3278,13 @@ function bindEvents() {
     state.chatSearch = event.target.value.trim();
     window.clearTimeout(chatSearchTimer);
     chatSearchTimer = window.setTimeout(renderChatList, 120);
+  });
+
+  document.querySelectorAll("[data-chat-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.chatFilter = button.dataset.chatFilter || "all";
+      renderChatList();
+    });
   });
 
   $("#globalSearch")?.addEventListener("keydown", (event) => {
@@ -3464,6 +3636,17 @@ function bindEvents() {
     }
   });
 
+  $("#aiSuggestBtn")?.addEventListener("click", () => {
+    const input = $("#chatReplyText");
+    if (!input) return;
+    const lead = state.selectedConversation?.lead;
+    const suggestion = lead
+      ? `Hi ${lead.name || "there"}, thanks for reaching out. I can help with that.`
+      : "Select a conversation first, then use AI Suggest for a reply draft.";
+    input.value = suggestion;
+    input.focus();
+  });
+
   $("#profileResolveHumanBtn")?.addEventListener("click", () => {
     if (state.selectedLeadId) resolveHumanAction(state.selectedLeadId);
   });
@@ -3629,6 +3812,12 @@ async function startDashboard() {
     switchView(views[requestedView] ? requestedView : featureEnabledForView("overview") ? "overview" : firstAvailableView());
     startDashboardPolling();
   } catch (error) {
+    if (error?.redirecting) return;
+    if (error?.companyContextMissing || error?.message === COMPANY_CONTEXT_MISSING_MESSAGE) {
+      renderCompanyContextMissing();
+      showNotice(COMPANY_CONTEXT_MISSING_MESSAGE, true);
+      return;
+    }
     if (!state.overviewLoaded) {
       renderDashboardFallback("Command Center could not start. Please refresh or sign in again.");
     }

@@ -6,21 +6,21 @@
     <title>Command Center</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,650;9..144,800&family=IBM+Plex+Mono:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/assets/styles.css?v=20260617-console" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/assets/styles.css?v=20260617-premium" />
   </head>
   <body class="app-shell">
-    <header class="topbar">
+    <aside class="topbar app-sidebar">
       <div class="brand-block">
         <span id="companyBrandMark" class="brand-mark">--</span>
         <div>
-          <strong id="companyBrandTitle">Company</strong>
+          <strong id="companyBrandTitle">CRM OS</strong>
           <span>CRM OS</span>
         </div>
       </div>
 
       <nav class="top-nav" aria-label="Operating sections">
-        <button class="nav-item active" data-view="overview"><i data-lucide="radar"></i>Command Center</button>
+        <button class="nav-item active" data-view="overview"><i data-lucide="layout-dashboard"></i>Command Center</button>
         <button class="nav-item" data-view="chats"><i data-lucide="inbox"></i>Inbox</button>
         <button class="nav-item" data-view="contacts"><i data-lucide="contact-round"></i>Contacts</button>
         <button class="nav-item" data-view="broadcasts"><i data-lucide="send-horizontal"></i>Broadcasts</button>
@@ -32,11 +32,13 @@
         <button class="nav-item" data-view="reports"><i data-lucide="chart-no-axes-combined"></i>Reports</button>
         <button class="nav-item" data-view="settings"><i data-lucide="settings"></i>Settings</button>
       </nav>
+    </aside>
 
+    <main class="workspace">
       <div class="topbar-right">
         <div class="global-search">
           <i data-lucide="search"></i>
-          <input id="globalSearch" placeholder="Search conversations, orders, signals..." />
+          <input id="globalSearch" placeholder="Search conversations, leads, orders..." />
         </div>
         <button class="secondary-button icon-button" type="button" aria-label="Notifications">
           <i data-lucide="bell"></i>
@@ -48,9 +50,7 @@
           <button type="submit"><i data-lucide="log-out"></i>Logout</button>
         </form>
       </div>
-    </header>
 
-    <main class="workspace">
       <section id="notice" class="notice hidden"></section>
 
       <section id="overviewView" class="view active-view">
@@ -61,57 +61,59 @@
         </div>
 
         <div id="overviewContent" class="dashboard-stack hidden">
-          <section class="command-center-phase-a">
-            <div class="command-center-main">
-              <header class="command-center-bar">
-                <div>
-                  <p class="eyebrow">Command Center</p>
-                  <h1 id="commandCenterQuestion">What needs attention now?</h1>
-                  <span id="commandCenterSummary">Reading live conversation, order, AI, and human handoff signals.</span>
-                  <small id="commandCenterFreshness" class="command-center-freshness">Waiting for live signal...</small>
-                </div>
-                <button id="resolveNextBtn" class="primary-button compact-action" type="button">
-                  <i data-lucide="arrow-right"></i>
-                  Resolve next
-                </button>
-              </header>
+          <section class="command-center-phase-a lead-analytics-dashboard">
+            <header class="dashboard-hero premium-card">
+              <div>
+                <p class="eyebrow">Command Center</p>
+                <h1 id="dashboardHeroTitle">CRM OS Command Center</h1>
+                <span id="dashboardHeroSummary">Lead analytics from real WhatsApp activity.</span>
+              </div>
+              <div class="mini-status">
+                <span id="commandCenterFreshness" class="command-center-freshness">Waiting for live signal...</span>
+              </div>
+            </header>
 
-              <section class="conversation-pulse-panel premium-card" aria-labelledby="conversationPulseTitle">
-                <div class="panel-heading">
-                  <div>
-                    <p class="eyebrow">Conversation Pulse</p>
-                    <h2 id="conversationPulseTitle">Live attention spine</h2>
-                    <span id="commandCenterFilterLabel">Viewing all attention signals</span>
-                  </div>
-                </div>
-                <div id="conversationPulse" class="conversation-pulse-spine" aria-label="Conversation Pulse"></div>
-                <div id="pulseHoverExplainer" class="pulse-hover-explainer">Hover a pulse segment to inspect what the signal means.</div>
-              </section>
+            <section class="metric-card-grid">
+              <article class="metric-card premium-card">
+                <span>Total Leads</span>
+                <strong id="totalLeads">0</strong>
+                <small id="totalLeadInsight">Real leads currently tracked.</small>
+              </article>
+              <article class="metric-card premium-card hot">
+                <span>Hot Leads</span>
+                <strong id="hotLeads">0</strong>
+                <small id="hotLeadInsight">6+ messages.</small>
+              </article>
+              <article class="metric-card premium-card warm">
+                <span>Warm Leads</span>
+                <strong id="warmLeads">0</strong>
+                <small id="warmLeadInsight">2-5 messages.</small>
+              </article>
+              <article class="metric-card premium-card scrap">
+                <span>Scrap Leads</span>
+                <strong id="scrapLeads">0</strong>
+                <small id="scrapLeadInsight">Under 2 messages.</small>
+              </article>
+            </section>
 
-              <section class="priority-queue-panel premium-card" aria-labelledby="priorityQueueTitle">
-                <div class="panel-heading">
-                  <div>
-                    <p class="eyebrow">Priority Queue</p>
-                    <h2 id="priorityQueueTitle">Primary work area</h2>
-                    <span id="commandCenterQueueCount">0 attention items</span>
-                  </div>
-                </div>
-                <div id="commandCenterPriorityQueue" class="priority-queue-list"></div>
-              </section>
-            </div>
-
-            <aside class="command-context-rail" aria-label="Command Center context">
-              <section class="context-surface-panel premium-card" aria-labelledby="pulseInterpreterTitle">
-                <p class="eyebrow">Pulse Interpreter</p>
-                <h2 id="pulseInterpreterTitle">Context Surface</h2>
-                <div id="commandCenterContextSurface" class="context-surface"></div>
-              </section>
-
-              <section class="secondary-signal-panel premium-card" aria-label="Secondary signal summary">
-                <p class="eyebrow">Operational Signals</p>
-                <div id="commandCenterSecondarySignals" class="secondary-signal-list"></div>
-              </section>
-            </aside>
+            <section class="analytics-grid">
+              <article class="chart-card premium-card">
+                <div class="panel-heading"><div><p class="eyebrow">Leads over time</p><h2>Lead movement</h2></div></div>
+                <div id="leadGrowthChart" class="line-chart"></div>
+              </article>
+              <article class="chart-card premium-card">
+                <div class="panel-heading"><div><p class="eyebrow">Distribution</p><h2>Hot / Warm / Scrap</h2></div></div>
+                <div id="temperatureDistribution" class="distribution-chart"></div>
+              </article>
+              <article class="chart-card premium-card">
+                <div class="panel-heading"><div><p class="eyebrow">Lead source distribution</p><h2>Source mix</h2></div></div>
+                <div id="leadSourceDistribution" class="distribution-chart"></div>
+              </article>
+              <article class="chart-card premium-card">
+                <div class="panel-heading"><div><p class="eyebrow">Message activity trend</p><h2>Inbound / outbound</h2></div></div>
+                <div id="messageActivityTrend" class="performance-chart"></div>
+              </article>
+            </section>
           </section>
         </div>
       </section>
@@ -132,6 +134,13 @@
               <i data-lucide="search"></i>
               <input id="chatSearch" placeholder="Search chats" />
             </div>
+            <div class="inbox-filter-tabs" aria-label="Conversation filters">
+              <button class="active" type="button" data-chat-filter="all">All</button>
+              <button type="button" data-chat-filter="unread">Unread</button>
+              <button type="button" data-chat-filter="human">Human Queue</button>
+              <button type="button" data-chat-filter="orders">Orders</button>
+              <button type="button" data-chat-filter="campaign">Campaign Replies</button>
+            </div>
             <div id="chatConversationList" class="chat-conversation-list">
               <div class="lead-skeleton"></div>
               <div class="lead-skeleton"></div>
@@ -150,7 +159,7 @@
                 <span id="aiStatusIndicator" class="status-pill"><i data-lucide="sparkles"></i>AI assist</span>
                 <button id="humanTakeoverBtn" class="danger-button" type="button">
                   <i data-lucide="user-round-check"></i>
-                  Human takeover
+                  Mark Human Takeover
                 </button>
               </div>
             </div>
@@ -164,8 +173,12 @@
               <i data-lucide="arrow-down"></i>
               New message
             </button>
-            <form id="chatReplyForm" class="reply-box hidden">
+            <form id="chatReplyForm" class="reply-box">
               <textarea id="chatReplyText" maxlength="700" placeholder="Write a WhatsApp reply"></textarea>
+              <button id="aiSuggestBtn" type="button" class="secondary-button">
+                <i data-lucide="sparkles"></i>
+                AI Suggest
+              </button>
               <button type="submit" class="primary-button">
                 <i data-lucide="send-horizontal"></i>
                 Send

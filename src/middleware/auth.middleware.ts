@@ -62,3 +62,19 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction) {
     next();
   });
 }
+
+export function requireUser(req: Request, res: Response, next: NextFunction) {
+  requireSession(req, res, () => {
+    if (res.locals.session?.role === "ADMIN") {
+      if (req.path.startsWith("/api") || req.originalUrl.startsWith("/api/")) {
+        next(new AppError("User workspace access required", 403));
+        return;
+      }
+
+      res.redirect("/admin");
+      return;
+    }
+
+    next();
+  });
+}

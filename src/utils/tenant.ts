@@ -3,7 +3,7 @@ import { AppError } from "./errors.js";
 
 export function sessionCompanyId(res: Response) {
   const companyId = res.locals.session?.companyId;
-  if (!companyId) throw new AppError("Company context is required.", 403);
+  if (!companyId) throw new AppError("Company context missing. Please contact admin.", 403);
   return String(companyId);
 }
 

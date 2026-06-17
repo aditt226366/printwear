@@ -17,7 +17,8 @@ form.addEventListener("submit", async (event) => {
   const data = await response.json().catch(() => ({ error: "Invalid username or password" }));
 
   if (response.ok) {
-    window.location.href = data.redirectTo || "/dashboard";
+    const fallback = data.role === "ADMIN" ? "/admin" : "/dashboard";
+    window.location.href = data.redirectTo || fallback;
     return;
   }
 

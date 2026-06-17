@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CRM OS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Inter+Tight:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/assets/styles.css?v=20260617-flow-orb" />
+  </head>
+  <body class="landing-shell">
+    <header class="landing-nav">
+      <a class="landing-logo" href="/" aria-label="CRM OS home">CRM OS</a>
+      <nav class="landing-pill" aria-label="Page sections">
+        <a href="#use-cases">Use Cases</a>
+        <a href="#features">Features</a>
+        <a href="#about">About</a>
+      </nav>
+      <a class="landing-nav-cta" href="/login">Get Started <span aria-hidden="true">&rarr;</span></a>
+    </header>
+
+    <div class="landing-orb-stage" aria-hidden="true">
+      <canvas id="landingOrbCanvas"></canvas>
+      <span class="orb-core"></span>
+    </div>
+
+    <main>
+      <section class="landing-hero">
+        <div class="landing-hero-copy">
+          <h1>Turn Conversations<br />Into Conversions.</h1>
+          <p>Automate outreach, engage customers 24/7, and grow through WhatsApp-powered AI operations.</p>
+          <div class="landing-actions">
+            <a class="landing-primary" href="/login">Get Started <span aria-hidden="true">&rarr;</span></a>
+            <a class="landing-secondary" href="#use-cases">Learn More <span aria-hidden="true">&rarr;</span></a>
+          </div>
+        </div>
+      </section>
+
+      <section id="use-cases" class="landing-cards-section">
+        <div class="landing-section-heading">
+          <h2>Your all-in-one Customer Operations OS.</h2>
+          <p>Inbox, broadcasts, campaigns, AI flows, human handoff, orders, and reports &mdash; built into one clean operating layer.</p>
+        </div>
+        <div class="landing-card-grid">
+          <article class="landing-feature-card">
+            <span class="card-icon">01</span>
+            <h3>WhatsApp Inbox</h3>
+            <p>Manage every customer conversation, AI reply, manual reply, and handoff from one workspace.</p>
+          </article>
+          <article class="landing-feature-card featured">
+            <span class="card-icon">02</span>
+            <h3>Campaign Engine</h3>
+            <p>Launch broadcasts, scheduled campaigns, and click-to-WhatsApp journeys with clean audience control.</p>
+          </article>
+          <article class="landing-feature-card">
+            <span class="card-icon">03</span>
+            <h3>AI Operations</h3>
+            <p>Route leads, trigger workflows, suggest replies, and escalate to humans when needed.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="about" class="landing-ai-section">
+        <div class="landing-ai-copy">
+          <h2>Your AI sidekick, always ready.</h2>
+          <p>Capture leads, respond faster, automate customer journeys, and keep every WhatsApp workflow moving without switching tools.</p>
+          <a class="landing-secondary light" href="#features">Discover How <span aria-hidden="true">&rarr;</span></a>
+        </div>
+        <div class="ai-grid-visual feature-showcase">
+          <div class="feature-map" aria-label="CRM OS feature workflow selector">
+            <button class="feature-node is-active" type="button" data-feature="conversations">
+              <span class="feature-node-icon" aria-hidden="true">WA</span>
+              <span><strong>WhatsApp Conversations</strong><small>Reply, assign, and track every customer chat.</small></span>
+            </button>
+            <button class="feature-node" type="button" data-feature="leads">
+              <span class="feature-node-icon" aria-hidden="true">LD</span>
+              <span><strong>Lead Management</strong><small>Capture, qualify, and follow up with every lead.</small></span>
+            </button>
+            <button class="feature-node" type="button" data-feature="bulk">
+              <span class="feature-node-icon" aria-hidden="true">BM</span>
+              <span><strong>Bulk Messaging</strong><small>Send approved outreach to clean audience groups.</small></span>
+            </button>
+            <button class="feature-node" type="button" data-feature="campaigns">
+              <span class="feature-node-icon" aria-hidden="true">CP</span>
+              <span><strong>Campaigns</strong><small>Run sequences and track replies from one layer.</small></span>
+            </button>
+            <button class="feature-node" type="button" data-feature="ads">
+              <span class="feature-node-icon" aria-hidden="true">AD</span>
+              <span><strong>Ads</strong><small>Capture click-to-WhatsApp leads with source context.</small></span>
+            </button>
+            <button class="feature-node" type="button" data-feature="ai">
+              <span class="feature-node-icon" aria-hidden="true">AI</span>
+              <span><strong>AI Workflow Builder</strong><small>Trigger replies, routing, and handoffs automatically.</small></span>
+            </button>
+            <button class="feature-node" type="button" data-feature="queue">
+              <span class="feature-node-icon" aria-hidden="true">HQ</span>
+              <span><strong>Human Queue</strong><small>Escalate priority conversations to your team.</small></span>
+            </button>
+            <button class="feature-node" type="button" data-feature="orders">
+              <span class="feature-node-icon" aria-hidden="true">OR</span>
+              <span><strong>Orders</strong><small>Capture requests and send status updates on WhatsApp.</small></span>
+            </button>
+          </div>
+
+          <div class="workflow-strip" aria-live="polite">
+            <div class="workflow-strip-head">
+              <span id="workflowFeatureLabel">WhatsApp Conversations</span>
+              <small>Workflow preview</small>
+            </div>
+            <div class="workflow-rail" id="workflowRail">
+              <span class="workflow-line" aria-hidden="true"></span>
+              <span class="workflow-pulse" aria-hidden="true"></span>
+              <span class="workflow-step">Incoming Message</span>
+              <span class="workflow-step">AI Suggestion</span>
+              <span class="workflow-step">Manual Reply</span>
+              <span class="workflow-step">Resolved</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="features" class="landing-modules-section">
+        <div class="landing-section-heading">
+          <p class="landing-kicker">Product modules</p>
+          <h2>One operating layer for every customer workflow.</h2>
+        </div>
+        <div class="feature-chip-grid modules-grid">
+          <span>Command Center</span>
+          <span>Inbox</span>
+          <span>Contacts</span>
+          <span>Broadcasts</span>
+          <span>Campaigns</span>
+          <span>Ads</span>
+          <span>AI Flows</span>
+          <span>Human Queue</span>
+          <span>Orders</span>
+          <span>Reports</span>
+        </div>
+      </section>
+
+      <section class="landing-final-cta">
+        <div>
+          <h2>Ready to grow with CRM OS?</h2>
+          <p>Launch a cleaner operating layer for WhatsApp conversations, campaigns, AI workflows, and handoffs.</p>
+        </div>
+        <a class="landing-primary" href="/login">Get Started <span aria-hidden="true">&rarr;</span></a>
+      </section>
+    </main>
+    <script src="/assets/landing.js?v=20260617-flow-orb"></script>
+  </body>
+</html>

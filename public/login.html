@@ -3,23 +3,24 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Platform Login</title>
+    <title>CRM OS Login</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,650;9..144,800&family=IBM+Plex+Mono:wght@500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/assets/styles.css?v=20260616-command" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/assets/styles.css?v=20260617-premium" />
   </head>
   <body class="login-shell">
-    <main class="login-page">
+    <main class="login-page premium-login-page">
+      <a class="landing-logo login-home" href="/">CRM OS</a>
       <section class="login-panel">
         <div class="login-brand">
-          <span class="brand-mark">CRM</span>
+          <span class="brand-mark">OS</span>
           <div>
-            <p class="eyebrow">Platform Access</p>
-            <h1>Welcome back</h1>
+            <p class="eyebrow">Secure Access</p>
+            <h1>Login</h1>
           </div>
         </div>
-        <p class="login-subtitle">Sign in to manage WhatsApp leads, orders, and human takeover.</p>
+        <p class="login-subtitle">Sign in to continue to your CRM OS workspace.</p>
 
         <form id="loginForm" class="login-form">
           <label>
@@ -30,26 +31,14 @@
             <span>Password</span>
             <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Password" required />
           </label>
-          <button type="submit" class="primary-button full-width">Sign in</button>
+          <button type="submit" class="primary-button full-width">Login</button>
           <p id="loginError" class="form-error" role="alert"></p>
         </form>
       </section>
 
       <aside class="login-visual" aria-label="Dashboard preview">
-        <div class="signal-strip">
-          <span></span>
-          <span></span>
-          <span></span>
-        </div>
-        <div class="preview-board">
-          <div class="preview-row strong"></div>
-          <div class="preview-row"></div>
-          <div class="preview-row short"></div>
-          <div class="preview-meter">
-            <span style="width: 74%"></span>
-          </div>
-        </div>
-        <p>AI-qualified WhatsApp leads, sales conversations, and follow-up signals in one premium workspace.</p>
+        <div class="landing-orb compact" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+        <p>Leads, WhatsApp conversations, AI flows, campaigns, handoffs and orders in one premium operating layer.</p>
       </aside>
     </main>
 
