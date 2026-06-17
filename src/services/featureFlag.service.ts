@@ -5,7 +5,8 @@ import { logger } from "../utils/logger.js";
 export type FeatureKey =
   | "dashboard"
   | "chats"
-  | "contacts_broadcasts"
+  | "contacts"
+  | "broadcasts"
   | "campaigns"
   | "ads"
   | "ai_flows"
@@ -23,16 +24,17 @@ export type FeatureFlag = {
 };
 
 export const DEFAULT_FEATURES: FeatureFlag[] = [
-  { key: "dashboard", label: "Dashboard", description: "Command metrics, import leads, and welcome sends.", enabled: true },
-  { key: "chats", label: "Inbox / Chats", description: "Live WhatsApp conversations and manual replies.", enabled: true },
-  { key: "contacts_broadcasts", label: "Audience / Contacts & Broadcasts", description: "Audience imports, contact management, and broadcasts.", enabled: true },
-  { key: "campaigns", label: "Campaigns", description: "Scheduled WhatsApp outreach and campaign reporting.", enabled: true },
-  { key: "ads", label: "Ads", description: "Click-to-WhatsApp ad drafts and Meta status checks.", enabled: true },
-  { key: "ai_flows", label: "AI Flows", description: "Workflow builder, triggers, and automation logs.", enabled: true },
-  { key: "human_queue", label: "Takeover / Human Queue", description: "Manual takeover queue and priority follow-ups.", enabled: true },
-  { key: "orders", label: "Orders", description: "Order summaries, dispatch status, and customer updates.", enabled: true },
-  { key: "reports", label: "Reports", description: "Performance dashboards and CRM analytics.", enabled: true },
-  { key: "settings", label: "Settings", description: "Account/session controls and workspace settings.", enabled: true }
+  { key: "dashboard", label: "Command Center", description: "Conversation Pulse, Priority Queue, and Pulse Interpreter.", enabled: true },
+  { key: "chats", label: "Inbox", description: "WhatsApp-style live conversation inbox with AI replies, manual replies, takeover, tags, lead status, and message history.", enabled: true },
+  { key: "contacts", label: "Contacts", description: "Audience and contact management with CSV import, Google Sheets import, contact table, tags, source, lifecycle status, and segments.", enabled: true },
+  { key: "broadcasts", label: "Broadcasts", description: "Bulk WhatsApp template messaging with segment selection, progress tracking, delivery/read status, and CRM chat history capture.", enabled: true },
+  { key: "campaigns", label: "Campaigns", description: "Scheduled and multi-step WhatsApp outreach with audience selection, templates, run now, pause/cancel, metrics, and reply tracking.", enabled: true },
+  { key: "ads", label: "Ads", description: "Facebook, Instagram, and WhatsApp click-to-chat ad planning with Meta status, drafts, objectives, audience mapping, previews, and tracking.", enabled: true },
+  { key: "ai_flows", label: "AI Flows", description: "Workflow automation builder with trigger, message, condition, delay, takeover, order draft blocks, activation, tests, and logs.", enabled: true },
+  { key: "human_queue", label: "Human Queue", description: "Priority human takeover inbox with handoff reason, suggested reply, priority, owner, open chat, and return-to-AI controls.", enabled: true },
+  { key: "orders", label: "Orders", description: "WhatsApp-linked order operations for product, quantity, size, color, delivery location, status, and WhatsApp updates.", enabled: true },
+  { key: "reports", label: "Reports", description: "Operational reporting for conversations, reply rate, campaign performance, broadcast performance, AI flows, and order movement.", enabled: true },
+  { key: "settings", label: "Settings", description: "Company and user settings only.", enabled: true }
 ];
 
 const featureKeys = new Set(DEFAULT_FEATURES.map((feature) => feature.key));

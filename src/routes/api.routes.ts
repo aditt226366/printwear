@@ -13,6 +13,7 @@ import {
   updateOrder,
   updateOrderStatus
 } from "../controllers/admin.controller.js";
+import { getCommandCenter } from "../controllers/commandCenter.controller.js";
 import { importLeads } from "../controllers/leads.controller.js";
 import { listKnowledgeBase, seedKnowledgeBase } from "../controllers/knowledge.controller.js";
 import { sendInitialMessages } from "../controllers/messages.controller.js";
@@ -94,17 +95,18 @@ apiRoutes.get("/debug/database-schema", requireAdmin, getDatabaseSchema);
 apiRoutes.get("/debug/integration-config", requireAdmin, getIntegrationConfig);
 apiRoutes.get("/debug/google-sheets-status", requireAdmin, getGoogleSheetsStatus);
 apiRoutes.get("/debug/webhook-status", requireFeature("settings"), getWebhookStatus);
+apiRoutes.get("/command-center", requireFeature("dashboard"), getCommandCenter);
 apiRoutes.get("/events", requireFeature("chats"), streamChatEvents);
 apiRoutes.get("/leads", requireFeature("chats"), getLeads);
 apiRoutes.get("/leads/:leadId/conversation", requireFeature("chats"), getConversation);
 apiRoutes.post("/leads/:leadId/messages", requireFeature("chats"), sendManualMessage);
 apiRoutes.post("/leads/import", requireFeature("dashboard"), importLeads);
-apiRoutes.get("/contacts", requireFeature("contacts_broadcasts"), listContacts);
-apiRoutes.post("/contacts", requireFeature("contacts_broadcasts"), createContact);
-apiRoutes.post("/contacts/import/csv", requireFeature("contacts_broadcasts"), importContactsCsv);
-apiRoutes.post("/contacts/import/google-sheets", requireFeature("contacts_broadcasts"), importContactsSheets);
-apiRoutes.get("/bulk-messages", requireFeature("contacts_broadcasts"), listBulkJobs);
-apiRoutes.post("/bulk-messages", requireFeature("contacts_broadcasts"), createBulkSend);
+apiRoutes.get("/contacts", requireFeature("contacts"), listContacts);
+apiRoutes.post("/contacts", requireFeature("contacts"), createContact);
+apiRoutes.post("/contacts/import/csv", requireFeature("contacts"), importContactsCsv);
+apiRoutes.post("/contacts/import/google-sheets", requireFeature("contacts"), importContactsSheets);
+apiRoutes.get("/bulk-messages", requireFeature("broadcasts"), listBulkJobs);
+apiRoutes.post("/bulk-messages", requireFeature("broadcasts"), createBulkSend);
 apiRoutes.get("/campaigns", requireFeature("campaigns"), listCampaigns);
 apiRoutes.post("/campaigns", requireFeature("campaigns"), createCampaign);
 apiRoutes.get("/campaigns/:campaignId", requireFeature("campaigns"), getCampaign);

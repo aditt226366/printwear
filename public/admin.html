@@ -7,23 +7,24 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,650;9..144,800&family=IBM+Plex+Mono:wght@500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/assets/styles.css?v=20260616-command" />
+    <link rel="stylesheet" href="/assets/styles.css?v=20260617-console" />
   </head>
   <body class="app-shell admin-shell">
     <header class="topbar admin-topbar">
       <div class="brand-block">
         <span class="brand-mark">PA</span>
         <div>
-          <strong>Platform Administration</strong>
-          <span>Users, companies, permissions, billing and feature controls.</span>
+          <strong>Operating Console</strong>
+          <span>Accounts, access, entitlements, connections, usage and system health.</span>
         </div>
       </div>
       <nav class="top-nav" aria-label="Admin sections">
-        <button class="nav-item active" data-admin-view="users"><i data-lucide="users"></i>Users</button>
-        <button class="nav-item" data-admin-view="features"><i data-lucide="sliders-horizontal"></i>Features</button>
-        <button class="nav-item" data-admin-view="integrations"><i data-lucide="plug-zap"></i>Integrations</button>
-        <button class="nav-item" data-admin-view="billing"><i data-lucide="receipt-text"></i>Billing</button>
-        <button class="nav-item" data-admin-view="diagnostics"><i data-lucide="activity"></i>Diagnostics</button>
+        <button class="nav-item active" data-admin-view="companies"><i data-lucide="building-2"></i>Accounts</button>
+        <button class="nav-item" data-admin-view="users"><i data-lucide="users"></i>Access</button>
+        <button class="nav-item" data-admin-view="features"><i data-lucide="sliders-horizontal"></i>Entitlements</button>
+        <button class="nav-item" data-admin-view="integrations"><i data-lucide="plug-zap"></i>Connections</button>
+        <button class="nav-item" data-admin-view="billing"><i data-lucide="receipt-text"></i>Usage</button>
+        <button class="nav-item" data-admin-view="diagnostics"><i data-lucide="activity"></i>System Health</button>
       </nav>
       <div class="topbar-right">
         <form action="/auth/logout" method="post" data-logout-form><button class="secondary-button" type="submit"><i data-lucide="log-out"></i>Logout</button></form>
@@ -33,37 +34,53 @@
     <main class="workspace admin-workspace">
       <section id="adminNotice" class="notice hidden"></section>
 
-      <section id="adminUsersView" class="view active-view">
+      <section id="adminCompaniesView" class="view active-view">
         <div class="page-heading-row premium-heading">
           <div>
-            <p class="eyebrow">Users</p>
-            <h1>Company & User Management</h1>
-            <span>Create companies, provision users, reset passwords, and manage account status securely.</span>
+            <p class="eyebrow">Accounts</p>
+            <h1>Account operations</h1>
+            <span>Add tenant accounts and review which workspaces are active, inactive, or still being set up.</span>
           </div>
         </div>
         <section class="admin-grid">
           <article class="panel premium-card">
-            <div class="panel-heading"><div><p class="eyebrow">Create Company</p><h2>Company profile</h2></div></div>
+            <div class="panel-heading"><div><p class="eyebrow">Primary action</p><h2>Add account</h2></div></div>
             <form id="companyForm" class="automation-form" novalidate>
               <label>Company name<input id="companyName" required placeholder="ABC Uniforms" /></label>
               <label>Slug<input id="companySlug" placeholder="abc-uniforms" /></label>
               <label>Status<select id="companyStatus"><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></label>
-              <button class="primary-button" type="submit"><i data-lucide="building-2"></i>Create company</button>
+              <button class="primary-button" type="submit"><i data-lucide="building-2"></i>Add account</button>
             </form>
           </article>
           <article class="panel premium-card">
-            <div class="panel-heading"><div><p class="eyebrow">Create User</p><h2>User login</h2></div></div>
+            <div class="panel-heading"><div><p class="eyebrow">Primary insight</p><h2>Account list</h2></div></div>
+            <div id="adminCompaniesTable" class="data-table admin-users-table"></div>
+          </article>
+        </section>
+      </section>
+
+      <section id="adminUsersView" class="view">
+        <div class="page-heading-row premium-heading">
+          <div>
+            <p class="eyebrow">Access</p>
+            <h1>Member access</h1>
+            <span>Add members, control roles, reset credentials, and suspend or restore access securely.</span>
+          </div>
+        </div>
+        <section class="admin-grid">
+          <article class="panel premium-card">
+            <div class="panel-heading"><div><p class="eyebrow">Primary action</p><h2>Add member</h2></div></div>
             <form id="userForm" class="automation-form" novalidate>
-              <label>Company<select id="userCompany" required></select></label>
+              <label>Account<select id="userCompany" required></select></label>
               <div class="form-row"><label>Name<input id="userName" required /></label><label>Username<input id="userUsername" required /></label></div>
               <div class="form-row"><label>Password<input id="userPassword" type="password" required /></label><label>Confirm password<input id="userConfirmPassword" type="password" required /></label></div>
               <label>Status<select id="userStatus"><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></label>
-              <button class="primary-button" type="submit"><i data-lucide="user-plus"></i>Create user</button>
+              <button class="primary-button" type="submit"><i data-lucide="user-plus"></i>Add member</button>
             </form>
           </article>
         </section>
         <section class="panel premium-card">
-          <div class="panel-heading"><div><p class="eyebrow">User Table</p><h2>Provisioned accounts</h2></div></div>
+          <div class="panel-heading"><div><p class="eyebrow">Primary insight</p><h2>Member table</h2></div></div>
           <div class="admin-user-toolbar">
             <label class="admin-search-field"><i data-lucide="search"></i><input id="userSearch" type="search" placeholder="Search users..." /></label>
             <select id="userCompanyFilter" class="admin-select"></select>
@@ -85,14 +102,14 @@
       <section id="adminFeaturesView" class="view">
         <div class="page-heading-row premium-heading">
           <div>
-            <p class="eyebrow">Features</p>
-            <h1>Company Feature Controls</h1>
-            <span>Select a company and decide which modules its users can see and access.</span>
+            <p class="eyebrow">Entitlements</p>
+            <h1>Product access</h1>
+            <span>Select an account and decide which modules appear in the user panel.</span>
           </div>
         </div>
         <section class="panel premium-card">
           <div class="panel-heading">
-            <div><p class="eyebrow">Company</p><h2>Feature access</h2></div>
+            <div><p class="eyebrow">Account</p><h2>Entitlement matrix</h2></div>
             <select id="featureCompanySelect" class="admin-select"></select>
           </div>
           <div id="adminFeatureList" class="feature-toggle-list"></div>
@@ -102,14 +119,14 @@
       <section id="adminIntegrationsView" class="view">
         <div class="page-heading-row premium-heading">
           <div>
-            <p class="eyebrow">Integrations</p>
-            <h1>Company Integration Settings</h1>
-            <span>Configure each company's Google Sheets, WhatsApp, and Meta Ads credentials without exposing saved secrets.</span>
+            <p class="eyebrow">Connections</p>
+            <h1>Connection setup</h1>
+            <span>Configure each account's Google Sheets, WhatsApp, and Meta Ads credentials without exposing saved secrets.</span>
           </div>
         </div>
         <section class="panel premium-card">
           <div class="panel-heading">
-            <div><p class="eyebrow">Company</p><h2>Credential routing</h2></div>
+            <div><p class="eyebrow">Account</p><h2>Provider credentials</h2></div>
             <select id="integrationCompanySelect" class="admin-select"></select>
           </div>
           <form id="integrationForm" class="automation-form integration-form">
@@ -142,7 +159,7 @@
                 <button id="clearMetaAdsIntegrationBtn" class="secondary-button danger-secondary" type="button"><i data-lucide="unlink"></i>Clear Meta Ads</button>
               </div>
             </fieldset>
-            <button class="primary-button" type="submit"><i data-lucide="save"></i>Save integrations</button>
+            <button class="primary-button" type="submit"><i data-lucide="save"></i>Save connections</button>
           </form>
           <div id="integrationTestResults" class="integration-test-results"></div>
         </section>
@@ -151,15 +168,15 @@
       <section id="adminDiagnosticsView" class="view">
         <div class="page-heading-row premium-heading">
           <div>
-            <p class="eyebrow">System Diagnostics</p>
-            <h1>Database & Runtime Readiness</h1>
-            <span>Direct schema checks for multi-tenant tables, migrations, and runtime versions.</span>
+            <p class="eyebrow">System Health</p>
+            <h1>Platform readiness</h1>
+            <span>Database, migration, runtime, and encryption readiness checks for the platform.</span>
           </div>
         </div>
         <section class="panel premium-card">
           <div class="panel-heading">
-            <div><p class="eyebrow">Database</p><h2>Schema verification</h2></div>
-            <button id="refreshDiagnosticsBtn" class="secondary-button" type="button"><i data-lucide="refresh-cw"></i>Refresh</button>
+            <div><p class="eyebrow">Primary insight</p><h2>Readiness checks</h2></div>
+            <button id="refreshDiagnosticsBtn" class="secondary-button" type="button"><i data-lucide="refresh-cw"></i>Run checks</button>
           </div>
           <div id="diagnosticsSummary" class="broadcast-stat-grid"></div>
           <div id="diagnosticsTable" class="data-table"></div>
@@ -169,9 +186,9 @@
       <section id="adminBillingView" class="view">
         <div class="page-heading-row premium-heading">
           <div>
-            <p class="eyebrow">Billing</p>
-            <h1>API Usage & Cost Tracking</h1>
-            <span>Secured usage from real API logs only. Cost is not calculated yet.</span>
+            <p class="eyebrow">Usage</p>
+            <h1>API usage</h1>
+            <span>Tracked provider calls by account. Cost remains NIL until calculation is finalized.</span>
           </div>
         </div>
         <section class="panel premium-card">
@@ -188,6 +205,6 @@
       </section>
     </main>
 
-    <script src="/assets/admin.js?v=20260616-command"></script>
+    <script src="/assets/admin.js?v=20260617-console"></script>
   </body>
 </html>

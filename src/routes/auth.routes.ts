@@ -12,3 +12,4 @@ authRoutes.post("/auth/logout", logoutJson);
 authRoutes.post("/logout", logout);
 authRoutes.get("/admin", requireAdmin, showAdminPanel);
 authRoutes.get("/dashboard", requireSession, showDashboard);
+authRoutes.get("/command-center", requireSession, showDashboard);

@@ -6,7 +6,7 @@ const adminState = {
   integrationTests: {},
   diagnostics: null,
   billing: { summary: {}, logs: [] },
-  currentView: "users",
+  currentView: "companies",
   userFilters: {
     search: "",
     companyId: "",
@@ -16,16 +16,17 @@ const adminState = {
 };
 
 const featureDescriptions = {
-  dashboard: "Command metrics, import leads, and welcome sends.",
-  chats: "Live WhatsApp conversations and manual replies.",
-  contacts_broadcasts: "Audience imports, contact management, and broadcasts.",
-  campaigns: "Scheduled WhatsApp outreach and campaign reporting.",
-  ads: "Click-to-WhatsApp ad drafts and Meta status checks.",
-  ai_flows: "Workflow builder, triggers, and automation logs.",
-  human_queue: "Manual takeover queue and priority follow-ups.",
-  orders: "Order summaries, dispatch status, and customer updates.",
-  reports: "Performance dashboards and CRM analytics.",
-  settings: "Account/session controls and workspace settings."
+  dashboard: "Operating homepage with Conversation Pulse, Priority Queue, and Pulse Interpreter.",
+  chats: "WhatsApp-style live inbox with AI replies, manual replies, takeover, tags, lead status, and message history.",
+  contacts: "Audience workspace with CSV import, Google Sheets import, tags, source, lifecycle status, and segments.",
+  broadcasts: "Bulk WhatsApp template messaging with audience selection, progress tracking, delivery/read status, and CRM history capture.",
+  campaigns: "Scheduled and multi-step WhatsApp outreach with templates, run now, pause/cancel, delivery metrics, and reply tracking.",
+  ads: "Facebook, Instagram, and WhatsApp click-to-chat ad planning with Meta status, drafts, previews, and tracking.",
+  ai_flows: "Workflow automation builder with triggers, messages, conditions, delays, takeover, order draft blocks, tests, and logs.",
+  human_queue: "Priority human takeover inbox with handoff reason, suggested reply, priority, owner, open chat, and return to AI.",
+  orders: "WhatsApp-linked order operations with customer, product, quantity, size, color, delivery, status, and update sends.",
+  reports: "Operational reporting for conversations, reply rate, campaigns, broadcasts, AI flows, and order movement.",
+  settings: "Company and user settings only."
 };
 
 function $(selector) {
@@ -226,7 +227,7 @@ function fillCompanySelects(selectedUserCompanyId = "") {
     const select = $(`#${id}`);
     if (!select) return;
     const current = select.value;
-    select.innerHTML = ["billingCompanySelect", "userCompanyFilter"].includes(id) ? `<option value="">All companies</option>${options}` : options;
+    select.innerHTML = ["billingCompanySelect", "userCompanyFilter"].includes(id) ? `<option value="">All accounts</option>${options}` : options;
     if (current) select.value = current;
   });
   if (selectedUserCompanyId && $("#userCompany")) {
@@ -237,12 +238,40 @@ function fillCompanySelects(selectedUserCompanyId = "") {
 function upsertCompany(company) {
   if (!company?.id) return;
   adminState.companies = [company, ...adminState.companies.filter((item) => item.id !== company.id)];
+  renderCompanies();
 }
 
 async function loadCompanies(selectedUserCompanyId = "") {
   const data = await api("/admin/companies");
   adminState.companies = data.companies || [];
   fillCompanySelects(selectedUserCompanyId);
+  renderCompanies();
+}
+
+function renderCompanies() {
+  const table = $("#adminCompaniesTable");
+  if (!table) return;
+  if (!adminState.companies.length) {
+    table.innerHTML = `<div class="empty-state"><strong>No accounts yet.</strong><span>Add an account to provision access, entitlements, connections, and usage tracking.</span></div>`;
+    return;
+  }
+  table.innerHTML = `
+    <div class="data-row admin-accounts-head">
+      <span>Account</span><span>Slug</span><span>Status</span><span>Created</span>
+    </div>
+    ${adminState.companies.map((company) => `
+      <div class="data-row admin-accounts-row">
+        <span class="user-cell">
+          <i>${escapeHtml(initials(company.name))}</i>
+          <span><strong>${escapeHtml(company.name)}</strong><small>${escapeHtml(company.businessType || "Tenant account")}</small></span>
+        </span>
+        <span>${escapeHtml(company.slug || "--")}</span>
+        <span><mark class="${company.status === "ACTIVE" ? "green" : "red"}">${escapeHtml(pretty(company.status))}</mark></span>
+        <span>${formatDate(company.createdAt)}</span>
+      </div>
+    `).join("")}
+  `;
+  refreshIcons();
 }
 
 async function loadUsers() {
@@ -259,7 +288,7 @@ async function createUserFromForm(form) {
   form.dataset.submitting = "true";
   if (button) {
     button.disabled = true;
-    button.innerHTML = `<i data-lucide="loader-circle"></i>Creating user`;
+    button.innerHTML = `<i data-lucide="loader-circle"></i>Adding member`;
     refreshIcons();
   }
   try {
@@ -276,7 +305,7 @@ async function createUserFromForm(form) {
     });
     clearFormErrors(form);
     form.reset();
-    showNotice("User created.");
+    showNotice("Member added.");
     await loadUsers();
   } catch (error) {
     showFormError(form, error);
@@ -284,7 +313,7 @@ async function createUserFromForm(form) {
     delete form.dataset.submitting;
     if (button) {
       button.disabled = false;
-      button.innerHTML = previousHtml || `<i data-lucide="user-plus"></i>Create user`;
+      button.innerHTML = previousHtml || `<i data-lucide="user-plus"></i>Add member`;
       refreshIcons();
     }
   }
@@ -307,17 +336,17 @@ function renderUsers() {
   const table = $("#adminUsersTable");
   if (!table) return;
   if (!adminState.users.length) {
-    table.innerHTML = `<div class="empty-state"><strong>No users yet.</strong><span>Create a company and user to begin.</span></div>`;
+    table.innerHTML = `<div class="empty-state"><strong>No members yet.</strong><span>Add an account and member to begin.</span></div>`;
     return;
   }
   const users = filteredUsers();
   if (!users.length) {
-    table.innerHTML = `<div class="empty-state"><strong>No users match these filters.</strong><span>Adjust search, company, role, or status to see more accounts.</span></div>`;
+    table.innerHTML = `<div class="empty-state"><strong>No members match these filters.</strong><span>Adjust search, account, role, or status to see more access records.</span></div>`;
     return;
   }
   table.innerHTML = `
     <div class="data-row admin-users-head">
-      <span>User</span><span>Company</span><span>Role</span><span>Status</span><span>Last Login</span><span>Created</span><span>Actions</span>
+      <span>Member</span><span>Account</span><span>Role</span><span>Status</span><span>Last login</span><span>Created</span><span>Actions</span>
     </div>
     ${users.map((user) => `
       <div class="data-row admin-users-row" data-user-id="${escapeHtml(user.id)}">
@@ -332,7 +361,7 @@ function renderUsers() {
         <span>${formatDate(user.createdAt)}</span>
         <span class="row-actions">
           <button class="secondary-button compact-admin-action" type="button" data-user-reset="${escapeHtml(user.id)}">Reset</button>
-          ${user.role === "USER" ? `<button class="secondary-button compact-admin-action" type="button" data-user-status="${escapeHtml(user.id)}">${user.status === "ACTIVE" ? "Deactivate" : "Activate"}</button>` : ""}
+          ${user.role === "USER" ? `<button class="secondary-button compact-admin-action" type="button" data-user-status="${escapeHtml(user.id)}">${user.status === "ACTIVE" ? "Suspend" : "Restore"}</button>` : ""}
         </span>
       </div>
     `).join("")}
@@ -392,7 +421,7 @@ function renderIntegrationTests() {
 
 async function testIntegration(provider, button) {
   const companyId = $("#integrationCompanySelect")?.value;
-  if (!companyId) throw new Error("Select a company before testing integrations.");
+  if (!companyId) throw new Error("Select an account before testing connections.");
   const labels = {
     whatsapp: "WhatsApp",
     googleSheets: "Google Sheets",
@@ -435,7 +464,7 @@ async function testIntegration(provider, button) {
     adminState.integrationTests[provider] = data.test || {};
     renderIntegrationTests();
     const passed = Boolean(data.test?.connected || data.test?.readable);
-    showNotice(passed ? `${labels[provider]} test passed.` : `${labels[provider]} test failed: ${data.test?.error || "Check the saved integration settings."}`, !passed);
+    showNotice(passed ? `${labels[provider]} test passed.` : `${labels[provider]} test failed: ${data.test?.error || "Check the saved connection settings."}`, !passed);
   } finally {
     if (button) {
       button.disabled = false;
@@ -447,7 +476,7 @@ async function testIntegration(provider, button) {
 
 async function clearIntegrationProvider(provider, button) {
   const companyId = $("#integrationCompanySelect")?.value;
-  if (!companyId) throw new Error("Select a company before clearing integrations.");
+  if (!companyId) throw new Error("Select an account before clearing connections.");
   const labels = {
     whatsapp: "WhatsApp",
     googleSheets: "Google Sheets",
@@ -468,7 +497,7 @@ async function clearIntegrationProvider(provider, button) {
     adminState.integration = data.integration || null;
     adminState.integrationTests = {};
     renderIntegration();
-    showNotice(`${labels[provider]} integration cleared.`);
+    showNotice(`${labels[provider]} connection cleared.`);
   } finally {
     if (button) {
       button.disabled = false;
@@ -492,8 +521,8 @@ function renderDiagnostics() {
     ["Database connected", status.databaseConnected ? "Yes" : "No"],
     ["Migration applied", status.migrationApplied ? "Yes" : "No"],
     ["Missing tables", missingTables.length],
-    ["Companies", status.companyCount || 0],
-    ["Users", status.userCount || 0],
+    ["Accounts", status.companyCount || 0],
+    ["Members", status.userCount || 0],
     ["Node", status.nodeVersion || "--"],
     ["Prisma", status.prismaVersion || "--"]
   ].map(([label, value]) => `<span><strong>${escapeHtml(value)}</strong><small>${escapeHtml(label)}</small></span>`).join("");
@@ -519,7 +548,7 @@ function renderDiagnostics() {
 async function loadFeatures() {
   const companyId = $("#featureCompanySelect")?.value || adminState.companies[0]?.id || "";
   if (!companyId) {
-    $("#adminFeatureList").innerHTML = `<div class="empty-state"><strong>No company selected.</strong><span>Create a company first.</span></div>`;
+    $("#adminFeatureList").innerHTML = `<div class="empty-state"><strong>No account selected.</strong><span>Add an account first.</span></div>`;
     return;
   }
   const data = await api(`/admin/features?companyId=${encodeURIComponent(companyId)}`);
@@ -536,7 +565,7 @@ function renderFeatures() {
         <strong>${escapeHtml(feature.label)}</strong>
         <small>${escapeHtml(feature.description || featureDescriptions[feature.key] || "")}</small>
       </div>
-      <mark class="${feature.enabled ? "green" : "neutral"}">${feature.enabled ? "Active" : "Inactive"}</mark>
+        <mark class="${feature.enabled ? "green" : "neutral"}">${feature.enabled ? "Visible" : "Hidden"}</mark>
       <button class="toggle-switch ${feature.enabled ? "is-on" : "is-off"}" type="button" role="switch" aria-checked="${feature.enabled ? "true" : "false"}" data-feature-toggle="${escapeHtml(feature.id)}">
         <span class="toggle-track" aria-hidden="true"><i></i></span>
         <b>${feature.enabled ? "ON" : "OFF"}</b>
@@ -564,12 +593,12 @@ function renderBilling() {
     ["Google Sheets API calls", summary.googleSheetsApiCalls || 0],
     ["Internal API calls", summary.internalApiCalls || 0],
     ["Total API calls", summary.totalApiCalls || 0],
-    ["Estimated cost", summary.estimatedCost || "-NIL-"]
+    ["Cost", summary.estimatedCost || "NIL"]
   ].map(([label, value]) => `<span><strong>${escapeHtml(value)}</strong><small>${escapeHtml(label)}</small></span>`).join("");
 
   const logs = adminState.billing.logs || [];
   $("#billingTable").innerHTML = logs.length ? `
-    <div class="data-row billing-head"><span>Date/time</span><span>Company</span><span>Provider</span><span>Endpoint</span><span>Status</span><span>Success</span><span>Units</span></div>
+    <div class="data-row billing-head"><span>Date/time</span><span>Account</span><span>Provider</span><span>Endpoint</span><span>Status</span><span>Success</span><span>Units</span></div>
     ${logs.map((log) => `
       <div class="data-row billing-row">
         <span>${formatDate(log.createdAt)}</span>
@@ -738,7 +767,7 @@ function bindEvents() {
         body: JSON.stringify({ enabled })
       });
       adminState.features = adminState.features.map((feature) => feature.id === data.feature.id ? data.feature : feature);
-      showNotice("Feature access updated.");
+      showNotice("Entitlements updated.");
     } catch (error) {
       await loadFeatures();
       showNotice(error.message, true);

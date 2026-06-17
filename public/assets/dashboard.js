@@ -12,6 +12,11 @@ const state = {
   currentView: "overview",
   overviewLoaded: false,
   latestOverview: null,
+  commandCenter: null,
+  selectedPulseSegment: "all_attention",
+  selectedPriorityItemId: null,
+  isLoadingCommandCenter: false,
+  commandCenterLastUpdatedAt: null,
   isRefreshing: false,
   humanActionQueue: [],
   orderPipeline: {},
@@ -59,6 +64,7 @@ const views = {
   chats: document.querySelector("#chatsView"),
   leads: document.querySelector("#leadsView"),
   contacts: document.querySelector("#contactsView"),
+  broadcasts: document.querySelector("#contactsView"),
   campaigns: document.querySelector("#campaignsView"),
   ads: document.querySelector("#adsView"),
   flows: document.querySelector("#flowsView"),
@@ -71,7 +77,8 @@ const views = {
 const viewFeatureMap = {
   overview: "dashboard",
   chats: "chats",
-  contacts: "contacts_broadcasts",
+  contacts: "contacts",
+  broadcasts: "broadcasts",
   campaigns: "campaigns",
   ads: "ads",
   flows: "ai_flows",
@@ -82,16 +89,17 @@ const viewFeatureMap = {
 };
 
 const featureDescriptions = {
-  dashboard: "Command metrics, import leads, and welcome sends.",
-  chats: "Live WhatsApp conversations and manual replies.",
-  contacts_broadcasts: "Audience imports, contact management, and broadcasts.",
-  campaigns: "Scheduled WhatsApp outreach and campaign reporting.",
-  ads: "Click-to-WhatsApp ad drafts and creative previews.",
-  ai_flows: "AI workflow builder, triggers, and automation logs.",
-  human_queue: "Manual takeover queue and priority follow-ups.",
-  orders: "Order summaries, dispatch status, and customer updates.",
-  reports: "Performance dashboards and CRM analytics.",
-  settings: "Connected systems, knowledge, and workspace controls."
+  dashboard: "Operating homepage with Conversation Pulse, Priority Queue, and Pulse Interpreter.",
+  chats: "WhatsApp-style live inbox with AI replies, manual replies, takeover, tags, lead status, and message history.",
+  contacts: "Audience workspace with CSV import, Google Sheets import, tags, source, lifecycle status, and segments.",
+  broadcasts: "Bulk WhatsApp template messaging with audience selection, progress tracking, delivery/read status, and CRM history capture.",
+  campaigns: "Scheduled and multi-step WhatsApp outreach with templates, run now, pause/cancel, delivery metrics, and reply tracking.",
+  ads: "Facebook, Instagram, and WhatsApp click-to-chat ad planning with Meta status, drafts, previews, and tracking.",
+  ai_flows: "Workflow automation builder with triggers, messages, conditions, delays, takeover, order draft blocks, tests, and logs.",
+  human_queue: "Priority human takeover inbox with handoff reason, suggested reply, priority, owner, open chat, and return to AI.",
+  orders: "WhatsApp-linked order operations with customer, product, quantity, size, color, delivery, status, and update sends.",
+  reports: "Operational reporting for conversations, reply rate, campaigns, broadcasts, AI flows, and order movement.",
+  settings: "Company and user settings only."
 };
 
 const premiumLibrariesReady = loadPremiumLibraries();
@@ -408,7 +416,7 @@ async function dashboardApi() {
       status: response.status,
       path: "/api/dashboard"
     });
-    throw new Error("Dashboard API returned invalid JSON");
+    throw new Error("Command Center API returned invalid JSON");
   }
 
   if (!response.ok) {
@@ -416,10 +424,16 @@ async function dashboardApi() {
       status: response.status,
       path: "/api/dashboard"
     });
-    throw new Error("Dashboard data could not load");
+    throw new Error("Command Center data could not load");
   }
 
   return data;
+}
+
+async function commandCenterApi(segment = state.selectedPulseSegment) {
+  const params = new URLSearchParams();
+  if (segment) params.set("segment", segment);
+  return publicApi(`/command-center?${params.toString()}`);
 }
 
 function buildQuery(params) {
@@ -1124,6 +1138,346 @@ function renderRecentConversations(recentLeads = []) {
   renderRecentConversationList(recentLeads);
 }
 
+function commandCenterSegmentLabel(key) {
+  return {
+    all_attention: "all attention",
+    inbox: "inbox",
+    orders: "orders",
+    ai_handoffs: "AI handoffs",
+    human_queue: "human queue",
+    campaign_replies: "campaigns / broadcasts"
+  }[key] || pretty(key);
+}
+
+function commandCenterSegmentMeaning(key) {
+  return {
+    all_attention: "All live signals across conversations, orders, AI handoffs, human queue, and campaigns.",
+    inbox: "Inbound customer replies and active WhatsApp threads that may need response.",
+    orders: "Order conversations where confirmation, review, quotation, or details are still moving.",
+    ai_handoffs: "AI workflow failures and automation uncertainty that needs operator review.",
+    human_queue: "Conversations explicitly waiting for a human owner or takeover decision.",
+    campaign_replies: "Campaign replies, broadcast delivery failures, and post-send movement."
+  }[key] || "Operational signal from the Command Center.";
+}
+
+function commandCenterItemById(id) {
+  return (state.commandCenter?.priorityQueue?.items || []).find((item) => item.id === id) || null;
+}
+
+function commandCenterContextForSelected(commandCenter = state.commandCenter) {
+  const contexts = commandCenter?.context?.items || [];
+  return contexts.find((context) => context.priorityItemId === state.selectedPriorityItemId)
+    || commandCenter?.context?.default
+    || null;
+}
+
+function syncSelectedPriorityItem(commandCenter = state.commandCenter) {
+  const items = commandCenter?.priorityQueue?.items || [];
+  if (!items.length) {
+    state.selectedPriorityItemId = null;
+    return null;
+  }
+  const existing = items.find((item) => item.id === state.selectedPriorityItemId);
+  const selected = existing || items.find((item) => item.id === commandCenter?.priorityQueue?.selectedPriorityItemId) || items[0];
+  state.selectedPriorityItemId = selected.id;
+  return selected;
+}
+
+function activateCommandCenterTarget(target) {
+  if (!target) return;
+  const view = target.targetView || "chats";
+  const objectId = target.objectId;
+  if (!featureEnabledForView(view)) {
+    showNotice("Feature disabled by admin.", true);
+    return;
+  }
+  if (view === "chats" && target.objectType === "Lead" && objectId) {
+    openLeadChat(objectId).catch((error) => {
+      logDashboardError("Context Surface action failed", error, { objectId });
+      showNotice("Could not open this linked work yet.", true);
+    });
+    return;
+  }
+  switchView(view);
+}
+
+function setCommandCenterLoading(isLoading) {
+  state.isLoadingCommandCenter = isLoading;
+  const surface = document.querySelector(".command-center-phase-a");
+  surface?.classList.toggle("is-loading", Boolean(isLoading));
+  if (isLoading) setText("commandCenterFreshness", "Refreshing live signals...");
+}
+
+function renderCommandCenterFreshness(commandCenter = state.commandCenter) {
+  const element = $("#commandCenterFreshness");
+  if (!element) return;
+  const updatedAt = commandCenter?.lastUpdatedAt || state.commandCenterLastUpdatedAt;
+  if (!updatedAt) {
+    element.textContent = "Waiting for live signal...";
+    element.classList.add("stale");
+    return;
+  }
+  const ageMs = Date.now() - new Date(updatedAt).getTime();
+  const isStale = ageMs > 60000;
+  element.classList.toggle("stale", isStale);
+  element.textContent = `${isStale ? "Stale signal" : "Live signal"} - updated ${relativeTime(updatedAt)}`;
+}
+
+function renderConversationPulse(commandCenter = state.commandCenter) {
+  const target = $("#conversationPulse");
+  if (!target) return;
+  const segments = commandCenter?.pulse?.segments || [];
+
+  if (!segments.length) {
+    setHtmlIfChanged(target, emptyState("No pulse signals yet.", "Conversation Pulse will appear once real activity exists."));
+    return;
+  }
+
+  const html = `
+    <button class="pulse-spine-empty-target" type="button" data-pulse-empty="true" aria-label="View all attention signals"></button>
+    <div class="pulse-spine-track" aria-hidden="true"></div>
+    <div class="pulse-spine-segments">
+      ${segments.map((segment) => {
+        const intensity = Math.max(8, Math.min(100, Number(segment.intensity || 0)));
+        const width = segment.active ? Math.max(1.4, intensity / 22) : Math.max(0.72, intensity / 34);
+        const weight = Math.max(10, Math.min(100, intensity));
+      return `
+        <button
+          class="conversation-pulse-segment ${segment.active ? "active" : ""} ${escapeHtml(segment.severity || "quiet")}"
+          type="button"
+          data-pulse-segment="${escapeHtml(segment.key)}"
+          data-pulse-meaning="${escapeHtml(commandCenterSegmentMeaning(segment.key))}"
+          style="--segment-width:${width}; --segment-intensity:${intensity}%; --segment-weight:${weight}%;"
+          aria-pressed="${segment.active ? "true" : "false"}"
+          title="${escapeHtml(commandCenterSegmentMeaning(segment.key))}"
+        >
+          <span class="pulse-marker"></span>
+          <span class="pulse-segment-copy">
+            <strong>${escapeHtml(segment.label)}</strong>
+            <small>${Number(segment.count || 0)} signal${Number(segment.count || 0) === 1 ? "" : "s"}</small>
+          </span>
+        </button>
+      `;
+      }).join("")}
+    </div>
+  `;
+
+  setHtmlIfChanged(target, html);
+  const explainer = $("#pulseHoverExplainer");
+  bindDelegatedClick(target, "conversationPulseEmpty", "[data-pulse-empty]", () => {
+    if (state.selectedPulseSegment === "all_attention") return;
+    loadCommandCenter("all_attention").catch((error) => {
+      logDashboardError("Command Center all-attention load failed", error);
+      showNotice("Conversation Pulse could not reset. Existing signals will stay visible.", true);
+    });
+  });
+  bindDelegatedClick(target, "conversationPulseSegment", "[data-pulse-segment]", (button) => {
+    const segment = button.dataset.pulseSegment || "all_attention";
+    if (segment === state.selectedPulseSegment && state.commandCenter?.pulse?.activeSegment === segment) return;
+    loadCommandCenter(segment).catch((error) => {
+      logDashboardError("Command Center segment load failed", error, { segment });
+      showNotice("Conversation Pulse could not refresh. Existing signals will stay visible.", true);
+    });
+  });
+  target.onmouseover = (event) => {
+    const segment = event.target.closest("[data-pulse-segment]");
+    if (!segment || !target.contains(segment)) return;
+    if (explainer) explainer.textContent = segment.dataset.pulseMeaning || "Operational signal from the Command Center.";
+  };
+
+  target.onmouseout = (event) => {
+    const segment = event.target.closest("[data-pulse-segment]");
+    if (!segment || !target.contains(segment)) return;
+    const nextSegment = event.relatedTarget?.closest?.("[data-pulse-segment]");
+    if (nextSegment === segment) return;
+    if (explainer) explainer.textContent = "Hover a pulse segment to inspect what the signal means.";
+  };
+}
+
+function prioritySeverityLabel(severity) {
+  return {
+    critical: "Critical",
+    warning: "Warning",
+    live: "Live",
+    quiet: "Quiet"
+  }[severity] || pretty(severity);
+}
+
+function priorityQueueRow(item) {
+  const selected = state.selectedPriorityItemId === item.id;
+  return `
+    <article class="priority-queue-row ${selected ? "selected" : ""} ${escapeHtml(item.severity || "quiet")}" data-priority-item="${escapeHtml(item.id)}">
+      <span class="priority-state-rail"></span>
+      <div class="priority-row-main">
+        <div>
+          <strong>${escapeHtml(item.title)}</strong>
+          <small>${escapeHtml(item.summary || "")}</small>
+        </div>
+        <div class="priority-row-meta">
+          <span>${escapeHtml(item.module || "Command")}</span>
+          <span>${escapeHtml(prioritySeverityLabel(item.severity))}</span>
+          <span>${escapeHtml(relativeTime(item.updatedAt))}</span>
+        </div>
+      </div>
+      <button class="priority-row-action" type="button" data-priority-action="${escapeHtml(item.id)}">${escapeHtml(item.recommendedAction || "Review")}</button>
+    </article>
+  `;
+}
+
+function renderPriorityQueue(commandCenter = state.commandCenter) {
+  const target = $("#commandCenterPriorityQueue");
+  if (!target) return;
+  const items = commandCenter?.priorityQueue?.items || [];
+  const segment = commandCenter?.selectedPulseSegment || state.selectedPulseSegment;
+  syncSelectedPriorityItem(commandCenter);
+
+  setText("commandCenterFilterLabel", `Viewing ${commandCenterSegmentLabel(segment)} signals`);
+  setText(
+    "commandCenterQueueCount",
+    `${items.length} attention item${items.length === 1 ? "" : "s"} in this lens`
+  );
+
+  if (!items.length) {
+    setHtmlIfChanged(
+      target,
+      emptyState("No attention items in this lens.", "Choose another pulse segment or wait for new operational activity.")
+    );
+    return;
+  }
+
+  setHtmlIfChanged(target, items.map(priorityQueueRow).join(""));
+  bindDelegatedClick(target, "prioritySelect", "[data-priority-item]", (row) => {
+    state.selectedPriorityItemId = row.dataset.priorityItem || null;
+    renderPriorityQueue();
+    renderContextSurface();
+  });
+  bindDelegatedClick(target, "priorityAction", "[data-priority-action]", (button, event) => {
+    event.stopPropagation();
+    state.selectedPriorityItemId = button.dataset.priorityAction || null;
+    const item = commandCenterItemById(state.selectedPriorityItemId);
+    renderPriorityQueue();
+    renderContextSurface();
+    activatePriorityItem(item);
+  });
+}
+
+function contextTargetAttrs(target) {
+  if (!target) return "";
+  return [
+    `data-context-view="${escapeHtml(target.targetView || "")}"`,
+    `data-context-object-type="${escapeHtml(target.objectType || "")}"`,
+    `data-context-object-id="${escapeHtml(target.objectId || "")}"`
+  ].join(" ");
+}
+
+function renderContextSurface(commandCenter = state.commandCenter) {
+  const target = $("#commandCenterContextSurface");
+  if (!target) return;
+  const context = commandCenterContextForSelected(commandCenter);
+
+  if (!context) {
+    setHtmlIfChanged(
+      target,
+      emptyState("No interpreter signal yet.", "Select a priority item to see what happened, why it matters, and where to act.")
+    );
+    return;
+  }
+
+  const action = context.recommendedAction;
+  const linkedWork = context.linkedWork || [];
+  const trail = context.resolutionTrail || [];
+
+  setHtmlIfChanged(target, `
+    <div class="context-surface-head">
+      <strong>${escapeHtml(context.title || "Selected signal")}</strong>
+      <span>${escapeHtml(context.source || commandCenterSegmentLabel(context.pulseSegment))}</span>
+    </div>
+
+    <div class="context-explainer-stack">
+      <section>
+        <p>What Happened</p>
+        <span>${escapeHtml(context.whatHappened || "No event explanation available.")}</span>
+      </section>
+      <section>
+        <p>Why It Matters</p>
+        <span>${escapeHtml(context.whyItMatters || "No operational impact available.")}</span>
+      </section>
+    </div>
+
+    <div class="context-action-block">
+      <p>Recommended Action</p>
+      ${action ? `
+        <button class="context-primary-action" type="button" ${contextTargetAttrs(action)}>
+          <span>${escapeHtml(action.label || "Review")}</span>
+          <small>${escapeHtml(action.targetLabel || "Inbox")}</small>
+        </button>
+      ` : `<span class="context-muted">No action needed in this lens.</span>`}
+    </div>
+
+    <div class="context-linked-work">
+      <p>Linked Work</p>
+      ${linkedWork.length ? linkedWork.map((link) => `
+        <button class="context-work-link" type="button" ${contextTargetAttrs(link)}>
+          <span>${escapeHtml(link.label || link.module || "Linked work")}</span>
+          <small>${escapeHtml(link.module || "")}</small>
+        </button>
+      `).join("") : `<span class="context-muted">No linked work available.</span>`}
+    </div>
+
+    <div class="context-resolution-trail">
+      <p>Resolution Trail</p>
+      ${trail.length ? trail.map((entry) => `<span>${escapeHtml(entry)}</span>`).join("") : `<span>No trail recorded yet.</span>`}
+    </div>
+  `);
+
+  bindDelegatedClick(target, "contextPrimaryAction", "[data-context-view]", (button) => {
+    activateCommandCenterTarget({
+      targetView: button.dataset.contextView,
+      objectType: button.dataset.contextObjectType,
+      objectId: button.dataset.contextObjectId
+    });
+  });
+}
+
+function renderSecondarySignals(commandCenter = state.commandCenter) {
+  const target = $("#commandCenterSecondarySignals");
+  if (!target) return;
+  const signals = commandCenter?.secondarySignals || [];
+  setHtmlIfChanged(
+    target,
+    signals.length
+      ? signals.map((signal) => `
+        <div class="secondary-signal-row ${escapeHtml(signal.tone || "quiet")}">
+          <span>${escapeHtml(signal.statement || "")}</span>
+        </div>
+      `).join("")
+      : emptyState("No secondary signals yet.", "Supporting signals will appear after real activity is recorded.")
+  );
+}
+
+function renderCommandCenter(commandCenter = state.commandCenter) {
+  if (!commandCenter) return;
+  state.commandCenter = commandCenter;
+  state.selectedPulseSegment = commandCenter.selectedPulseSegment || commandCenter.pulse?.activeSegment || state.selectedPulseSegment;
+  state.commandCenterLastUpdatedAt = commandCenter.lastUpdatedAt || state.commandCenterLastUpdatedAt;
+  syncSelectedPriorityItem(commandCenter);
+  const total = Number(commandCenter.priorityQueue?.totalCount || 0);
+
+  setText("commandCenterQuestion", commandCenter.question || "What needs attention now?");
+  setText(
+    "commandCenterSummary",
+    total
+      ? `${total} real attention signal${total === 1 ? "" : "s"} across conversations, orders, AI, and campaigns.`
+      : "No active attention signals across conversations, orders, AI, and campaigns."
+  );
+  renderConversationPulse(commandCenter);
+  renderPriorityQueue(commandCenter);
+  renderContextSurface(commandCenter);
+  renderSecondarySignals(commandCenter);
+  renderCommandCenterFreshness(commandCenter);
+  refreshIcons();
+}
+
 function renderDerivedOverview() {
   if (!state.latestOverview) return;
 
@@ -1185,6 +1539,7 @@ function renderOverview(data) {
   animateCounter("warmLeads", stats.warmLeads);
   animateCounter("scrapLeads", stats.scrapLeads);
   renderDerivedOverview();
+  renderCommandCenter();
   refreshIcons();
   runMotion();
 }
@@ -1211,7 +1566,7 @@ function emptyOverviewData() {
   };
 }
 
-function renderDashboardFallback(message = "Dashboard data is not available yet.") {
+function renderDashboardFallback(message = "Command Center data is not available yet.") {
   state.dashboardLoaded = true;
   state.humanActionQueue = [];
   state.orderPipeline = {};
@@ -1221,6 +1576,119 @@ function renderDashboardFallback(message = "Dashboard data is not available yet.
   renderHumanActionQueue();
   renderOverview({ ...emptyOverviewData(), notice: message });
   setConnectionStatus("error", message);
+}
+
+async function loadCommandCenter(segment = state.selectedPulseSegment) {
+  setCommandCenterLoading(true);
+  try {
+    const data = await commandCenterApi(segment);
+    renderCommandCenter(data);
+    return data;
+  } finally {
+    setCommandCenterLoading(false);
+    renderCommandCenterFreshness();
+  }
+}
+
+function refreshCommandCenterSilently() {
+  if (state.currentView !== "overview" || state.isLoadingCommandCenter) return;
+  loadCommandCenter(state.selectedPulseSegment).catch((error) => {
+    logDashboardError("Command Center refresh failed", error);
+  });
+}
+
+function focusHighestPriorityItem() {
+  const item = state.commandCenter?.priorityQueue?.items?.[0];
+  if (!item) {
+    showNotice("No attention item is currently waiting.");
+    return;
+  }
+  state.selectedPriorityItemId = item.id;
+  renderPriorityQueue();
+  renderContextSurface();
+  [...document.querySelectorAll("[data-priority-item]")]
+    .find((row) => row.dataset.priorityItem === item.id)
+    ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
+function activatePriorityItem(item) {
+  if (!item) return;
+  const actionLabel = item.recommendedAction || "Review";
+
+  if (item.orderId) {
+    if (!featureEnabledForView("orders")) {
+      showNotice("Feature disabled by admin.", true);
+      return;
+    }
+    switchView("orders");
+    showNotice(`${actionLabel}: ${item.title}`);
+    return;
+  }
+
+  if (item.workflowId) {
+    if (!featureEnabledForView("flows")) {
+      showNotice("Feature disabled by admin.", true);
+      return;
+    }
+    switchView("flows");
+    showNotice(`${actionLabel}: ${item.title}`);
+    return;
+  }
+
+  if (item.campaignId) {
+    if (!featureEnabledForView("campaigns")) {
+      showNotice("Feature disabled by admin.", true);
+      return;
+    }
+    switchView("campaigns");
+    showNotice(`${actionLabel}: ${item.title}`);
+    return;
+  }
+
+  if (item.segmentKey === "campaign_replies") {
+    const targetView = item.module === "Broadcasts" ? "broadcasts" : "campaigns";
+    if (!featureEnabledForView(targetView)) {
+      showNotice("Feature disabled by admin.", true);
+      return;
+    }
+    switchView(targetView);
+    showNotice(`${actionLabel}: ${item.title}`);
+    return;
+  }
+
+  if (item.segmentKey === "human_queue") {
+    if (!featureEnabledForView("human")) {
+      showNotice("Feature disabled by admin.", true);
+      return;
+    }
+    switchView("human");
+    showNotice(`${actionLabel}: ${item.title}`);
+    return;
+  }
+
+  if (item.module === "Broadcasts") {
+    if (!featureEnabledForView("broadcasts")) {
+      showNotice("Feature disabled by admin.", true);
+      return;
+    }
+    switchView("broadcasts");
+    showNotice(`${actionLabel}: ${item.title}`);
+    return;
+  }
+
+  if (item.leadId) {
+    if (!featureEnabledForView("chats")) {
+      showNotice("Feature disabled by admin.", true);
+      return;
+    }
+    openLeadChat(item.leadId).catch((error) => {
+      logDashboardError("Priority queue action failed", error, { leadId: item.leadId });
+      showNotice("Could not open this priority item yet.", true);
+    });
+    return;
+  }
+
+  showNotice(`${actionLabel}: ${item.title}`);
 }
 
 function renderLeadCards() {
@@ -1437,10 +1905,14 @@ function renderConversation(data, options = {}) {
 
 async function loadOverview() {
   try {
-    const data = await dashboardApi();
+    const [data, commandCenter] = await Promise.all([
+      dashboardApi(),
+      commandCenterApi(state.selectedPulseSegment)
+    ]);
     const recentLeads = data.recentLeads || data.recentConversations || [];
     data.recentLeads = recentLeads;
     state.dashboardLoaded = true;
+    state.commandCenter = commandCenter;
     state.humanActionQueue = data.humanActionQueue || data.items || [];
     state.orderPipeline = data.orderPipeline || data.pipeline || {};
     state.leads = state.leads.length ? mergeLeads(state.leads, recentLeads) : recentLeads;
@@ -1451,11 +1923,11 @@ async function loadOverview() {
   } catch (error) {
     logDashboardError("Overview load failed", error);
     if (!state.overviewLoaded) {
-      renderDashboardFallback("Dashboard data is still loading. Actions will stay disabled until the server responds.");
+      renderDashboardFallback("Command Center data is still loading. Actions will stay disabled until the server responds.");
     } else {
       setConnectionStatus("error", "Reconnecting...");
     }
-    showNotice("Dashboard data could not load. Existing data will stay visible while we reconnect.", true);
+    showNotice("Command Center data could not load. Existing data will stay visible while we reconnect.", true);
   }
 }
 
@@ -1678,7 +2150,7 @@ function applyFeatureVisibility() {
     .slice(0, 2)
     .toUpperCase();
   setText("profileInitials", initials || "AD");
-  setText("settingsAccountEmail", state.session?.email || "--");
+  setText("settingsAccountEmail", state.session?.username || state.session?.email || "--");
   setText("settingsAccountRole", pretty(state.session?.role || "--"));
 
   document.querySelectorAll("[data-view]").forEach((button) => {
@@ -1745,7 +2217,13 @@ function renderFeatureToggles() {
 }
 
 function renderFeatureDisabled(view) {
-  Object.entries(views).forEach(([key, element]) => element?.classList.toggle("active-view", key === view));
+  const activated = new Set();
+  Object.entries(views).forEach(([key, element]) => {
+    if (!element || activated.has(element)) return;
+    activated.add(element);
+    const active = key === view || ((view === "contacts" || view === "broadcasts") && element === views.contacts);
+    element.classList.toggle("active-view", active);
+  });
   const target = views[view];
   if (!target) return;
   target.innerHTML = `
@@ -1764,9 +2242,6 @@ async function loadContacts() {
     state.contacts = data.contacts || [];
     state.contactFacets = data.facets || state.contactFacets;
     renderContacts();
-    loadBulkJobs().catch((error) => {
-      if (!error.setupRequired) showNotice(error.message, true);
-    });
   } catch (error) {
     if (error.setupRequired) {
       state.contacts = [];
@@ -1794,7 +2269,7 @@ function renderContacts() {
 
   table.innerHTML = `
     <div class="data-row data-head">
-      <span></span><span>Name</span><span>Phone</span><span>Tags</span><span>Source</span><span>Status</span><span>Last contacted</span><span>Actions</span>
+      <span></span><span>Contact</span><span>WhatsApp</span><span>Tags</span><span>Source</span><span>Status</span><span>Last touch</span><span>Action</span>
     </div>
     ${state.contacts
       .map((contact) => `
@@ -1817,7 +2292,13 @@ function renderContacts() {
     else state.selectedContactIds.delete(checkbox.dataset.contactCheck);
     renderContacts();
   });
-  bindDelegatedClick(table, "contactChat", "[data-open-chat]", (button) => openLeadChat(button.dataset.openChat));
+  bindDelegatedClick(table, "contactChat", "[data-open-chat]", (button) => {
+    if (!featureEnabledForView("chats")) {
+      showNotice("Feature disabled by admin.", true);
+      return;
+    }
+    openLeadChat(button.dataset.openChat);
+  });
   refreshIcons();
 }
 
@@ -1877,7 +2358,7 @@ function renderBulkJobs() {
         <div class="bulk-job-main">
           <div>
             <strong>${escapeHtml(job.name)}</strong>
-            <small>${escapeHtml(job.templateName)} - ${formatDate(job.createdAt)}</small>
+            <small>${escapeHtml(job.templateName)} / ${formatDate(job.createdAt)}</small>
           </div>
           <mark class="${statusTone(job.status)}">${escapeHtml(pretty(job.status))}</mark>
         </div>
@@ -1895,7 +2376,7 @@ function renderBulkJobs() {
         </div>
       </article>
     `,
-    emptyState("No bulk sends yet.", "Queue an approved template send to see progress.")
+    emptyState("No broadcasts yet.", "Queue an approved template send to see delivery progress.")
   );
   refreshIcons();
 }
@@ -1920,8 +2401,8 @@ function renderCampaigns() {
   const table = $("#campaignsTable");
   if (!table) return;
   if (!state.campaigns.length) {
-    table.innerHTML = emptyState("No campaigns yet.", "Create a scheduled or immediate WhatsApp template campaign.");
-    setText("campaignDetailTitle", "Campaign setup guide");
+    table.innerHTML = emptyState("No campaigns yet.", "Plan a scheduled or immediate WhatsApp template campaign.");
+    setText("campaignDetailTitle", "Campaign readiness");
     const detail = $("#campaignDetail");
     if (detail) {
       detail.classList.add("empty-state");
@@ -1939,7 +2420,7 @@ function renderCampaigns() {
 
   table.innerHTML = `
     <div class="data-row campaign-head">
-      <span>Name</span><span>Type</span><span>Created</span><span>Scheduled</span><span>Status</span><span>Audience</span><span>Sent</span><span>Failed</span><span>Replies</span><span>Actions</span>
+      <span>Campaign</span><span>Type</span><span>Created</span><span>Scheduled</span><span>Status</span><span>Audience</span><span>Sent</span><span>Failed</span><span>Replies</span><span>Actions</span>
     </div>
     ${state.campaigns.map((campaign) => `
       <div class="data-row campaign-row" data-campaign-id="${escapeHtml(campaign.id)}">
@@ -2057,7 +2538,7 @@ function renderAds() {
         <mark class="amber">${escapeHtml(pretty(draft.status))}</mark>
       </article>
     `,
-    emptyState("No ad drafts yet.", "Saved click-to-chat drafts will appear here.")
+    emptyState("No ad drafts yet.", "Saved click-to-WhatsApp drafts will appear here.")
   );
   refreshIcons();
 }
@@ -2144,7 +2625,7 @@ function loadWorkflowIntoDraft(workflow) {
 function renderWorkflowList() {
   const target = $("#workflowList");
   if (!target) return;
-  setText("workflowListSummary", `${state.workflows.length} saved flow${state.workflows.length === 1 ? "" : "s"} in this workspace.`);
+  setText("workflowListSummary", `${state.workflows.length} saved automation${state.workflows.length === 1 ? "" : "s"} in this workspace.`);
   setHtmlIfChanged($("#toggleWorkflowActiveBtn"), `<i data-lucide="power"></i>${state.workflowDraft.isActive ? "Active" : "Inactive"}`);
   renderKeyedChildren(
     target,
@@ -2160,7 +2641,7 @@ function renderWorkflowList() {
         <mark class="${workflow.isActive ? "green" : "neutral"}">${workflow.isActive ? "Active" : "Inactive"}</mark>
       </article>
     `,
-    emptyState("No saved workflows yet.", "Save this canvas to create your first flow.")
+    emptyState("No saved automations yet.", "Save this canvas to create your first flow.")
   );
   renderWorkflowLogs();
   bindDelegatedClick(target, "loadWorkflow", "[data-load-workflow]", (row) => {
@@ -2382,6 +2863,10 @@ function connectChatEvents() {
         renderChatList();
       }
     }
+
+    if (["message.created", "lead.updated", "order.updated"].includes(data.type)) {
+      refreshCommandCenterSilently();
+    }
   }
 
   events.addEventListener("message.created", handleChatEvent);
@@ -2416,12 +2901,18 @@ function switchView(name) {
   }
 
   state.currentView = name;
+  document.body.dataset.activeView = name;
   if (window.location.hash !== `#${name}`) {
     window.history.replaceState(null, "", `#${name}`);
   }
   document.body.classList.toggle("chat-mode", name === "chats");
+  document.body.classList.toggle("command-mode", name === "overview");
+  const activated = new Set();
   Object.entries(views).forEach(([key, element]) => {
-    element.classList.toggle("active-view", key === name);
+    if (!element || activated.has(element)) return;
+    activated.add(element);
+    const active = key === name || ((name === "contacts" || name === "broadcasts") && element === views.contacts);
+    element.classList.toggle("active-view", active);
   });
   document.querySelectorAll(".nav-item").forEach((button) => {
     const isSegment = button.dataset.temperatureTab !== undefined;
@@ -2429,10 +2920,14 @@ function switchView(name) {
     const isPrimaryView = !isSegment && button.dataset.view === name;
     button.classList.toggle("active", isPrimaryView || isSelectedSegment);
   });
-  runMotion(name === "overview" ? ".operations-pulse, .command-rail .premium-card, .operations-strip .premium-card" : ".premium-card, .lead-card, .chat-list-row");
+  runMotion(name === "overview" ? ".conversation-pulse-panel, .priority-queue-panel, .secondary-signal-panel" : ".premium-card, .lead-card, .chat-list-row");
   if (name === "overview") loadOverview();
   if (name === "leads" || name === "chats") loadLeads().catch((error) => showNotice(error.message, true));
   if (name === "contacts") loadContacts().catch((error) => showNotice(error.message, true));
+  if (name === "broadcasts") {
+    if (featureEnabledForView("contacts")) loadContacts().catch((error) => showNotice(error.message, true));
+    loadBulkJobs().catch((error) => showNotice(error.message, true));
+  }
   if (name === "campaigns") loadCampaigns().catch((error) => showNotice(error.message, true));
   if (name === "ads") loadAds().catch((error) => showNotice(error.message, true));
   if (name === "flows") loadWorkflows().catch((error) => showNotice(error.message, true));
@@ -2473,11 +2968,16 @@ async function pollDashboardData() {
       await loadConversation(selectedLeadId, { forceBottom });
     }
     if ((state.currentView === "overview" && featureEnabledForView("overview")) || (state.currentView === "reports" && featureEnabledForView("reports"))) {
-      const data = await dashboardApi();
+      const [data, commandCenter] = await Promise.all([
+        dashboardApi(),
+        commandCenterApi(state.selectedPulseSegment)
+      ]);
       state.latestOverview = data;
+      state.commandCenter = commandCenter;
       state.humanActionQueue = data.humanActionQueue || data.items || [];
       state.orderPipeline = data.orderPipeline || data.pipeline || {};
       renderDerivedOverview();
+      renderCommandCenter(commandCenter);
     } else if (state.currentView === "orders" && featureEnabledForView("orders")) {
       await loadOrderData();
     } else if (state.currentView === "human" && featureEnabledForView("human")) {
@@ -2496,6 +2996,9 @@ function startDashboardPolling() {
   window.setInterval(() => {
     pollDashboardData();
   }, DASHBOARD_POLL_INTERVAL_MS);
+  window.setInterval(() => {
+    renderCommandCenterFreshness();
+  }, 15000);
 }
 
 function clearClientSessionState() {
@@ -2584,7 +3087,7 @@ function bindEvents() {
       state.features = data.features || state.features;
       state.enabledFeatureKeys = new Set(state.features.map((feature) => feature.key));
       applyFeatureVisibility();
-      showNotice("Feature access updated.");
+      showNotice("Entitlements updated.");
     } catch (error) {
       button.disabled = false;
       showNotice(error.message, true);
@@ -2782,7 +3285,7 @@ function bindEvents() {
       tag: "Contacts matching the audience tag will be selected.",
       csv: "Upload a CSV with name, phone, tags, source. Contacts are imported safely before campaign creation.",
       sheets: "Google Sheets contacts are synced before campaign creation.",
-      manual: "Contacts selected in Contacts & Broadcasts are used as the audience."
+      manual: "Contacts selected in Contacts are used as the broadcast audience."
     }[event.target.value] || "";
     setText("campaignAudienceSummary", label);
   });
@@ -2914,6 +3417,8 @@ function bindEvents() {
     state.workflowDraft.isActive = !state.workflowDraft.isActive;
     renderWorkflowList();
   });
+
+  $("#resolveNextBtn")?.addEventListener("click", focusHighestPriorityItem);
 
   $("#importLeadsBtn")?.addEventListener("click", async () => {
     try {
@@ -3110,8 +3615,8 @@ async function performOrderAction(orderId, action, button) {
 async function startDashboard() {
   const fallbackTimer = window.setTimeout(() => {
     if (!state.overviewLoaded) {
-      renderDashboardFallback("Dashboard is taking longer than expected. You can keep working while it reconnects.");
-      showNotice("Dashboard is taking longer than expected. Retrying in the background.", true);
+      renderDashboardFallback("Command Center is taking longer than expected. You can keep working while it reconnects.");
+      showNotice("Command Center is taking longer than expected. Retrying in the background.", true);
     }
   }, DASHBOARD_START_FALLBACK_MS);
   try {
@@ -3125,9 +3630,9 @@ async function startDashboard() {
     startDashboardPolling();
   } catch (error) {
     if (!state.overviewLoaded) {
-      renderDashboardFallback("Dashboard could not start. Please refresh or sign in again.");
+      renderDashboardFallback("Command Center could not start. Please refresh or sign in again.");
     }
-    showNotice(error.message || "Dashboard could not start.", true);
+    showNotice(error.message || "Command Center could not start.", true);
   }
 
   premiumLibrariesReady.then(() => {

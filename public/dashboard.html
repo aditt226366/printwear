@@ -3,11 +3,11 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>CRM Command Center</title>
+    <title>Command Center</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,650;9..144,800&family=IBM+Plex+Mono:wght@500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/assets/styles.css?v=20260616-command" />
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,650;9..144,800&family=IBM+Plex+Mono:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/assets/styles.css?v=20260617-console" />
   </head>
   <body class="app-shell">
     <header class="topbar">
@@ -15,27 +15,28 @@
         <span id="companyBrandMark" class="brand-mark">--</span>
         <div>
           <strong id="companyBrandTitle">Company</strong>
-          <span>CRM Command Center</span>
+          <span>CRM OS</span>
         </div>
       </div>
 
-      <nav class="top-nav" aria-label="CRM sections">
-        <button class="nav-item active" data-view="overview"><i data-lucide="radar"></i>Command</button>
+      <nav class="top-nav" aria-label="Operating sections">
+        <button class="nav-item active" data-view="overview"><i data-lucide="radar"></i>Command Center</button>
         <button class="nav-item" data-view="chats"><i data-lucide="inbox"></i>Inbox</button>
-        <button class="nav-item" data-view="contacts"><i data-lucide="contact-round"></i>Audience</button>
+        <button class="nav-item" data-view="contacts"><i data-lucide="contact-round"></i>Contacts</button>
+        <button class="nav-item" data-view="broadcasts"><i data-lucide="send-horizontal"></i>Broadcasts</button>
         <button class="nav-item" data-view="campaigns"><i data-lucide="calendar-clock"></i>Campaigns</button>
         <button class="nav-item" data-view="ads"><i data-lucide="megaphone"></i>Ads</button>
         <button class="nav-item" data-view="flows"><i data-lucide="workflow"></i>AI Flows</button>
-        <button class="nav-item" data-view="human"><i data-lucide="user-round-check"></i>Takeover</button>
+        <button class="nav-item" data-view="human"><i data-lucide="user-round-check"></i>Human Queue</button>
         <button class="nav-item" data-view="orders"><i data-lucide="package-check"></i>Orders</button>
-        <button class="nav-item" data-view="reports"><i data-lucide="chart-no-axes-combined"></i>Intel</button>
+        <button class="nav-item" data-view="reports"><i data-lucide="chart-no-axes-combined"></i>Reports</button>
         <button class="nav-item" data-view="settings"><i data-lucide="settings"></i>Settings</button>
       </nav>
 
       <div class="topbar-right">
         <div class="global-search">
           <i data-lucide="search"></i>
-          <input id="globalSearch" placeholder="Search leads, chats, orders..." />
+          <input id="globalSearch" placeholder="Search conversations, orders, signals..." />
         </div>
         <button class="secondary-button icon-button" type="button" aria-label="Notifications">
           <i data-lucide="bell"></i>
@@ -53,117 +54,64 @@
       <section id="notice" class="notice hidden"></section>
 
       <section id="overviewView" class="view active-view">
-        <div id="overviewSkeleton" class="skeleton-grid">
-          <div class="skeleton-card"></div>
-          <div class="skeleton-card"></div>
-          <div class="skeleton-card"></div>
-          <div class="skeleton-card"></div>
-          <div class="skeleton-card wide"></div>
-          <div class="skeleton-card wide"></div>
+        <div id="overviewSkeleton" class="command-center-loading-shell">
+          <div class="command-loading-line"></div>
+          <div class="command-loading-pulse"></div>
+          <div class="command-loading-queue"></div>
         </div>
 
         <div id="overviewContent" class="dashboard-stack hidden">
-          <section class="command-layout">
-            <article class="operations-pulse premium-card">
-              <div class="pulse-heading">
+          <section class="command-center-phase-a">
+            <div class="command-center-main">
+              <header class="command-center-bar">
                 <div>
-                  <p class="eyebrow">Operations Pulse</p>
-                  <h1 id="dashboardHeroTitle">CRM Command Center</h1>
-                  <span id="dashboardHeroSummary">Live WhatsApp sales, orders, and human takeover intelligence.</span>
+                  <p class="eyebrow">Command Center</p>
+                  <h1 id="commandCenterQuestion">What needs attention now?</h1>
+                  <span id="commandCenterSummary">Reading live conversation, order, AI, and human handoff signals.</span>
+                  <small id="commandCenterFreshness" class="command-center-freshness">Waiting for live signal...</small>
                 </div>
-                <div class="pulse-actions">
-                  <button id="importLeadsBtn" class="secondary-button compact-action" type="button">
-                    <i data-lucide="file-spreadsheet"></i>
-                    Import
-                  </button>
-                  <button id="sendInitialBtn" class="primary-button compact-action" type="button">
-                    <i data-lucide="send"></i>
-                    Send welcomes
-                  </button>
-                </div>
-              </div>
+                <button id="resolveNextBtn" class="primary-button compact-action" type="button">
+                  <i data-lucide="arrow-right"></i>
+                  Resolve next
+                </button>
+              </header>
 
-              <div class="pulse-heatline" aria-label="Current operational pressure">
-                <span class="pulse-node hot"><b id="hotLeads">0</b><small>Hot</small><em id="hotLeadTrend">6+ messages</em></span>
-                <span class="pulse-node warm"><b id="warmLeads">0</b><small>Warm</small><em id="warmLeadTrend">2-5 messages</em></span>
-                <span class="pulse-node cool"><b id="scrapLeads">0</b><small>Low intent</small><em id="scrapLeadTrend">&lt;2 messages</em></span>
-                <span class="pulse-node human"><b id="humanQueueCount">0</b><small>Human</small><em id="humanTakeoverTrend">Manual queue</em></span>
-                <span class="pulse-node orders"><b id="ordersDone">0</b><small>Orders</small><em id="ordersDoneTrend">Confirmed onward</em></span>
-              </div>
-
-              <div class="pulse-readout">
-                <p id="hotLeadInsight">Leads with enough conversation depth for same-day closing.</p>
-                <p id="warmLeadInsight">Customers showing intent and needing nurture.</p>
-                <p id="scrapLeadInsight">Low-engagement records kept out of the closing queue.</p>
-                <p id="humanQueueInsight">Chats currently marked for manual attention.</p>
-                <p id="ordersDoneInsight">Confirmed, dispatched, delivered, or completed orders.</p>
-              </div>
-            </article>
-
-            <aside class="command-rail">
-              <article class="panel premium-card decision-panel">
+              <section class="conversation-pulse-panel premium-card" aria-labelledby="conversationPulseTitle">
                 <div class="panel-heading">
                   <div>
-                    <p class="eyebrow">Priority Inbox</p>
-                    <h2>Needs a human.</h2>
+                    <p class="eyebrow">Conversation Pulse</p>
+                    <h2 id="conversationPulseTitle">Live attention spine</h2>
+                    <span id="commandCenterFilterLabel">Viewing all attention signals</span>
                   </div>
                 </div>
-                <div id="humanActionQueueList" class="intel-list"></div>
-              </article>
-              <article class="panel premium-card signal-panel">
+                <div id="conversationPulse" class="conversation-pulse-spine" aria-label="Conversation Pulse"></div>
+                <div id="pulseHoverExplainer" class="pulse-hover-explainer">Hover a pulse segment to inspect what the signal means.</div>
+              </section>
+
+              <section class="priority-queue-panel premium-card" aria-labelledby="priorityQueueTitle">
                 <div class="panel-heading">
                   <div>
-                    <p class="eyebrow">Recent Movement</p>
-                    <h2>Conversations changing.</h2>
+                    <p class="eyebrow">Priority Queue</p>
+                    <h2 id="priorityQueueTitle">Primary work area</h2>
+                    <span id="commandCenterQueueCount">0 attention items</span>
                   </div>
                 </div>
-                <div id="recentConversationList" class="intel-list"></div>
-              </article>
+                <div id="commandCenterPriorityQueue" class="priority-queue-list"></div>
+              </section>
+            </div>
+
+            <aside class="command-context-rail" aria-label="Command Center context">
+              <section class="context-surface-panel premium-card" aria-labelledby="pulseInterpreterTitle">
+                <p class="eyebrow">Pulse Interpreter</p>
+                <h2 id="pulseInterpreterTitle">Context Surface</h2>
+                <div id="commandCenterContextSurface" class="context-surface"></div>
+              </section>
+
+              <section class="secondary-signal-panel premium-card" aria-label="Secondary signal summary">
+                <p class="eyebrow">Operational Signals</p>
+                <div id="commandCenterSecondarySignals" class="secondary-signal-list"></div>
+              </section>
             </aside>
-          </section>
-
-          <section class="operations-strip">
-            <article class="panel premium-card chart-card wide-chart">
-              <div class="panel-heading">
-                <div>
-                  <p class="eyebrow">Audience Momentum</p>
-                  <h2>Lead quality is shifting.</h2>
-                </div>
-              </div>
-              <div id="leadGrowthChart" class="line-chart"></div>
-            </article>
-
-            <article class="panel premium-card chart-card">
-              <div class="panel-heading">
-                <div>
-                  <p class="eyebrow">Audience Mix</p>
-                  <h2>Quality distribution.</h2>
-                </div>
-              </div>
-              <div id="temperatureDistribution" class="distribution-chart"></div>
-            </article>
-
-            <article class="panel premium-card chart-card">
-              <div class="panel-heading">
-                <div>
-                  <p class="eyebrow">Response Load</p>
-                  <h2>Reply coverage.</h2>
-                </div>
-              </div>
-              <div id="responsePerformance" class="performance-chart"></div>
-            </article>
-          </section>
-
-          <section class="operations-context">
-            <article class="panel premium-card">
-              <div class="panel-heading">
-                <div>
-                  <p class="eyebrow">Workspace Intelligence</p>
-                  <h2>Operating summary.</h2>
-                </div>
-              </div>
-              <div id="workspaceInsightsList" class="workspace-insights-list"></div>
-            </article>
           </section>
         </div>
       </section>
@@ -171,9 +119,9 @@
       <section id="chatsView" class="view">
         <div class="page-heading-row chat-page-heading premium-heading">
           <div>
-            <p class="eyebrow">WhatsApp control room</p>
-            <h1>Live Conversations</h1>
-            <span>AI-assisted WhatsApp conversations with human takeover.</span>
+            <p class="eyebrow">Inbox</p>
+            <h1>WhatsApp control room</h1>
+            <span>Live customer threads, AI assistance, handoff state, and order context in one workspace.</span>
           </div>
           <span class="status-pill connected"><i data-lucide="bot"></i>AI drafting replies</span>
         </div>
@@ -319,11 +267,11 @@
       </section>
 
       <section id="contactsView" class="view">
-        <div class="page-heading-row compact-heading premium-heading">
+        <div class="page-heading-row compact-heading premium-heading contacts-mode-only">
           <div>
-            <p class="eyebrow">Audience Operations</p>
-            <h1>Contacts &amp; Broadcasts</h1>
-            <span>Import audiences and send approved WhatsApp messages at scale.</span>
+            <p class="eyebrow">Contacts</p>
+            <h1>Audience workspace</h1>
+            <span>Import, segment, and select contacts for WhatsApp outreach.</span>
           </div>
           <div class="lead-controls">
             <button id="addContactBtn" class="secondary-button" type="button"><i data-lucide="user-plus"></i>Add Contact</button>
@@ -331,13 +279,20 @@
             <button id="importSheetsContactsBtn" class="secondary-button" type="button"><i data-lucide="file-spreadsheet"></i>Google Sheets</button>
           </div>
         </div>
+        <div class="page-heading-row compact-heading premium-heading broadcasts-mode-only">
+          <div>
+            <p class="eyebrow">Broadcasts</p>
+            <h1>Broadcast operations</h1>
+            <span>Send approved WhatsApp templates to selected audiences and monitor delivery progress.</span>
+          </div>
+        </div>
 
         <section class="broadcast-command-grid">
-          <article class="panel premium-card automation-panel">
+          <article class="panel premium-card automation-panel contacts-mode-only">
             <div class="panel-heading">
               <div>
-                <p class="eyebrow">Import &amp; Segment</p>
-                <h2>Contact intake</h2>
+                <p class="eyebrow">Primary action</p>
+                <h2>Import and segment</h2>
               </div>
             </div>
             <form id="csvImportForm" class="automation-form">
@@ -357,11 +312,11 @@
             </div>
           </article>
 
-          <article class="panel premium-card automation-panel broadcast-panel">
+          <article class="panel premium-card automation-panel broadcast-panel broadcasts-mode-only">
             <div class="panel-heading">
               <div>
-                <p class="eyebrow">Broadcast Composer</p>
-                <h2>Approved WhatsApp template</h2>
+                <p class="eyebrow">Primary action</p>
+                <h2>Compose broadcast</h2>
               </div>
             </div>
             <form id="bulkSendForm" class="automation-form broadcast-form">
@@ -382,11 +337,11 @@
             </form>
           </article>
 
-          <article class="panel premium-card automation-panel broadcast-progress-panel">
+          <article class="panel premium-card automation-panel broadcast-progress-panel broadcasts-mode-only">
             <div class="panel-heading">
               <div>
-                <p class="eyebrow">Progress Tracker</p>
-                <h2>Broadcast delivery</h2>
+                <p class="eyebrow">Primary insight</p>
+                <h2>Delivery progress</h2>
               </div>
               <button id="refreshBulkJobsBtn" class="secondary-button icon-button" type="button" aria-label="Refresh broadcast jobs"><i data-lucide="refresh-cw"></i></button>
             </div>
@@ -401,10 +356,10 @@
           </article>
         </section>
 
-        <section class="panel premium-card automation-table-panel">
+        <section class="panel premium-card automation-table-panel contacts-mode-only">
           <div class="panel-heading">
             <div>
-              <p class="eyebrow">Contact Table</p>
+              <p class="eyebrow">Audience list</p>
               <h2 id="contactTableTitle">0 contacts</h2>
             </div>
             <div class="lead-controls">
@@ -420,8 +375,8 @@
         <div class="page-heading-row compact-heading premium-heading">
           <div>
             <p class="eyebrow">Campaigns</p>
-            <h1>Campaign Studio</h1>
-            <span>Schedule, launch, and track WhatsApp outreach.</span>
+            <h1>Campaign operations</h1>
+            <span>Build, schedule, run, and inspect WhatsApp campaign movement.</span>
           </div>
         </div>
 
@@ -429,8 +384,8 @@
           <article class="panel premium-card automation-panel">
             <div class="panel-heading">
               <div>
-                <p class="eyebrow">Create Campaign</p>
-                <h2>Audience and schedule</h2>
+                <p class="eyebrow">Primary action</p>
+                <h2>Plan campaign</h2>
               </div>
             </div>
             <form id="campaignForm" class="automation-form">
@@ -468,7 +423,7 @@
           <article class="panel premium-card automation-panel">
             <div class="panel-heading">
               <div>
-                <p class="eyebrow">Detail</p>
+                <p class="eyebrow">Primary insight</p>
                 <h2 id="campaignDetailTitle">Select a campaign</h2>
               </div>
             </div>
@@ -479,7 +434,7 @@
         <section class="panel premium-card automation-table-panel">
           <div class="panel-heading">
             <div>
-              <p class="eyebrow">Campaign Table</p>
+              <p class="eyebrow">Campaign list</p>
               <h2>Recent campaigns</h2>
             </div>
           </div>
@@ -562,8 +517,8 @@
         <div class="page-heading-row compact-heading premium-heading">
           <div>
             <p class="eyebrow">AI Flows</p>
-            <h1>AI Flow Builder</h1>
-            <span>Design automated WhatsApp journeys with triggers, actions, and human fallback.</span>
+            <h1>Automation workspace</h1>
+            <span>Design WhatsApp journeys with triggers, actions, and human fallback.</span>
           </div>
           <div class="lead-controls">
             <button id="createWorkflowBtn" class="secondary-button" type="button"><i data-lucide="plus"></i>Create Flow</button>
@@ -577,7 +532,7 @@
           <article class="panel premium-card flow-list-panel">
             <div class="panel-heading">
               <div>
-                <p class="eyebrow">Flow List</p>
+                <p class="eyebrow">Primary insight</p>
                 <h2>Automation library</h2>
                 <span id="workflowListSummary">Saved WhatsApp journeys and trigger status.</span>
               </div>
@@ -587,8 +542,8 @@
           <article class="panel premium-card flow-logs-panel">
             <div class="panel-heading">
               <div>
-                <p class="eyebrow">Workflow Logs</p>
-                <h2>Recent execution signals</h2>
+                <p class="eyebrow">Execution</p>
+                <h2>Recent signals</h2>
               </div>
             </div>
             <div id="workflowLogs" class="workflow-logs">
@@ -736,7 +691,7 @@
               </div>
             </div>
             <div class="profile-detail-list">
-              <span>Email: <strong id="settingsAccountEmail">--</strong></span>
+              <span>Username: <strong id="settingsAccountEmail">--</strong></span>
               <span>Role: <strong id="settingsAccountRole">--</strong></span>
             </div>
             <form action="/auth/logout" method="post" data-logout-form>
@@ -747,6 +702,6 @@
       </section>
     </main>
 
-    <script src="/assets/dashboard.js?v=20260616-command"></script>
+    <script src="/assets/dashboard.js?v=20260617-console"></script>
   </body>
 </html>

@@ -127,7 +127,7 @@ function envGoogleFallback(): GoogleSheetsCredentials | null {
 }
 
 function shouldUseEnvFallback(companyId?: string | null) {
-  return !companyId || localIntegrationFallbackEnabled();
+  return localIntegrationFallbackEnabled();
 }
 
 function missingGoogleSheetsConfig(spreadsheetId?: string | null, serviceAccountEmail?: string | null, privateKey?: string | null) {
@@ -346,7 +346,7 @@ export const companyIntegrationService = {
       select: { companyId: true }
     });
     if (row) return row.companyId;
-    if (env.WHATSAPP_PHONE_NUMBER_ID && env.WHATSAPP_PHONE_NUMBER_ID === phoneNumberId) {
+    if (localIntegrationFallbackEnabled() && env.WHATSAPP_PHONE_NUMBER_ID && env.WHATSAPP_PHONE_NUMBER_ID === phoneNumberId) {
       const company = await prisma.company.findFirst({ orderBy: { createdAt: "asc" }, select: { id: true } });
       return company?.id ?? null;
     }
@@ -356,7 +356,7 @@ export const companyIntegrationService = {
   async acceptsWebhookVerifyToken(token?: string | null) {
     const verifyToken = clean(token);
     if (!verifyToken) return false;
-    if (env.WHATSAPP_VERIFY_TOKEN && env.WHATSAPP_VERIFY_TOKEN === verifyToken) return true;
+    if (localIntegrationFallbackEnabled() && env.WHATSAPP_VERIFY_TOKEN && env.WHATSAPP_VERIFY_TOKEN === verifyToken) return true;
     const row = await prisma.companyIntegration.findFirst({
       where: { whatsappVerifyToken: verifyToken },
       select: { id: true }
