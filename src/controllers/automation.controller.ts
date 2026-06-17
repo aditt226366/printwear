@@ -140,8 +140,17 @@ export const pauseCampaign = asyncHandler(async (req: Request, res: Response) =>
   res.json({ campaign: await automationService.pauseCampaign(req.params.campaignId, companyScope(res)) });
 });
 
+export const resumeCampaign = asyncHandler(async (req: Request, res: Response) => {
+  res.json({ campaign: await automationService.resumeCampaign(req.params.campaignId, companyScope(res)) });
+});
+
 export const cancelCampaign = asyncHandler(async (req: Request, res: Response) => {
   res.json({ campaign: await automationService.cancelCampaign(req.params.campaignId, companyScope(res)) });
+});
+
+export const deleteCampaign = asyncHandler(async (req: Request, res: Response) => {
+  await automationService.deleteCampaign(req.params.campaignId, companyScope(res));
+  res.status(204).send();
 });
 
 export const listAdDrafts = asyncHandler(async (_req: Request, res: Response) => {
@@ -157,6 +166,11 @@ export const createAdDraft = asyncHandler(async (req: Request, res: Response) =>
   res.status(201).json({ draft: await automationService.createAdDraft(body, sessionCompanyId(res)) });
 });
 
+export const deleteAdDraft = asyncHandler(async (req: Request, res: Response) => {
+  await automationService.deleteAdDraft(req.params.adDraftId, companyScope(res));
+  res.status(204).send();
+});
+
 export const listWorkflows = asyncHandler(async (_req: Request, res: Response) => {
   res.json({ workflows: await automationService.listWorkflows(companyScope(res)) });
 });
@@ -169,4 +183,13 @@ export const createWorkflow = asyncHandler(async (req: Request, res: Response) =
 export const updateWorkflow = asyncHandler(async (req: Request, res: Response) => {
   const body = workflowUpdateSchema.parse(req.body);
   res.json({ workflow: await automationService.updateWorkflow(req.params.workflowId, body, companyScope(res)) });
+});
+
+export const duplicateWorkflow = asyncHandler(async (req: Request, res: Response) => {
+  res.status(201).json({ workflow: await automationService.duplicateWorkflow(req.params.workflowId, sessionCompanyId(res)) });
+});
+
+export const deleteWorkflow = asyncHandler(async (req: Request, res: Response) => {
+  await automationService.deleteWorkflow(req.params.workflowId, companyScope(res));
+  res.status(204).send();
 });

@@ -22,7 +22,6 @@
       <nav class="top-nav" aria-label="Operating sections">
         <button class="nav-item active" data-view="overview"><i data-lucide="layout-dashboard"></i>Command Center</button>
         <button class="nav-item" data-view="chats"><i data-lucide="inbox"></i>Inbox</button>
-        <button class="nav-item" data-view="contacts"><i data-lucide="contact-round"></i>Contacts</button>
         <button class="nav-item" data-view="broadcasts"><i data-lucide="send-horizontal"></i>Broadcasts</button>
         <button class="nav-item" data-view="campaigns"><i data-lucide="calendar-clock"></i>Campaigns</button>
         <button class="nav-item" data-view="ads"><i data-lucide="megaphone"></i>Ads</button>
@@ -140,6 +139,12 @@
               <button type="button" data-chat-filter="human">Human Queue</button>
               <button type="button" data-chat-filter="orders">Orders</button>
               <button type="button" data-chat-filter="campaign">Campaign Replies</button>
+            </div>
+            <div class="lead-category-tabs" aria-label="Lead categories">
+              <button class="active" type="button" data-chat-temperature="">All leads</button>
+              <button type="button" data-chat-temperature="HOT">Hot</button>
+              <button type="button" data-chat-temperature="WARM">Warm</button>
+              <button type="button" data-chat-temperature="SCRAP">Scrap</button>
             </div>
             <div id="chatConversationList" class="chat-conversation-list">
               <div class="lead-skeleton"></div>
@@ -279,63 +284,55 @@
         </section>
       </section>
 
-      <section id="contactsView" class="view">
-        <div class="page-heading-row compact-heading premium-heading contacts-mode-only">
-          <div>
-            <p class="eyebrow">Contacts</p>
-            <h1>Audience workspace</h1>
-            <span>Import, segment, and select contacts for WhatsApp outreach.</span>
-          </div>
-          <div class="lead-controls">
-            <button id="addContactBtn" class="secondary-button" type="button"><i data-lucide="user-plus"></i>Add Contact</button>
-            <button id="csvImportShortcutBtn" class="secondary-button" type="button"><i data-lucide="upload"></i>Import CSV</button>
-            <button id="importSheetsContactsBtn" class="secondary-button" type="button"><i data-lucide="file-spreadsheet"></i>Google Sheets</button>
-          </div>
-        </div>
-        <div class="page-heading-row compact-heading premium-heading broadcasts-mode-only">
+      <section id="broadcastsView" class="view">
+        <div class="page-heading-row compact-heading premium-heading">
           <div>
             <p class="eyebrow">Broadcasts</p>
-            <h1>Broadcast operations</h1>
-            <span>Send approved WhatsApp templates to selected audiences and monitor delivery progress.</span>
+            <h1>Audience Broadcasts</h1>
+            <span>Select real contacts, build a template, send WhatsApp broadcasts, and monitor delivery state.</span>
+          </div>
+          <div class="lead-controls">
+            <button id="newTemplateBtn" class="secondary-button" type="button"><i data-lucide="file-plus-2"></i>New Template</button>
+            <button id="addContactBtn" class="secondary-button" type="button"><i data-lucide="user-plus"></i>Add Contact</button>
+            <button id="csvImportShortcutBtn" class="secondary-button" type="button"><i data-lucide="upload"></i>Import</button>
+            <button id="sendSelectedBulkBtn" class="primary-button" type="submit" form="bulkSendForm"><i data-lucide="radio-tower"></i>Broadcast</button>
           </div>
         </div>
 
-        <section class="broadcast-command-grid">
-          <article class="panel premium-card automation-panel contacts-mode-only">
+        <section class="broadcast-toolbar premium-card">
+          <div class="panel-search"><i data-lucide="search"></i><input id="contactSearch" placeholder="Search contacts or mobile number" /></div>
+          <button class="secondary-button" type="button" id="broadcastFilterBtn"><i data-lucide="sliders-horizontal"></i>Filter</button>
+          <div class="input-shell"><i data-lucide="tag"></i><select id="contactTagFilter"><option value="">All tags</option></select></div>
+          <div class="input-shell"><i data-lucide="radio"></i><select id="contactSourceFilter"><option value="">All sources</option></select></div>
+          <div class="input-shell"><i data-lucide="activity"></i><select id="contactStatusFilter"><option value="">All statuses</option></select></div>
+        </section>
+
+        <section class="broadcast-workspace-grid">
+          <article class="panel premium-card audience-table-panel">
             <div class="panel-heading">
               <div>
-                <p class="eyebrow">Primary action</p>
-                <h2>Import and segment</h2>
+                <p class="eyebrow">Audience</p>
+                <h2 id="contactTableTitle">0 contacts</h2>
+              </div>
+              <div class="lead-controls">
+                <button id="selectAllContactsBtn" class="secondary-button" type="button"><i data-lucide="check-square"></i>Select all</button>
+                <button id="importSheetsContactsBtn" class="secondary-button" type="button"><i data-lucide="file-spreadsheet"></i>Google Sheets</button>
               </div>
             </div>
-            <form id="csvImportForm" class="automation-form">
-              <div class="form-row">
-                <label>CSV file<input id="csvFileInput" type="file" accept=".csv,text/csv" /></label>
-                <label>Tags<input id="csvDefaultTags" placeholder="vip, summer-drop" /></label>
-              </div>
-              <textarea id="csvTextInput" rows="6" placeholder="name,phone,tags,source"></textarea>
-              <div id="csvPreview" class="csv-preview-card hidden"></div>
-              <button class="primary-button" type="submit"><i data-lucide="upload"></i>Import CSV</button>
-            </form>
-            <div class="automation-filters broadcast-filters">
-              <div class="panel-search"><i data-lucide="search"></i><input id="contactSearch" placeholder="Search name or phone" /></div>
-              <div class="input-shell"><i data-lucide="tag"></i><select id="contactTagFilter"><option value="">All tags</option></select></div>
-              <div class="input-shell"><i data-lucide="activity"></i><select id="contactStatusFilter"><option value="">All statuses</option></select></div>
-              <div class="input-shell"><i data-lucide="radio"></i><select id="contactSourceFilter"><option value="">All sources</option></select></div>
-            </div>
+            <div id="contactsTable" class="data-table broadcast-audience-table"></div>
           </article>
 
-          <article class="panel premium-card automation-panel broadcast-panel broadcasts-mode-only">
+          <article class="panel premium-card broadcast-send-panel">
             <div class="panel-heading">
               <div>
-                <p class="eyebrow">Primary action</p>
-                <h2>Compose broadcast</h2>
+                <p class="eyebrow">Send flow</p>
+                <h2>Template broadcast</h2>
               </div>
             </div>
             <form id="bulkSendForm" class="automation-form broadcast-form">
-              <label>Broadcast name<input id="bulkName" placeholder="June catalog outreach" /></label>
+              <label>Broadcast name<input id="bulkName" placeholder="June WhatsApp outreach" /></label>
               <div class="form-row">
-                <label>Template selector<input id="bulkTemplateName" placeholder="approved_template_name" /></label>
+                <label>Template Name<input id="bulkTemplateName" placeholder="approved_template_name" /></label>
                 <label>Language<input id="bulkTemplateLanguage" placeholder="en_US" /></label>
               </div>
               <div class="form-row">
@@ -343,45 +340,73 @@
                 <label>Source<input id="bulkAudienceSource" placeholder="optional source" /></label>
               </div>
               <div class="broadcast-preview">
-                <span><i data-lucide="message-square-text"></i>Broadcast preview</span>
-                <p id="broadcastPreviewText">Selected contacts will receive the approved WhatsApp template. Each sent message is stored in CRM chat history and reflected in WABA history when coexistence is enabled.</p>
+                <span><i data-lucide="message-square-text"></i>Preview</span>
+                <p id="broadcastPreviewText">Select a template and audience to preview this WhatsApp broadcast.</p>
               </div>
-              <button id="sendSelectedBulkBtn" class="primary-button" type="submit"><i data-lucide="send-horizontal"></i>Send broadcast</button>
+            </form>
+            <form id="csvImportForm" class="automation-form csv-inline-import">
+              <div class="form-row">
+                <label>CSV file<input id="csvFileInput" type="file" accept=".csv,text/csv" /></label>
+                <label>Default tags<input id="csvDefaultTags" placeholder="vip, repeat-buyers" /></label>
+              </div>
+              <textarea id="csvTextInput" rows="4" placeholder="name,phone,tags,source"></textarea>
+              <div id="csvPreview" class="csv-preview-card hidden"></div>
+              <button class="secondary-button" type="submit"><i data-lucide="upload"></i>Import CSV</button>
             </form>
           </article>
-
-          <article class="panel premium-card automation-panel broadcast-progress-panel broadcasts-mode-only">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">Primary insight</p>
-                <h2>Delivery progress</h2>
-              </div>
-              <button id="refreshBulkJobsBtn" class="secondary-button icon-button" type="button" aria-label="Refresh broadcast jobs"><i data-lucide="refresh-cw"></i></button>
-            </div>
-            <div class="broadcast-stat-grid">
-              <span><strong id="broadcastSentCount">0</strong><small>Sent</small></span>
-              <span><strong id="broadcastFailedCount">0</strong><small>Failed</small></span>
-              <span><strong id="broadcastDeliveredCount">0</strong><small>Delivered</small></span>
-              <span><strong id="broadcastReadCount">0</strong><small>Read</small></span>
-              <span><strong id="broadcastQueuedCount">0</strong><small>Queued</small></span>
-            </div>
-            <div id="bulkJobsList" class="automation-list"></div>
-          </article>
         </section>
 
-        <section class="panel premium-card automation-table-panel contacts-mode-only">
+        <section class="panel premium-card broadcast-progress-panel">
           <div class="panel-heading">
             <div>
-              <p class="eyebrow">Audience list</p>
-              <h2 id="contactTableTitle">0 contacts</h2>
+              <p class="eyebrow">Broadcast jobs</p>
+              <h2>Delivery progress</h2>
             </div>
-            <div class="lead-controls">
-              <button id="selectAllContactsBtn" class="secondary-button" type="button"><i data-lucide="check-square"></i>Select all</button>
-              <button id="focusBroadcastBtn" class="primary-button" type="button"><i data-lucide="send"></i>Prepare broadcast</button>
-            </div>
+            <button id="refreshBulkJobsBtn" class="secondary-button icon-button" type="button" aria-label="Refresh broadcast jobs"><i data-lucide="refresh-cw"></i></button>
           </div>
-          <div id="contactsTable" class="data-table"></div>
+          <div class="broadcast-stat-grid">
+            <span><strong id="broadcastSentCount">0</strong><small>Sent</small></span>
+            <span><strong id="broadcastDeliveredCount">0</strong><small>Delivered</small></span>
+            <span><strong id="broadcastReadCount">0</strong><small>Read</small></span>
+            <span><strong id="broadcastFailedCount">0</strong><small>Failed</small></span>
+            <span><strong id="broadcastQueuedCount">0</strong><small>Queued</small></span>
+          </div>
+          <div id="bulkJobsList" class="automation-list"></div>
         </section>
+
+        <dialog id="templateDialog" class="crm-dialog">
+          <form id="templateForm" method="dialog" class="template-form">
+            <div class="dialog-heading">
+              <div>
+                <p class="eyebrow">New Template</p>
+                <h2>Create broadcast template</h2>
+              </div>
+              <button class="icon-button secondary-button" value="cancel" type="submit" aria-label="Close"><i data-lucide="x"></i></button>
+            </div>
+            <div class="form-row">
+              <label>Template Name *<input id="templateNameInput" placeholder="welcome_message" required /></label>
+              <label>Type<select id="templateTypeInput"><option value="custom">custom</option><option value="marketing">marketing</option><option value="utility">utility</option></select></label>
+            </div>
+            <label>Message Content *<textarea id="templateContentInput" rows="5" placeholder="Hi {name}! Welcome to our service." required></textarea></label>
+            <div class="template-variable-row">
+              <span>Personalization</span>
+              <button type="button" data-template-var="{company}">{company}</button>
+              <button type="button" data-template-var="{email}">{email}</button>
+              <button type="button" data-template-var="{name}">{name}</button>
+              <button type="button" data-template-var="{phone}">{phone}</button>
+            </div>
+            <div class="form-row">
+              <label>Header Text optional<input id="templateHeaderInput" placeholder="Header..." /></label>
+              <label>Footer Text optional<input id="templateFooterInput" placeholder="Footer..." /></label>
+            </div>
+            <label>Meta Template Name<input id="templateMetaNameInput" placeholder="exact_name_in_meta_dashboard" /></label>
+            <label class="checkbox-line"><input id="templatePreapprovedInput" type="checkbox" /> Pre-approved by Meta / WhatsApp</label>
+            <div class="form-actions">
+              <button class="secondary-button" value="cancel" type="submit">Cancel</button>
+              <button id="createTemplateBtn" class="primary-button" value="default" type="submit">Create Template</button>
+            </div>
+          </form>
+        </dialog>
       </section>
 
       <section id="campaignsView" class="view">
@@ -391,6 +416,7 @@
             <h1>Campaign operations</h1>
             <span>Build, schedule, run, and inspect WhatsApp campaign movement.</span>
           </div>
+          <button id="launchCampaignBtn" class="primary-button" type="button"><i data-lucide="rocket"></i>Launch Campaign</button>
         </div>
 
         <section class="automation-grid">
@@ -401,7 +427,14 @@
                 <h2>Plan campaign</h2>
               </div>
             </div>
-            <form id="campaignForm" class="automation-form">
+            <div class="workflow-steps compact">
+              <span class="active"><b>1</b>Campaign Type</span>
+              <span><b>2</b>Targeting &amp; Audience</span>
+              <span><b>3</b>Schedule</span>
+              <span><b>4</b>Message Creative</span>
+              <span><b>5</b>Icebreakers</span>
+            </div>
+            <form id="campaignForm" class="automation-form stepped-form">
               <label>Campaign name<input id="campaignName" placeholder="Repeat buyers reactivation" /></label>
               <div class="form-row">
                 <label>Audience source<select id="campaignAudienceSourceType">
@@ -423,7 +456,7 @@
               </div>
               <div class="broadcast-preview">
                 <span><i data-lucide="users"></i>Audience selection</span>
-                <p id="campaignAudienceSummary">Use all contacts, a tag/source segment, a CSV upload, Google Sheets import, or manually selected contacts from Contacts &amp; Broadcasts.</p>
+                <p id="campaignAudienceSummary">Use all contacts, a tag/source segment, a CSV upload, Google Sheets import, or manually selected contacts from Broadcasts.</p>
               </div>
               <textarea id="campaignPreview" rows="4" placeholder="Internal message preview"></textarea>
               <div class="form-actions">
@@ -462,7 +495,10 @@
             <h1>WhatsApp Ads Planner</h1>
             <span>Plan click-to-WhatsApp ads and preview opening messages.</span>
           </div>
-          <span id="metaAdsStatus" class="status-pill"><i data-lucide="plug-zap"></i>Meta Ads not connected</span>
+          <div class="lead-controls">
+            <span id="metaAdsStatus" class="status-pill"><i data-lucide="plug-zap"></i>Meta Ads not connected</span>
+            <button id="launchAdBtn" class="primary-button" type="button"><i data-lucide="rocket"></i>Launch Ad</button>
+          </div>
         </div>
 
         <section class="panel premium-card meta-status-card">
@@ -481,7 +517,14 @@
                 <h2>Create draft</h2>
               </div>
             </div>
-            <form id="adDraftForm" class="automation-form">
+            <div class="workflow-steps compact">
+              <span class="active"><b>1</b>Ad Type</span>
+              <span><b>2</b>Targeting &amp; Audience</span>
+              <span><b>3</b>Budget</span>
+              <span><b>4</b>Creative</span>
+              <span><b>5</b>Icebreakers</span>
+            </div>
+            <form id="adDraftForm" class="automation-form stepped-form">
               <label>Ad name<input id="adName" placeholder="Dubai service lead ad" /></label>
               <div class="form-row">
                 <label>Objective<input id="adObjective" placeholder="WhatsApp enquiries" /></label>
@@ -541,6 +584,16 @@
           </div>
         </div>
 
+        <section class="flow-library-toolbar premium-card">
+          <div class="panel-search"><i data-lucide="search"></i><input id="workflowSearch" placeholder="Search by flow name" /></div>
+          <div class="flow-tabs" role="tablist" aria-label="AI flow tabs">
+            <button class="active" type="button" data-flow-tab="flows"><i data-lucide="circle-dot"></i>Your Flows</button>
+            <button type="button" data-flow-tab="templates"><i data-lucide="compass"></i>Templates <small>NEW</small></button>
+            <button type="button" data-flow-tab="routing"><i data-lucide="route"></i>AI Routing</button>
+            <button type="button" data-flow-tab="test"><i data-lucide="smartphone"></i>Test Number</button>
+          </div>
+        </section>
+
         <section class="flow-command-grid">
           <article class="panel premium-card flow-list-panel">
             <div class="panel-heading">
@@ -570,24 +623,31 @@
           <aside class="flow-block-panel">
             <div>
               <p class="eyebrow">Flow Start</p>
-              <button draggable="true" data-flow-block="start" data-flow-label="Start trigger"><i data-lucide="play"></i>Start trigger</button>
+              <button draggable="true" data-flow-block="start" data-flow-label="Flow Start"><i data-lucide="play"></i>Flow Start</button>
             </div>
             <div>
-              <p class="eyebrow">Messages</p>
-              <button draggable="true" data-flow-block="text" data-flow-label="Send message"><i data-lucide="message-square"></i>Send message</button>
-              <button draggable="true" data-flow-block="question" data-flow-label="Ask question"><i data-lucide="circle-help"></i>Ask question</button>
-              <button draggable="true" data-flow-block="template" data-flow-label="Send template"><i data-lucide="badge-check"></i>Send template</button>
+              <p class="eyebrow">Message types</p>
+              <button draggable="true" data-flow-block="text" data-flow-label="Text Buttons"><i data-lucide="message-square"></i>Text Buttons</button>
+              <button draggable="true" data-flow-block="media" data-flow-label="Media Buttons"><i data-lucide="image"></i>Media Buttons</button>
+              <button draggable="true" data-flow-block="list" data-flow-label="List"><i data-lucide="list"></i>List</button>
+              <button draggable="true" data-flow-block="catalogue" data-flow-label="Catalogue Message"><i data-lucide="store"></i>Catalogue Message</button>
+              <button draggable="true" data-flow-block="single_product" data-flow-label="Single Product"><i data-lucide="shopping-cart"></i>Single Product</button>
+              <button draggable="true" data-flow-block="multi_product" data-flow-label="Multi Product"><i data-lucide="shopping-bag"></i>Multi Product</button>
+              <button draggable="true" data-flow-block="template" data-flow-label="Template"><i data-lucide="badge-check"></i>Template</button>
             </div>
             <div>
               <p class="eyebrow">Actions</p>
-              <button draggable="true" data-flow-block="delay" data-flow-label="Wait for reply"><i data-lucide="timer"></i>Wait for reply</button>
+              <button draggable="true" data-flow-block="human_takeover" data-flow-label="Request Intervention"><i data-lucide="user-round-check"></i>Request Intervention</button>
+              <button draggable="true" data-flow-block="meta_conversions" data-flow-label="Meta Conversions API"><i data-lucide="file-symlink"></i>Meta Conversions API</button>
               <button draggable="true" data-flow-block="condition" data-flow-label="Condition"><i data-lucide="git-branch"></i>Condition</button>
+              <button draggable="true" data-flow-block="connect_flow" data-flow-label="Connect Flow"><i data-lucide="waypoints"></i>Connect Flow</button>
+              <button draggable="true" data-flow-block="ask_address" data-flow-label="Ask Address"><i data-lucide="map-pinned"></i>Ask Address</button>
+              <button draggable="true" data-flow-block="ask_location" data-flow-label="Ask Location"><i data-lucide="map-pin"></i>Ask Location</button>
+              <button draggable="true" data-flow-block="question" data-flow-label="Ask Question"><i data-lucide="circle-help"></i>Ask Question</button>
+              <button draggable="true" data-flow-block="ask_media" data-flow-label="Ask Media"><i data-lucide="file-image"></i>Ask Media</button>
+              <button draggable="true" data-flow-block="set_attribute" data-flow-label="Set Attribute"><i data-lucide="square-code"></i>Set Attribute</button>
               <button draggable="true" data-flow-block="add_tag" data-flow-label="Add tag"><i data-lucide="tag"></i>Add tag</button>
-              <button draggable="true" data-flow-block="set_status" data-flow-label="Set lead status"><i data-lucide="activity"></i>Set lead status</button>
-              <button draggable="true" data-flow-block="human_takeover" data-flow-label="Request human takeover"><i data-lucide="user-round-check"></i>Human takeover</button>
-              <button draggable="true" data-flow-block="order_draft" data-flow-label="Create order draft"><i data-lucide="package-plus"></i>Create order draft</button>
-              <button draggable="true" data-flow-block="api_request" data-flow-label="API request"><i data-lucide="cloud-cog"></i>API request</button>
-              <button draggable="true" data-flow-block="end" data-flow-label="End flow"><i data-lucide="circle-stop"></i>End flow</button>
+              <button draggable="true" data-flow-block="api_request" data-flow-label="API Request"><i data-lucide="globe"></i>API Request</button>
             </div>
           </aside>
 
@@ -681,8 +741,12 @@
           </div>
         </div>
         <section class="reports-grid">
-          <article class="panel premium-card chart-card"><div id="reportsLeadMix" class="distribution-chart"></div></article>
-          <article class="panel premium-card chart-card"><div id="reportsResponse" class="performance-chart"></div></article>
+          <article class="panel premium-card chart-card"><p class="eyebrow">Lead analytics</p><div id="reportsLeadMix" class="distribution-chart"></div></article>
+          <article class="panel premium-card chart-card"><p class="eyebrow">Message activity</p><div id="reportsResponse" class="performance-chart"></div></article>
+          <article class="panel premium-card chart-card"><p class="eyebrow">Broadcast performance</p><div id="reportsBroadcastPerformance" class="report-metric-stack"></div></article>
+          <article class="panel premium-card chart-card"><p class="eyebrow">Campaign performance</p><div id="reportsCampaignPerformance" class="report-metric-stack"></div></article>
+          <article class="panel premium-card chart-card"><p class="eyebrow">AI flow performance</p><div id="reportsFlowPerformance" class="report-metric-stack"></div></article>
+          <article class="panel premium-card chart-card"><p class="eyebrow">Order movement</p><div id="reportsOrderMovement" class="report-metric-stack"></div></article>
         </section>
       </section>
 
@@ -698,8 +762,22 @@
           <article class="panel premium-card">
             <div class="panel-heading">
               <div>
-                <p class="eyebrow">Account</p>
-                <h2>Session controls</h2>
+                <p class="eyebrow">Company Profile</p>
+                <h2 id="settingsCompanyName">--</h2>
+                <span id="settingsCompanyMeta">Workspace details from your account.</span>
+              </div>
+            </div>
+            <div class="profile-detail-list">
+              <span>Slug: <strong id="settingsCompanySlug">--</strong></span>
+              <span>WhatsApp: <strong id="settingsCompanyWhatsapp">--</strong></span>
+              <span>Timezone: <strong id="settingsCompanyTimezone">--</strong></span>
+            </div>
+          </article>
+          <article class="panel premium-card">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">User Profile</p>
+                <h2 id="settingsUserName">--</h2>
                 <span>Review your current role and sign out of this browser session.</span>
               </div>
             </div>

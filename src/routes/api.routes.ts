@@ -45,6 +45,10 @@ import {
   createCampaign,
   createContact,
   createWorkflow,
+  deleteAdDraft,
+  deleteCampaign,
+  deleteWorkflow,
+  duplicateWorkflow,
   getCampaign,
   getAutomationSetup,
   getAdsStatus,
@@ -56,6 +60,7 @@ import {
   listContacts,
   listWorkflows,
   pauseCampaign,
+  resumeCampaign,
   updateWorkflow
 } from "../controllers/automation.controller.js";
 import { requireAdmin, requireSession } from "../middleware/auth.middleware.js";
@@ -101,23 +106,28 @@ apiRoutes.get("/leads", requireFeature("chats"), getLeads);
 apiRoutes.get("/leads/:leadId/conversation", requireFeature("chats"), getConversation);
 apiRoutes.post("/leads/:leadId/messages", requireFeature("chats"), sendManualMessage);
 apiRoutes.post("/leads/import", requireFeature("dashboard"), importLeads);
-apiRoutes.get("/contacts", requireFeature("contacts"), listContacts);
-apiRoutes.post("/contacts", requireFeature("contacts"), createContact);
-apiRoutes.post("/contacts/import/csv", requireFeature("contacts"), importContactsCsv);
-apiRoutes.post("/contacts/import/google-sheets", requireFeature("contacts"), importContactsSheets);
+apiRoutes.get("/contacts", requireFeature("broadcasts"), listContacts);
+apiRoutes.post("/contacts", requireFeature("broadcasts"), createContact);
+apiRoutes.post("/contacts/import/csv", requireFeature("broadcasts"), importContactsCsv);
+apiRoutes.post("/contacts/import/google-sheets", requireFeature("broadcasts"), importContactsSheets);
 apiRoutes.get("/bulk-messages", requireFeature("broadcasts"), listBulkJobs);
 apiRoutes.post("/bulk-messages", requireFeature("broadcasts"), createBulkSend);
 apiRoutes.get("/campaigns", requireFeature("campaigns"), listCampaigns);
 apiRoutes.post("/campaigns", requireFeature("campaigns"), createCampaign);
 apiRoutes.get("/campaigns/:campaignId", requireFeature("campaigns"), getCampaign);
 apiRoutes.post("/campaigns/:campaignId/pause", requireFeature("campaigns"), pauseCampaign);
+apiRoutes.post("/campaigns/:campaignId/resume", requireFeature("campaigns"), resumeCampaign);
 apiRoutes.post("/campaigns/:campaignId/cancel", requireFeature("campaigns"), cancelCampaign);
+apiRoutes.delete("/campaigns/:campaignId", requireFeature("campaigns"), deleteCampaign);
 apiRoutes.get("/ads", requireFeature("ads"), listAdDrafts);
 apiRoutes.get("/ads/status", requireFeature("ads"), getAdsStatus);
 apiRoutes.post("/ads", requireFeature("ads"), createAdDraft);
+apiRoutes.delete("/ads/:adDraftId", requireFeature("ads"), deleteAdDraft);
 apiRoutes.get("/ai-flows", requireFeature("ai_flows"), listWorkflows);
 apiRoutes.post("/ai-flows", requireFeature("ai_flows"), createWorkflow);
 apiRoutes.patch("/ai-flows/:workflowId", requireFeature("ai_flows"), updateWorkflow);
+apiRoutes.post("/ai-flows/:workflowId/duplicate", requireFeature("ai_flows"), duplicateWorkflow);
+apiRoutes.delete("/ai-flows/:workflowId", requireFeature("ai_flows"), deleteWorkflow);
 apiRoutes.post("/messages/send-initial", requireFeature("dashboard"), sendInitialMessages);
 apiRoutes.post("/knowledge/seed", requireFeature("settings"), seedKnowledgeBase);
 apiRoutes.get("/knowledge", requireFeature("settings"), listKnowledgeBase);

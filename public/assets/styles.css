@@ -4305,6 +4305,313 @@ mark.amber,
   }
 }
 
+/* CRM OS user-panel module polish */
+.app-sidebar {
+  justify-content: flex-start;
+}
+
+.app-sidebar .top-nav {
+  gap: 7px;
+  padding-bottom: 10px;
+}
+
+.app-sidebar .nav-item {
+  min-height: 42px;
+  align-items: center;
+}
+
+.lead-category-tabs,
+.flow-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 0 0 12px;
+}
+
+.lead-category-tabs button,
+.flow-tabs button {
+  min-height: 30px;
+  border: 1px solid rgba(129,223,255,0.14);
+  border-radius: 999px;
+  background: rgba(255,255,255,0.04);
+  color: var(--text-muted);
+  padding: 0 11px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.lead-category-tabs button.active,
+.flow-tabs button.active {
+  border-color: rgba(71,217,255,0.46);
+  background: rgba(71,217,255,0.14);
+  color: #fff;
+}
+
+.flow-tabs small {
+  margin-left: 5px;
+  border-radius: 999px;
+  background: #c8ff52;
+  color: #09101d;
+  padding: 2px 6px;
+  font-size: 9px;
+}
+
+.whatsapp-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 10px;
+  text-align: left;
+}
+
+.chat-list-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.chat-list-top strong,
+.chat-list-main small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-list-meta {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+}
+
+.bubble.inbound {
+  color: #eaf4ff;
+  background: rgba(21, 31, 48, 0.96);
+  border: 1px solid rgba(129,223,255,0.12);
+}
+
+.bubble.outbound {
+  color: #f8fbff;
+  box-shadow: 0 14px 32px rgba(30, 139, 255, 0.24);
+}
+
+.bubble small {
+  display: block;
+  margin-top: 6px;
+  color: rgba(235, 246, 255, 0.68);
+  font-size: 11px;
+}
+
+.broadcast-toolbar,
+.flow-library-toolbar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto minmax(130px, 0.35fr) minmax(130px, 0.35fr) minmax(130px, 0.35fr);
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 14px;
+  padding: 14px;
+}
+
+.broadcast-workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(330px, 0.7fr);
+  gap: 14px;
+}
+
+.broadcast-send-panel,
+.audience-table-panel,
+.broadcast-progress-panel {
+  min-width: 0;
+}
+
+.broadcast-audience-table .contact-row,
+.broadcast-audience-table .data-head {
+  grid-template-columns: 34px minmax(170px, 1fr) 150px minmax(150px, 0.8fr) 120px 112px 132px 90px;
+}
+
+.broadcast-progress-panel {
+  margin-top: 14px;
+}
+
+.csv-inline-import {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(129,223,255,0.12);
+}
+
+.crm-dialog {
+  width: min(720px, calc(100vw - 32px));
+  border: 1px solid rgba(129,223,255,0.22);
+  border-radius: 18px;
+  background: #08101d;
+  color: var(--text-main);
+  box-shadow: 0 40px 120px rgba(0,0,0,0.55);
+}
+
+.crm-dialog::backdrop {
+  background: rgba(0,0,0,0.68);
+  backdrop-filter: blur(7px);
+}
+
+.dialog-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.template-form,
+.stepped-form {
+  display: grid;
+  gap: 14px;
+}
+
+.template-variable-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.template-variable-row button {
+  min-height: 30px;
+  border: 1px solid rgba(129,223,255,0.17);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.05);
+  color: var(--text-main);
+  padding: 0 10px;
+}
+
+.checkbox-line {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.workflow-steps {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.workflow-steps.compact {
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+}
+
+.workflow-steps span {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(129,223,255,0.13);
+  border-radius: 12px;
+  background: rgba(255,255,255,0.04);
+  color: var(--text-muted);
+  padding: 10px;
+  font-weight: 800;
+}
+
+.workflow-steps span.active {
+  border-color: rgba(39,217,149,0.55);
+  box-shadow: inset 0 -3px 0 rgba(39,217,149,0.85);
+  color: var(--text-main);
+}
+
+.workflow-steps b {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(129,223,255,0.32);
+  border-radius: 8px;
+}
+
+.campaign-row,
+.campaign-head {
+  grid-template-columns: minmax(190px, 1.2fr) minmax(130px, 0.8fr) minmax(130px, 0.8fr) 110px 135px 135px 80px 190px;
+}
+
+.flow-table .data-row {
+  min-width: 720px;
+  grid-template-columns: minmax(240px, 1.4fr) minmax(140px, 0.7fr) 110px 170px;
+}
+
+.flow-block-panel,
+.flow-config-panel,
+.flow-canvas-wrap,
+.ad-card-preview,
+.phone-preview {
+  background: rgba(2, 7, 17, 0.62);
+  color: var(--text-main);
+}
+
+.flow-block-panel,
+.flow-config-panel {
+  border-color: rgba(129,223,255,0.12);
+}
+
+.flow-block-panel button {
+  min-height: 42px;
+  border-color: rgba(129,223,255,0.13);
+  background: rgba(255,255,255,0.045);
+  color: var(--text-main);
+}
+
+.flow-canvas {
+  border-color: rgba(129,223,255,0.18);
+  background:
+    radial-gradient(circle, rgba(71,217,255,0.22) 1px, transparent 1.5px),
+    linear-gradient(180deg, rgba(4, 13, 28, 0.94), rgba(2, 7, 17, 0.98));
+  background-size: 22px 22px, 100% 100%;
+}
+
+.flow-node {
+  border: 1px solid rgba(39,217,149,0.62);
+  border-radius: 14px;
+  background: rgba(8, 16, 29, 0.96);
+  color: var(--text-main);
+}
+
+.flow-node small,
+.broadcast-stat-grid small,
+.metric-mini-grid small,
+.order-summary-card small,
+.human-summary-card small {
+  color: var(--text-muted);
+  font-family: Inter, system-ui, sans-serif;
+}
+
+.ad-card-preview,
+.phone-preview {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(129,223,255,0.13);
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.ad-media {
+  background: linear-gradient(135deg, rgba(35,118,255,0.45), rgba(71,217,255,0.15));
+}
+
+.ad-card-preview button {
+  background: rgba(71,217,255,0.15);
+  color: var(--text-main);
+}
+
+@media (max-width: 1180px) {
+  .broadcast-toolbar,
+  .broadcast-workspace-grid,
+  .workflow-steps.compact {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 620px) {
   .landing-hero h1 {
     font-size: 46px;

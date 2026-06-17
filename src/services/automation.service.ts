@@ -816,6 +816,17 @@ export const automationService = {
     return prisma.campaign.update({ where: { id }, data: { status: CampaignStatus.PAUSED } });
   },
 
+  async resumeCampaign(id: string, companyId?: string) {
+    await assertAutomationSetup();
+    const campaign = await prisma.campaign.findUnique({ where: { id } });
+    if (!campaign || (companyId && campaign.companyId !== companyId)) throw new AppError("Campaign not found", 404);
+    if (campaign.status !== CampaignStatus.PAUSED) throw new AppError("Only paused campaigns can be resumed", 400);
+    const status = campaign.scheduledAt && campaign.scheduledAt.getTime() > Date.now() ? CampaignStatus.SCHEDULED : CampaignStatus.RUNNING;
+    const updated = await prisma.campaign.update({ where: { id }, data: { status } });
+    if (status === CampaignStatus.RUNNING) void this.processCampaign(id);
+    return updated;
+  },
+
   async cancelCampaign(id: string, companyId?: string) {
     await assertAutomationSetup();
     const campaign = await prisma.campaign.findUnique({ where: { id } });
@@ -824,6 +835,13 @@ export const automationService = {
       throw new AppError("Only pending campaigns can be cancelled", 400);
     }
     return prisma.campaign.update({ where: { id }, data: { status: CampaignStatus.CANCELLED } });
+  },
+
+  async deleteCampaign(id: string, companyId?: string) {
+    await assertAutomationSetup();
+    const campaign = await prisma.campaign.findUnique({ where: { id } });
+    if (!campaign || (companyId && campaign.companyId !== companyId)) throw new AppError("Campaign not found", 404);
+    await prisma.campaign.delete({ where: { id } });
   },
 
   async processCampaign(campaignId: string) {
@@ -1032,6 +1050,13 @@ export const automationService = {
     return prisma.adDraft.create({ data: { ...input, companyId } });
   },
 
+  async deleteAdDraft(id: string, companyId?: string) {
+    await assertAutomationSetup();
+    const draft = await prisma.adDraft.findUnique({ where: { id } });
+    if (!draft || (companyId && draft.companyId !== companyId)) throw new AppError("Ad draft not found", 404);
+    await prisma.adDraft.delete({ where: { id } });
+  },
+
   async listWorkflows(companyId?: string) {
     await assertAutomationSetup();
     return prisma.aiWorkflow.findMany({
@@ -1108,6 +1133,39 @@ export const automationService = {
       metadata: { workflowId: workflow.id }
     });
     return workflow;
+  },
+
+  async duplicateWorkflow(id: string, companyId: string) {
+    await assertAutomationSetup();
+    const existing = await prisma.aiWorkflow.findFirst({ where: { id, companyId } });
+    if (!existing) throw new AppError("Workflow not found", 404);
+    const workflow = await prisma.aiWorkflow.create({
+      data: {
+        companyId,
+        name: `${existing.name} Copy`,
+        triggerType: existing.triggerType,
+        triggerValue: existing.triggerValue,
+        isActive: false,
+        definition: existing.definition as Prisma.InputJsonObject
+      }
+    });
+    void apiUsageService.log({
+      companyId,
+      provider: "INTERNAL",
+      endpoint: "ai_workflow.duplicate",
+      method: "POST",
+      statusCode: 201,
+      success: true,
+      metadata: { sourceWorkflowId: id, workflowId: workflow.id }
+    });
+    return workflow;
+  },
+
+  async deleteWorkflow(id: string, companyId?: string) {
+    await assertAutomationSetup();
+    const existing = await prisma.aiWorkflow.findFirst({ where: { id, ...(companyId ? { companyId } : {}) } });
+    if (!existing) throw new AppError("Workflow not found", 404);
+    await prisma.aiWorkflow.delete({ where: { id } });
   },
 
   async executeMatchingWorkflows(input: { leadId: string; phone: string; text: string; source?: string }) {

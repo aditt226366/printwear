@@ -9,6 +9,7 @@ const state = {
   leadSearch: "",
   chatSearch: "",
   chatFilter: "all",
+  chatTemperatureFilter: "",
   temperatureFilter: "",
   currentView: "overview",
   overviewLoaded: false,
@@ -36,6 +37,7 @@ const state = {
   metaAdsConnected: false,
   workflows: [],
   activeWorkflowId: null,
+  workflowSearch: "",
   workflowDraft: {
     id: null,
     name: "",
@@ -49,7 +51,7 @@ const state = {
     pendingConnectionId: null,
     definition: {
       nodes: [
-        { id: "start-1", type: "start", label: "Start", x: 80, y: 120, config: {} }
+        { id: "start-1", type: "start", label: "Flow Start", x: 650, y: 260, config: {} }
       ],
       edges: []
     }
@@ -65,8 +67,7 @@ const views = {
   overview: document.querySelector("#overviewView"),
   chats: document.querySelector("#chatsView"),
   leads: document.querySelector("#leadsView"),
-  contacts: document.querySelector("#contactsView"),
-  broadcasts: document.querySelector("#contactsView"),
+  broadcasts: document.querySelector("#broadcastsView"),
   campaigns: document.querySelector("#campaignsView"),
   ads: document.querySelector("#adsView"),
   flows: document.querySelector("#flowsView"),
@@ -79,7 +80,6 @@ const views = {
 const viewFeatureMap = {
   overview: "dashboard",
   chats: "chats",
-  contacts: "contacts",
   broadcasts: "broadcasts",
   campaigns: "campaigns",
   ads: "ads",
@@ -804,10 +804,20 @@ function humanActionRow(item) {
         <time>${relativeTime(item.time)}</time>
         <span class="priority-badge ${String(item.priority || "LOW").toLowerCase()}">${pretty(item.priority || "LOW")}</span>
       </span>
-      <button class="secondary-button compact-action" type="button" data-open-chat="${item.leadId}">
-        <i data-lucide="messages-square"></i>
-        Open Chat
-      </button>
+      <span class="row-actions">
+        <button class="secondary-button compact-action" type="button" data-open-chat="${item.leadId}">
+          <i data-lucide="messages-square"></i>
+          Open Chat
+        </button>
+        <button class="secondary-button compact-action" type="button" data-resolve-human="${item.leadId}">
+          <i data-lucide="check-circle-2"></i>
+          Resolve
+        </button>
+        <button class="secondary-button compact-action" type="button" data-return-ai="${item.leadId}">
+          <i data-lucide="bot"></i>
+          Return to AI
+        </button>
+      </span>
     </article>
   `;
 }
@@ -825,6 +835,8 @@ function renderHumanActionQueue() {
     emptyState("No human takeover needed right now.", "New customer requests for human help will appear here.")
   );
   bindDelegatedClick(list, "humanOverviewOpenChat", "[data-open-chat]", (button) => openLeadChat(button.dataset.openChat));
+  bindDelegatedClick(list, "humanOverviewResolve", "[data-resolve-human]", (button) => resolveHumanAction(button.dataset.resolveHuman));
+  bindDelegatedClick(list, "humanOverviewReturnAi", "[data-return-ai]", (button) => resolveHumanAction(button.dataset.returnAi));
 }
 
 function conversationPreviewRow(lead) {
@@ -1010,6 +1022,55 @@ function renderAnalytics(stats = {}) {
   const reportsResponse = $("#reportsResponse");
   if (reportsLeadMix) setHtmlIfChanged(reportsLeadMix, $("#temperatureDistribution")?.innerHTML || "");
   if (reportsResponse) setHtmlIfChanged(reportsResponse, $("#responsePerformance")?.innerHTML || "");
+  renderReports();
+}
+
+function metricRows(rows = []) {
+  return rows.map((row) => `
+    <div class="report-metric-row">
+      <span>${escapeHtml(row.label)}</span>
+      <strong>${escapeHtml(row.value)}</strong>
+    </div>
+  `).join("") || emptyState("No data yet.", "This report fills from real workspace activity.");
+}
+
+function renderReports() {
+  const broadcastTotals = state.bulkJobs.reduce((result, job) => ({
+    jobs: result.jobs + 1,
+    sent: result.sent + Number(job.sentCount || 0),
+    failed: result.failed + Number(job.failedCount || 0),
+    queued: result.queued + Number(job.queuedCount || 0)
+  }), { jobs: 0, sent: 0, failed: 0, queued: 0 });
+  const campaignTotals = state.campaigns.reduce((result, campaign) => ({
+    campaigns: result.campaigns + 1,
+    sent: result.sent + Number(campaign.sent || 0),
+    failed: result.failed + Number(campaign.failed || 0),
+    replies: result.replies + Number(campaign.replies || 0)
+  }), { campaigns: 0, sent: 0, failed: 0, replies: 0 });
+  const orderStats = orderDeskStats();
+  setHtmlIfChanged($("#reportsBroadcastPerformance"), metricRows([
+    { label: "Broadcast jobs", value: broadcastTotals.jobs },
+    { label: "Sent", value: broadcastTotals.sent },
+    { label: "Queued", value: broadcastTotals.queued },
+    { label: "Failed", value: broadcastTotals.failed }
+  ]));
+  setHtmlIfChanged($("#reportsCampaignPerformance"), metricRows([
+    { label: "Campaigns", value: campaignTotals.campaigns },
+    { label: "Sent", value: campaignTotals.sent },
+    { label: "Replies", value: campaignTotals.replies },
+    { label: "Failed", value: campaignTotals.failed }
+  ]));
+  setHtmlIfChanged($("#reportsFlowPerformance"), metricRows([
+    { label: "Flows", value: state.workflows.length },
+    { label: "Active", value: state.workflows.filter((workflow) => workflow.isActive).length },
+    { label: "Logs", value: state.workflows.reduce((sum, workflow) => sum + Number(workflow.executionLogs?.length || 0), 0) }
+  ]));
+  setHtmlIfChanged($("#reportsOrderMovement"), metricRows([
+    { label: "Total orders", value: orderStats.total },
+    { label: "Confirmed", value: orderStats.confirmed },
+    { label: "Dispatch ready", value: orderStats.dispatchReady },
+    { label: "Dispatched", value: orderStats.dispatched }
+  ]));
 }
 
 function renderWorkspaceInsights(data = state.latestOverview) {
@@ -1094,6 +1155,8 @@ function renderHumanQueueViews() {
     emptyState("No conversations need human takeover.", "Priority handoffs will appear here automatically.")
   );
   bindDelegatedClick(fullList, "humanFullOpenChat", "[data-open-chat]", (button) => openLeadChat(button.dataset.openChat));
+  bindDelegatedClick(fullList, "humanFullResolve", "[data-resolve-human]", (button) => resolveHumanAction(button.dataset.resolveHuman));
+  bindDelegatedClick(fullList, "humanFullReturnAi", "[data-return-ai]", (button) => resolveHumanAction(button.dataset.returnAi));
   refreshIcons();
 }
 
@@ -1176,6 +1239,7 @@ function renderOrdersView() {
     performOrderAction(button.dataset.orderId, button.dataset.nextAction, button);
   });
   refreshIcons();
+  renderReports();
 }
 
 function renderConversationIntel(recentLeads = []) {
@@ -1875,6 +1939,7 @@ function renderChatList() {
   const list = $("#chatConversationList");
   if (!list) return;
   const leads = getFilteredLeads(true).filter((lead) => {
+    if (state.chatTemperatureFilter && leadTemperature(lead) !== state.chatTemperatureFilter) return false;
     if (state.chatFilter === "unread") return Number(lead.unreadCount || 0) > 0;
     if (state.chatFilter === "human") return isHumanQueueLead(lead);
     if (state.chatFilter === "orders") return Boolean(lead.orderSummary || lead.orderStatus || lead.orderId);
@@ -1886,6 +1951,9 @@ function renderChatList() {
   document.querySelectorAll("[data-chat-filter]").forEach((button) => {
     button.classList.toggle("active", button.dataset.chatFilter === state.chatFilter);
   });
+  document.querySelectorAll("[data-chat-temperature]").forEach((button) => {
+    button.classList.toggle("active", (button.dataset.chatTemperature || "") === state.chatTemperatureFilter);
+  });
 
   renderKeyedChildren(
     list,
@@ -1895,7 +1963,7 @@ function renderChatList() {
       const unreadCount = Number(lead.unreadCount || 0);
       const temperature = leadTemperature(lead);
       return `
-            <button class="chat-list-row ${state.selectedLeadId === lead.id ? "active" : ""}" data-chat-lead="${lead.id}">
+            <button class="chat-list-row whatsapp-row ${state.selectedLeadId === lead.id ? "active" : ""}" data-chat-lead="${lead.id}">
               <span class="lead-avatar">${escapeHtml(lead.name).slice(0, 1).toUpperCase()}</span>
               <span class="chat-list-main">
                 <span class="chat-list-top">
@@ -2304,6 +2372,12 @@ function applyFeatureVisibility() {
     .slice(0, 2)
     .toUpperCase();
   setText("profileInitials", initials || "AD");
+  setText("settingsCompanyName", company?.name || "--");
+  setText("settingsCompanySlug", company?.slug || "--");
+  setText("settingsCompanyWhatsapp", company?.whatsappNumber || "--");
+  setText("settingsCompanyTimezone", company?.timezone || "--");
+  setText("settingsCompanyMeta", company?.businessType ? `${pretty(company.businessType)} workspace` : "Workspace details from your account.");
+  setText("settingsUserName", state.session?.username || state.session?.email || "--");
   setText("settingsAccountEmail", state.session?.username || state.session?.email || "--");
   setText("settingsAccountRole", pretty(state.session?.role || "--"));
 
@@ -2375,7 +2449,7 @@ function renderFeatureDisabled(view) {
   Object.entries(views).forEach(([key, element]) => {
     if (!element || activated.has(element)) return;
     activated.add(element);
-    const active = key === view || ((view === "contacts" || view === "broadcasts") && element === views.contacts);
+    const active = key === view;
     element.classList.toggle("active-view", active);
   });
   const target = views[view];
@@ -2409,7 +2483,7 @@ async function loadContacts() {
 }
 
 function renderContacts() {
-  setText("contactTableTitle", `${state.contacts.length} contact${state.contacts.length === 1 ? "" : "s"}`);
+  setText("contactTableTitle", `${state.contacts.length} audience contact${state.contacts.length === 1 ? "" : "s"}`);
   renderSelectOptions($("#contactTagFilter"), state.contactFacets.tags || [], state.contactFilters.tag, "All tags");
   renderSelectOptions($("#contactStatusFilter"), state.contactFacets.statuses || [], state.contactFilters.status, "All statuses");
   renderSelectOptions($("#contactSourceFilter"), state.contactFacets.sources || [], state.contactFilters.source, "All sources");
@@ -2417,19 +2491,19 @@ function renderContacts() {
   const table = $("#contactsTable");
   if (!table) return;
   if (!state.contacts.length) {
-    table.innerHTML = emptyState("No contacts yet.", "Import a CSV, sync Google Sheets, or add a contact manually.");
+    table.innerHTML = emptyState("No audience yet.", "Add contacts, import a CSV, or sync Google Sheets before sending a broadcast.");
     return;
   }
 
   table.innerHTML = `
     <div class="data-row data-head">
-      <span></span><span>Contact</span><span>WhatsApp</span><span>Tags</span><span>Source</span><span>Status</span><span>Last touch</span><span>Action</span>
+      <span></span><span>Name</span><span>Mobile Number</span><span>Tags</span><span>Source</span><span>Status</span><span>Last touch</span><span>Action</span>
     </div>
     ${state.contacts
       .map((contact) => `
         <div class="data-row contact-row" data-contact-id="${escapeHtml(contact.id)}">
           <span><input type="checkbox" data-contact-check="${escapeHtml(contact.id)}" ${state.selectedContactIds.has(contact.id) ? "checked" : ""} /></span>
-          <span><strong>${escapeHtml(contact.name)}</strong></span>
+          <span><strong>${escapeHtml(contact.name || "Unknown")}</strong></span>
           <span>${escapeHtml(contact.phone)}</span>
           <span class="tag-list">${(contact.tags || []).map((tag) => `<b>${escapeHtml(tag)}</b>`).join("") || "--"}</span>
           <span>${escapeHtml(contact.source || "--")}</span>
@@ -2445,6 +2519,7 @@ function renderContacts() {
     if (checkbox.checked) state.selectedContactIds.add(checkbox.dataset.contactCheck);
     else state.selectedContactIds.delete(checkbox.dataset.contactCheck);
     renderContacts();
+    updateBroadcastPreview();
   });
   bindDelegatedClick(table, "contactChat", "[data-open-chat]", (button) => {
     if (!featureEnabledForView("chats")) {
@@ -2533,6 +2608,20 @@ function renderBulkJobs() {
     emptyState("No broadcasts yet.", "Queue an approved template send to see delivery progress.")
   );
   refreshIcons();
+  updateBroadcastPreview();
+  renderReports();
+}
+
+function updateBroadcastPreview() {
+  const templateName = $("#bulkTemplateName")?.value.trim();
+  const audienceCount = state.selectedContactIds.size || state.contacts.length;
+  const content = $("#templateContentInput")?.value.trim();
+  setText(
+    "broadcastPreviewText",
+    templateName
+      ? `${audienceCount} selected/filtered contact${audienceCount === 1 ? "" : "s"} will receive template ${templateName}.${content ? ` Preview: ${content}` : ""}`
+      : "Select a template and audience to preview this WhatsApp broadcast."
+  );
 }
 
 async function loadCampaigns() {
@@ -2569,34 +2658,36 @@ function renderCampaigns() {
       `;
       refreshIcons();
     }
+    renderReports();
     return;
   }
 
   table.innerHTML = `
     <div class="data-row campaign-head">
-      <span>Campaign</span><span>Type</span><span>Created</span><span>Scheduled</span><span>Status</span><span>Audience</span><span>Sent</span><span>Failed</span><span>Replies</span><span>Actions</span>
+      <span>Campaign</span><span>Audience</span><span>Template</span><span>Status</span><span>Scheduled</span><span>Created</span><span>Replies</span><span>Actions</span>
     </div>
     ${state.campaigns.map((campaign) => `
       <div class="data-row campaign-row" data-campaign-id="${escapeHtml(campaign.id)}">
         <span><strong>${escapeHtml(campaign.name)}</strong></span>
-        <span>${escapeHtml(pretty(campaign.type))}</span>
-        <span>${formatDate(campaign.createdAt)}</span>
-        <span>${campaign.scheduledAt ? formatDate(campaign.scheduledAt) : "--"}</span>
+        <span>${escapeHtml(campaign.audienceLabel || `${campaign.audienceCount || 0} contacts`)}</span>
+        <span>${escapeHtml(campaign.templateName || "--")}</span>
         <span><mark class="${statusTone(campaign.status)}">${escapeHtml(pretty(campaign.status))}</mark></span>
-        <span>${escapeHtml(campaign.audienceCount || 0)}</span>
-        <span>${escapeHtml(campaign.sent || 0)}</span>
-        <span>${escapeHtml(campaign.failed || 0)}</span>
+        <span>${campaign.scheduledAt ? formatDate(campaign.scheduledAt) : "--"}</span>
+        <span>${formatDate(campaign.createdAt)}</span>
         <span>${escapeHtml(campaign.replies || 0)}</span>
         <span class="row-actions">
-          <button class="secondary-button" type="button" data-pause-campaign="${escapeHtml(campaign.id)}">Pause</button>
-          <button class="danger-button" type="button" data-cancel-campaign="${escapeHtml(campaign.id)}">Cancel</button>
+          <button class="secondary-button icon-button" type="button" data-view-campaign="${escapeHtml(campaign.id)}" aria-label="View campaign"><i data-lucide="eye"></i></button>
+          ${String(campaign.status).toUpperCase() === "PAUSED"
+            ? `<button class="secondary-button icon-button" type="button" data-resume-campaign="${escapeHtml(campaign.id)}" aria-label="Resume campaign"><i data-lucide="play"></i></button>`
+            : `<button class="secondary-button icon-button" type="button" data-pause-campaign="${escapeHtml(campaign.id)}" aria-label="Pause campaign"><i data-lucide="pause"></i></button>`}
+          <button class="danger-button icon-button" type="button" data-delete-campaign="${escapeHtml(campaign.id)}" aria-label="Delete campaign"><i data-lucide="trash-2"></i></button>
         </span>
       </div>
     `).join("")}
   `;
 
   bindDelegatedClick(table, "campaignDetail", "[data-campaign-id]", (button, event) => {
-    if (event.target.closest("[data-pause-campaign], [data-cancel-campaign]")) return;
+    if (event.target.closest("[data-pause-campaign], [data-resume-campaign], [data-delete-campaign]")) return;
     loadCampaignDetail(button.dataset.campaignId).catch((error) => showNotice(error.message, true));
   });
   bindDelegatedClick(table, "campaignPause", "[data-pause-campaign]", async (button) => {
@@ -2604,15 +2695,22 @@ function renderCampaigns() {
     showNotice("Campaign paused.");
     await loadCampaigns();
   });
-  bindDelegatedClick(table, "campaignCancel", "[data-cancel-campaign]", async (button) => {
-    await publicApi(`/campaigns/${button.dataset.cancelCampaign}/cancel`, { method: "POST" });
-    showNotice("Campaign cancelled.");
+  bindDelegatedClick(table, "campaignResume", "[data-resume-campaign]", async (button) => {
+    await publicApi(`/campaigns/${button.dataset.resumeCampaign}/resume`, { method: "POST" });
+    showNotice("Campaign resumed.");
+    await loadCampaigns();
+  });
+  bindDelegatedClick(table, "campaignDelete", "[data-delete-campaign]", async (button) => {
+    if (!window.confirm("Delete this campaign?")) return;
+    await publicApi(`/campaigns/${button.dataset.deleteCampaign}`, { method: "DELETE" });
+    showNotice("Campaign deleted.");
     await loadCampaigns();
   });
 
   if (!state.selectedCampaignId || !state.campaigns.some((campaign) => campaign.id === state.selectedCampaignId)) {
     loadCampaignDetail(state.campaigns[0].id).catch((error) => showNotice(error.message, true));
   }
+  renderReports();
 }
 
 async function loadCampaignDetail(campaignId) {
@@ -2674,7 +2772,7 @@ function renderAds() {
     "metaAdsStatusText",
     state.metaAdsConnected
       ? "Meta Ads API credentials are configured. Draft launch controls can be enabled once account review is complete."
-      : "Meta Ads not connected for your company. Ask an admin to add this company's Meta Ads account."
+      : "Meta Ads integration is not configured for this company."
   );
   renderAdPreview();
   const list = $("#adDraftsList");
@@ -2684,17 +2782,42 @@ function renderAds() {
     state.adDrafts,
     (draft) => draft.id,
     (draft) => `
-      <article class="automation-row">
+      <article class="automation-row ad-draft-row" data-ad-draft="${escapeHtml(draft.id)}">
         <div>
           <strong>${escapeHtml(draft.name)}</strong>
-          <small>${escapeHtml(draft.objective)} - ${escapeHtml(draft.audience)}</small>
+          <small>${escapeHtml(draft.objective)} - ${escapeHtml(draft.audience)} - ${formatDate(draft.createdAt)}</small>
         </div>
-        <mark class="amber">${escapeHtml(pretty(draft.status))}</mark>
+        <div class="row-actions">
+          <mark class="amber">${escapeHtml(pretty(draft.status || "Draft"))}</mark>
+          <button class="secondary-button icon-button" type="button" data-edit-ad="${escapeHtml(draft.id)}" aria-label="Edit ad draft"><i data-lucide="pencil"></i></button>
+          <button class="danger-button icon-button" type="button" data-delete-ad="${escapeHtml(draft.id)}" aria-label="Delete ad draft"><i data-lucide="trash-2"></i></button>
+        </div>
       </article>
     `,
     emptyState("No ad drafts yet.", "Saved click-to-WhatsApp drafts will appear here.")
   );
+  bindDelegatedClick(list, "adEdit", "[data-edit-ad]", (button) => {
+    const draft = state.adDrafts.find((item) => item.id === button.dataset.editAd);
+    if (!draft) return;
+    if ($("#adName")) $("#adName").value = draft.name || "";
+    if ($("#adObjective")) $("#adObjective").value = draft.objective || "";
+    if ($("#adAudience")) $("#adAudience").value = draft.audience || "";
+    if ($("#adHeadline")) $("#adHeadline").value = draft.headline || "";
+    if ($("#adBodyText")) $("#adBodyText").value = draft.bodyText || "";
+    if ($("#adCta")) $("#adCta").value = draft.cta || "";
+    if ($("#adDestination")) $("#adDestination").value = draft.destinationWhatsAppNumber || "";
+    if ($("#adTemplatePreview")) $("#adTemplatePreview").value = draft.templatePreview || "";
+    renderAdPreview();
+    $("#adDraftForm")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  bindDelegatedClick(list, "adDelete", "[data-delete-ad]", async (button) => {
+    if (!window.confirm("Delete this ad draft?")) return;
+    await publicApi(`/ads/${button.dataset.deleteAd}`, { method: "DELETE" });
+    showNotice("Ad draft deleted.");
+    await loadAds();
+  });
   refreshIcons();
+  renderReports();
 }
 
 function renderAdPreview() {
@@ -2726,11 +2849,22 @@ function renderAdPreview() {
 const flowDefaults = {
   start: { label: "Start trigger", config: { trigger: "keyword" } },
   text: { label: "Send message", config: { text: "Thanks for reaching out. How can our team help?" } },
+  media: { label: "Media Buttons", config: { mediaUrl: "", caption: "" } },
+  list: { label: "List", config: { title: "Choose an option" } },
+  catalogue: { label: "Catalogue Message", config: { catalogueId: "" } },
+  single_product: { label: "Single Product", config: { productId: "" } },
+  multi_product: { label: "Multi Product", config: { productIds: "" } },
   template: { label: "Send template", config: { templateName: "", templateLanguage: "en_US" } },
   question: { label: "Ask question", config: { text: "What quantity do you need?" } },
   delay: { label: "Wait for reply", config: { seconds: 2 } },
   condition: { label: "Condition", config: { field: "message", contains: "quote" } },
+  connect_flow: { label: "Connect Flow", config: { workflowId: "" } },
+  ask_address: { label: "Ask Address", config: { attribute: "address" } },
+  ask_location: { label: "Ask Location", config: { attribute: "location" } },
+  ask_media: { label: "Ask Media", config: { attribute: "media" } },
+  meta_conversions: { label: "Meta Conversions API", config: { eventName: "Lead" } },
   add_tag: { label: "Add tag", config: { tag: "workflow" } },
+  set_attribute: { label: "Set Attribute", config: { key: "interest", value: "" } },
   set_status: { label: "Set lead status", config: { status: "WARM" } },
   human_takeover: { label: "Request human takeover", config: { reason: "Workflow requested human follow-up" } },
   order_draft: { label: "Create order draft", config: { productType: "Customer request", confidence: "draft" } },
@@ -2779,28 +2913,63 @@ function loadWorkflowIntoDraft(workflow) {
 function renderWorkflowList() {
   const target = $("#workflowList");
   if (!target) return;
-  setText("workflowListSummary", `${state.workflows.length} saved automation${state.workflows.length === 1 ? "" : "s"} in this workspace.`);
+  const search = state.workflowSearch.toLowerCase();
+  const workflows = state.workflows.filter((workflow) => !search || workflow.name.toLowerCase().includes(search));
+  setText("workflowListSummary", `${workflows.length} saved automation${workflows.length === 1 ? "" : "s"} in this workspace.`);
   setHtmlIfChanged($("#toggleWorkflowActiveBtn"), `<i data-lucide="power"></i>${state.workflowDraft.isActive ? "Active" : "Inactive"}`);
-  renderKeyedChildren(
-    target,
-    state.workflows,
-    (workflow) => workflow.id,
-    (workflow) => `
-      <article class="flow-list-row ${workflow.id === state.activeWorkflowId ? "active" : ""}" data-load-workflow="${escapeHtml(workflow.id)}">
-        <span class="flow-list-icon"><i data-lucide="${workflow.isActive ? "zap" : "pause"}"></i></span>
-        <div>
-          <strong>${escapeHtml(workflow.name)}</strong>
-          <small>${escapeHtml(pretty(workflow.triggerType))}: ${escapeHtml(workflow.triggerValue)} - ${workflow.definition?.nodes?.length || 0} blocks</small>
-        </div>
-        <mark class="${workflow.isActive ? "green" : "neutral"}">${workflow.isActive ? "Active" : "Inactive"}</mark>
-      </article>
-    `,
-    emptyState("No saved automations yet.", "Save this canvas to create your first flow.")
-  );
+  target.innerHTML = workflows.length
+    ? `
+      <div class="data-table flow-table">
+        <div class="data-row data-head"><span>Flow Name</span><span>Created By</span><span>Status</span><span>Actions</span></div>
+        ${workflows.map((workflow) => `
+          <div class="data-row flow-row ${workflow.id === state.activeWorkflowId ? "active" : ""}" data-load-workflow="${escapeHtml(workflow.id)}">
+            <span><strong>${escapeHtml(workflow.name)}</strong><small>${escapeHtml(pretty(workflow.triggerType))}: ${escapeHtml(workflow.triggerValue)}</small></span>
+            <span>${escapeHtml(state.session?.username || "CRM OS")}</span>
+            <span><button class="toggle-switch ${workflow.isActive ? "is-on" : "is-off"}" type="button" data-toggle-workflow="${escapeHtml(workflow.id)}" aria-label="Toggle flow status"><span class="toggle-track"><i></i></span></button></span>
+            <span class="row-actions">
+              <button class="secondary-button icon-button" type="button" data-duplicate-workflow="${escapeHtml(workflow.id)}" aria-label="Duplicate flow"><i data-lucide="copy"></i></button>
+              <button class="secondary-button icon-button" type="button" data-edit-workflow="${escapeHtml(workflow.id)}" aria-label="Edit flow"><i data-lucide="pencil"></i></button>
+              <button class="danger-button icon-button" type="button" data-delete-workflow="${escapeHtml(workflow.id)}" aria-label="Delete flow"><i data-lucide="trash-2"></i></button>
+            </span>
+          </div>
+        `).join("")}
+      </div>
+    `
+    : emptyState("No saved automations yet.", "Save this canvas to create your first flow.");
   renderWorkflowLogs();
-  bindDelegatedClick(target, "loadWorkflow", "[data-load-workflow]", (row) => {
+  bindDelegatedClick(target, "loadWorkflow", "[data-load-workflow]", (row, event) => {
+    if (event.target.closest("[data-toggle-workflow], [data-duplicate-workflow], [data-edit-workflow], [data-delete-workflow]")) return;
     const workflow = state.workflows.find((item) => item.id === row.dataset.loadWorkflow);
     if (workflow) loadWorkflowIntoDraft(workflow);
+  });
+  bindDelegatedClick(target, "workflowEdit", "[data-edit-workflow]", (button) => {
+    const workflow = state.workflows.find((item) => item.id === button.dataset.editWorkflow);
+    if (workflow) {
+      loadWorkflowIntoDraft(workflow);
+      $("#flowCanvas")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  });
+  bindDelegatedClick(target, "workflowToggle", "[data-toggle-workflow]", async (button) => {
+    const workflow = state.workflows.find((item) => item.id === button.dataset.toggleWorkflow);
+    if (!workflow) return;
+    await publicApi(`/ai-flows/${workflow.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ isActive: !workflow.isActive })
+    });
+    showNotice(!workflow.isActive ? "Flow activated." : "Flow deactivated.");
+    await loadWorkflows();
+  });
+  bindDelegatedClick(target, "workflowDuplicate", "[data-duplicate-workflow]", async (button) => {
+    await publicApi(`/ai-flows/${button.dataset.duplicateWorkflow}/duplicate`, { method: "POST" });
+    showNotice("Flow duplicated.");
+    await loadWorkflows();
+  });
+  bindDelegatedClick(target, "workflowDelete", "[data-delete-workflow]", async (button) => {
+    if (!window.confirm("Delete this flow?")) return;
+    await publicApi(`/ai-flows/${button.dataset.deleteWorkflow}`, { method: "DELETE" });
+    showNotice("Flow deleted.");
+    if (state.activeWorkflowId === button.dataset.deleteWorkflow) resetWorkflowDraft();
+    await loadWorkflows();
   });
   refreshIcons();
 }
@@ -2838,11 +3007,22 @@ function flowNodeHtml(node) {
   const icon = {
     start: "play",
     text: "message-square",
+    media: "image",
+    list: "list",
+    catalogue: "store",
+    single_product: "shopping-cart",
+    multi_product: "shopping-bag",
     template: "badge-check",
     question: "circle-help",
     delay: "timer",
     condition: "git-branch",
     add_tag: "tag",
+    set_attribute: "square-code",
+    connect_flow: "waypoints",
+    ask_address: "map-pinned",
+    ask_location: "map-pin",
+    ask_media: "file-image",
+    meta_conversions: "file-symlink",
     set_status: "activity",
     human_takeover: "user-round-check",
     order_draft: "package-plus",
@@ -2932,7 +3112,7 @@ function resetWorkflowDraft() {
     selectedNodeId: id,
     pendingConnectionId: null,
     definition: {
-      nodes: [{ id, type: "start", label: "Start trigger", x: 90, y: 120, config: { trigger: "keyword" } }],
+      nodes: [{ id, type: "start", label: "Flow Start", x: 650, y: 260, config: { trigger: "keyword" } }],
       edges: []
     }
   };
@@ -3065,7 +3245,7 @@ function switchView(name) {
   Object.entries(views).forEach(([key, element]) => {
     if (!element || activated.has(element)) return;
     activated.add(element);
-    const active = key === name || ((name === "contacts" || name === "broadcasts") && element === views.contacts);
+    const active = key === name;
     element.classList.toggle("active-view", active);
   });
   document.querySelectorAll(".nav-item").forEach((button) => {
@@ -3077,9 +3257,8 @@ function switchView(name) {
   runMotion(name === "overview" ? ".conversation-pulse-panel, .priority-queue-panel, .secondary-signal-panel" : ".premium-card, .lead-card, .chat-list-row");
   if (name === "overview") loadOverview();
   if (name === "leads" || name === "chats") loadLeads().catch((error) => showNotice(error.message, true));
-  if (name === "contacts") loadContacts().catch((error) => showNotice(error.message, true));
   if (name === "broadcasts") {
-    if (featureEnabledForView("contacts")) loadContacts().catch((error) => showNotice(error.message, true));
+    loadContacts().catch((error) => showNotice(error.message, true));
     loadBulkJobs().catch((error) => showNotice(error.message, true));
   }
   if (name === "campaigns") loadCampaigns().catch((error) => showNotice(error.message, true));
@@ -3090,6 +3269,18 @@ function switchView(name) {
   if (name === "reports") {
     if (state.latestOverview) renderAnalytics(state.latestOverview.stats || {});
     else loadOverview().catch((error) => showNotice(error.message, true));
+    if (featureEnabledForView("broadcasts")) {
+      loadBulkJobs().catch((error) => logDashboardError("Broadcast report load failed", error));
+    }
+    if (featureEnabledForView("campaigns")) {
+      loadCampaigns().catch((error) => logDashboardError("Campaign report load failed", error));
+    }
+    if (featureEnabledForView("flows")) {
+      loadWorkflows().catch((error) => logDashboardError("Workflow report load failed", error));
+    }
+    if (featureEnabledForView("orders")) {
+      loadOrderData().catch((error) => logDashboardError("Order report load failed", error));
+    }
   }
 }
 
@@ -3287,6 +3478,13 @@ function bindEvents() {
     });
   });
 
+  document.querySelectorAll("[data-chat-temperature]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.chatTemperatureFilter = button.dataset.chatTemperature || "";
+      renderChatList();
+    });
+  });
+
   $("#globalSearch")?.addEventListener("keydown", (event) => {
     if (event.key !== "Enter") return;
     state.leadSearch = event.currentTarget.value.trim();
@@ -3369,6 +3567,7 @@ function bindEvents() {
     if (allSelected) state.contacts.forEach((contact) => state.selectedContactIds.delete(contact.id));
     else state.contacts.forEach((contact) => state.selectedContactIds.add(contact.id));
     renderContacts();
+    updateBroadcastPreview();
   });
 
   $("#focusBroadcastBtn")?.addEventListener("click", () => {
@@ -3379,6 +3578,44 @@ function bindEvents() {
   $("#csvImportShortcutBtn")?.addEventListener("click", () => {
     $("#csvFileInput")?.scrollIntoView({ behavior: "smooth", block: "center" });
     $("#csvFileInput")?.focus();
+  });
+
+  $("#newTemplateBtn")?.addEventListener("click", () => {
+    $("#templateDialog")?.showModal();
+    refreshIcons();
+  });
+
+  document.querySelectorAll("[data-template-var]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const input = $("#templateContentInput");
+      if (!input) return;
+      const token = button.dataset.templateVar || "";
+      const start = input.selectionStart ?? input.value.length;
+      const end = input.selectionEnd ?? input.value.length;
+      input.value = `${input.value.slice(0, start)}${token}${input.value.slice(end)}`;
+      input.focus();
+      input.setSelectionRange(start + token.length, start + token.length);
+      updateBroadcastPreview();
+    });
+  });
+
+  $("#templateForm")?.addEventListener("submit", (event) => {
+    const submitter = event.submitter;
+    if (submitter?.value === "cancel") return;
+    event.preventDefault();
+    const templateName = $("#templateMetaNameInput")?.value.trim() || $("#templateNameInput")?.value.trim();
+    if (!templateName) {
+      showNotice("Template name is required.", true);
+      return;
+    }
+    if ($("#bulkTemplateName")) $("#bulkTemplateName").value = templateName;
+    updateBroadcastPreview();
+    $("#templateDialog")?.close();
+    showNotice("Template prepared for broadcast send.");
+  });
+
+  ["bulkTemplateName", "templateContentInput", "bulkAudienceTag", "bulkAudienceSource"].forEach((id) => {
+    $(`#${id}`)?.addEventListener("input", updateBroadcastPreview);
   });
 
   $("#bulkSendForm")?.addEventListener("submit", async (event) => {
@@ -3462,9 +3699,19 @@ function bindEvents() {
     setText("campaignAudienceSummary", label);
   });
 
+  $("#launchCampaignBtn")?.addEventListener("click", () => {
+    $("#campaignForm")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    $("#campaignName")?.focus();
+  });
+
   ["adHeadline", "adBodyText", "adCta", "adTemplatePreview", "adPlatform", "adBudget", "adLocation"].forEach((id) => {
     $(`#${id}`)?.addEventListener("input", renderAdPreview);
     $(`#${id}`)?.addEventListener("change", renderAdPreview);
+  });
+
+  $("#launchAdBtn")?.addEventListener("click", () => {
+    $("#adDraftForm")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    $("#adName")?.focus();
   });
 
   $("#adDraftForm")?.addEventListener("submit", async (event) => {
@@ -3493,6 +3740,20 @@ function bindEvents() {
   document.querySelectorAll("[data-flow-block]").forEach((button) => {
     button.addEventListener("dragstart", (event) => {
       event.dataTransfer.setData("text/plain", button.dataset.flowBlock);
+    });
+  });
+
+  $("#workflowSearch")?.addEventListener("input", (event) => {
+    state.workflowSearch = event.target.value.trim();
+    renderWorkflowList();
+  });
+
+  document.querySelectorAll("[data-flow-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      document.querySelectorAll("[data-flow-tab]").forEach((tab) => tab.classList.toggle("active", tab === button));
+      const tab = button.dataset.flowTab;
+      if (tab === "flows") renderWorkflowList();
+      else showNotice(`${button.textContent.trim()} is available from this workspace. Saved flow data remains unchanged.`);
     });
   });
 
