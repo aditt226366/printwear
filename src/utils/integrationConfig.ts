@@ -1,5 +1,5 @@
 export function integrationEncryptionKeyConfigured() {
-  return Boolean(process.env.INTEGRATION_ENCRYPTION_KEY?.trim());
+  return Boolean(process.env.ENCRYPTION_KEY?.trim() || process.env.INTEGRATION_ENCRYPTION_KEY?.trim());
 }
 
 export function integrationConfigDiagnostic() {

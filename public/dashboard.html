@@ -491,80 +491,174 @@
         <div class="page-heading-row compact-heading premium-heading">
           <div>
             <p class="eyebrow">Ads</p>
-            <h1>WhatsApp Ads Planner</h1>
-            <span>Plan click-to-WhatsApp ads and preview opening messages.</span>
+            <h1>Ads</h1>
+            <span>Create, track, and optimize Click-to-WhatsApp ads from your CRM.</span>
           </div>
           <div class="lead-controls">
-            <span id="metaAdsStatus" class="status-pill"><i data-lucide="plug-zap"></i>Meta Ads not connected</span>
-            <button id="launchAdBtn" class="primary-button" type="button"><i data-lucide="rocket"></i>Launch Ad</button>
+            <button id="createAdBtn" class="primary-button" type="button"><i data-lucide="plus"></i>Create Ad</button>
+            <button id="syncAdsBtn" class="secondary-button" type="button"><i data-lucide="refresh-cw"></i>Sync Ads</button>
+            <button id="openAdsManagerBtn" class="secondary-button" type="button"><i data-lucide="external-link"></i>Open Meta Ads Manager</button>
           </div>
         </div>
 
-        <section class="panel premium-card meta-status-card">
-          <div>
-            <p class="eyebrow">Connection Status</p>
-            <h2>Draft now, launch later</h2>
-            <span id="metaAdsStatusText">Meta Ads API not connected yet. You can still create ad drafts and previews. Launch controls stay disabled until valid credentials exist.</span>
+        <section class="panel premium-card ads-connection-card">
+          <div class="ads-connection-head">
+            <div>
+              <p class="eyebrow">Connection status</p>
+              <h2>Meta launch readiness</h2>
+              <span id="metaAdsStatusText">Connect Meta Ads in Admin Integrations to publish ads directly. You can still create drafts and map manually launched ads.</span>
+            </div>
+            <span id="metaAdsStatus" class="status-pill"><i data-lucide="plug"></i>Meta Ads not connected</span>
+          </div>
+          <div id="adsConnectionGrid" class="ads-connection-grid">
+            <span><small>Meta Ads</small><strong>Checking</strong></span>
+            <span><small>WhatsApp Cloud API</small><strong>Checking</strong></span>
+            <span><small>Facebook Page</small><strong>Checking</strong></span>
+            <span><small>Ad Account</small><strong>Checking</strong></span>
           </div>
         </section>
 
-        <section class="automation-grid">
-          <article class="panel premium-card automation-panel">
+        <section id="adsMetrics" class="metric-mini-grid ads-metric-grid"></section>
+
+        <section class="ads-toolbar premium-card">
+          <div class="segmented-tabs ads-filter-tabs" role="tablist" aria-label="Ad status filters">
+            <button class="segment-tab active" type="button" data-ad-filter="ALL">All</button>
+            <button class="segment-tab" type="button" data-ad-filter="DRAFT">Draft</button>
+            <button class="segment-tab" type="button" data-ad-filter="READY_TO_PUBLISH">Ready</button>
+            <button class="segment-tab" type="button" data-ad-filter="RUNNING">Running</button>
+            <button class="segment-tab" type="button" data-ad-filter="PAUSED">Paused</button>
+            <button class="segment-tab" type="button" data-ad-filter="FAILED">Failed</button>
+            <button class="segment-tab" type="button" data-ad-filter="COMPLETED">Completed</button>
+          </div>
+        </section>
+
+        <section class="ads-command-grid">
+          <article class="panel premium-card ads-list-panel">
             <div class="panel-heading">
               <div>
-                <p class="eyebrow">Ad Draft</p>
-                <h2>Create draft</h2>
+                <p class="eyebrow">Existing Ads</p>
+                <h2>Campaign command list</h2>
               </div>
             </div>
-            <div class="workflow-steps compact">
-              <span class="active"><b>1</b>Ad Type</span>
-              <span><b>2</b>Targeting &amp; Audience</span>
-              <span><b>3</b>Budget</span>
-              <span><b>4</b>Creative</span>
-              <span><b>5</b>Icebreakers</span>
-            </div>
-            <form id="adDraftForm" class="automation-form stepped-form">
-              <label>Ad name<input id="adName" placeholder="Dubai service lead ad" /></label>
-              <div class="form-row">
-                <label>Objective<input id="adObjective" placeholder="WhatsApp enquiries" /></label>
-                <label>Audience / segment<input id="adAudience" placeholder="VIP contacts, UAE small businesses" /></label>
-              </div>
-              <div class="form-row">
-                <label>Platform<select id="adPlatform">
-                  <option>Facebook + Instagram</option>
-                  <option>Facebook</option>
-                  <option>Instagram</option>
-                </select></label>
-                <label>Budget<input id="adBudget" placeholder="AED 500" /></label>
-              </div>
-              <div class="form-row">
-                <label>Location<input id="adLocation" placeholder="Dubai, UAE" /></label>
-                <label>WhatsApp number<input id="adDestination" placeholder="+971..." /></label>
-              </div>
-              <label>Headline<input id="adHeadline" placeholder="Talk to our team on WhatsApp" /></label>
-              <textarea id="adBodyText" rows="3" placeholder="Primary text"></textarea>
-              <div class="form-row">
-                <label>CTA<input id="adCta" placeholder="Send WhatsApp" /></label>
-                <label>Template preview<input id="adTemplateName" placeholder="business_intro_template" /></label>
-              </div>
-              <textarea id="adTemplatePreview" rows="3" placeholder="WhatsApp opening message"></textarea>
-              <button class="primary-button" type="submit"><i data-lucide="save"></i>Save ad draft</button>
-            </form>
+            <div id="adCampaignList" class="ads-campaign-list"></div>
           </article>
 
-          <article class="panel premium-card automation-panel">
+          <article class="panel premium-card ads-wizard-panel" id="adWizard">
             <div class="panel-heading">
               <div>
-                <p class="eyebrow">Preview</p>
-                <h2>Click-to-chat preview</h2>
+                <p class="eyebrow">Ad creation wizard</p>
+                <h2>Click-to-WhatsApp launch plan</h2>
               </div>
             </div>
-            <div id="adPreview" class="ad-preview"></div>
+            <div class="workflow-steps compact ads-wizard-steps" role="tablist">
+              <button class="active" type="button" data-ad-step="1"><b>1</b>Objective</button>
+              <button type="button" data-ad-step="2"><b>2</b>Platform</button>
+              <button type="button" data-ad-step="3"><b>3</b>Destination</button>
+              <button type="button" data-ad-step="4"><b>4</b>Audience</button>
+              <button type="button" data-ad-step="5"><b>5</b>Creative</button>
+              <button type="button" data-ad-step="6"><b>6</b>Budget</button>
+              <button type="button" data-ad-step="7"><b>7</b>Automation</button>
+              <button type="button" data-ad-step="8"><b>8</b>Review</button>
+            </div>
+
+            <form id="adWizardForm" class="automation-form stepped-form">
+              <div class="ad-step-panel active" data-ad-step-panel="1">
+                <div class="choice-grid">
+                  <label class="choice-card active"><input type="radio" name="adObjective" value="CLICK_TO_WHATSAPP" checked />Click to WhatsApp</label>
+                  <label class="choice-card disabled"><input type="radio" name="adObjective" value="LEAD_GENERATION" disabled />Lead Generation placeholder</label>
+                  <label class="choice-card disabled"><input type="radio" name="adObjective" value="WEBSITE_TRAFFIC" disabled />Website Traffic placeholder</label>
+                  <label class="choice-card disabled"><input type="radio" name="adObjective" value="RETARGET_WHATSAPP_LEADS" disabled />Retarget WhatsApp Leads placeholder</label>
+                </div>
+              </div>
+
+              <div class="ad-step-panel" data-ad-step-panel="2">
+                <label>Platform<select id="adPlatform">
+                  <option value="FACEBOOK_INSTAGRAM">Facebook + Instagram</option>
+                  <option value="FACEBOOK">Facebook</option>
+                  <option value="INSTAGRAM">Instagram</option>
+                </select></label>
+              </div>
+
+              <div class="ad-step-panel" data-ad-step-panel="3">
+                <div class="form-row">
+                  <label>WhatsApp number<input id="adWhatsappNumber" placeholder="+91..." /></label>
+                  <label>WABA / Phone Number ID<input id="adPhoneNumberId" placeholder="Loaded from WhatsApp integration when connected" /></label>
+                </div>
+                <label>Welcome text<input id="adWelcomeText" placeholder="Hi, I want to know more." /></label>
+                <div class="broadcast-preview"><span><i data-lucide="message-circle"></i>Starting message preview</span><p id="adStartingPreview">Hi, I want to know more.</p></div>
+              </div>
+
+              <div class="ad-step-panel" data-ad-step-panel="4">
+                <label>Audience type<select id="adAudienceType">
+                  <option value="manual">Manual targeting</option>
+                  <option value="existing_contacts">Existing contacts</option>
+                  <option value="hot_leads">Hot leads</option>
+                  <option value="warm_leads">Warm leads</option>
+                  <option value="csv_upload">CSV upload placeholder</option>
+                  <option value="retarget_previous_campaign">Retarget previous campaign responders</option>
+                </select></label>
+                <label>Manual targeting<textarea id="adAudienceText" rows="3" placeholder="Cities, interests, age range, buyer profile"></textarea></label>
+                <label>CSV upload placeholder<input id="adAudienceCsv" type="file" accept=".csv,text/csv" /></label>
+              </div>
+
+              <div class="ad-step-panel" data-ad-step-panel="5">
+                <label>Ad name<input id="adName" placeholder="June Click-to-WhatsApp campaign" /></label>
+                <label>Primary text<textarea id="adPrimaryText" rows="3" placeholder="Tell customers why they should message you now."></textarea></label>
+                <div class="form-row">
+                  <label>Headline<input id="adHeadline" placeholder="Message us on WhatsApp" /></label>
+                  <label>Description<input id="adDescription" placeholder="Fast support and quotes" /></label>
+                </div>
+                <div class="form-row">
+                  <label>CTA<input id="adCta" value="Send WhatsApp Message" /></label>
+                  <label>URL tags / UTM params<input id="adUtm" placeholder="utm_source=meta&utm_campaign=..." /></label>
+                </div>
+                <label>Image upload placeholder<input id="adImageUpload" type="file" accept="image/*" /></label>
+              </div>
+
+              <div class="ad-step-panel" data-ad-step-panel="6">
+                <div class="form-row">
+                  <label>Daily budget<input id="adDailyBudget" type="number" min="0" step="1" placeholder="1000" /></label>
+                  <label>Lifetime budget<input id="adLifetimeBudget" type="number" min="0" step="1" placeholder="30000" /></label>
+                </div>
+                <div class="form-row">
+                  <label>Start date<input id="adStartDate" type="datetime-local" /></label>
+                  <label>End date<input id="adEndDate" type="datetime-local" /></label>
+                </div>
+                <label>Timezone<input id="adTimezone" placeholder="Asia/Kolkata" /></label>
+              </div>
+
+              <div class="ad-step-panel" data-ad-step-panel="7">
+                <label class="checkbox-line"><input id="adTagLead" type="checkbox" checked />Tag new lead as Ad Lead</label>
+                <label class="checkbox-line"><input id="adStartAiWorkflow" type="checkbox" />Start AI workflow</label>
+                <label>Assign agent<input id="adAssignAgent" placeholder="Agent name or email" /></label>
+                <label class="checkbox-line"><input id="adAddToLeadManagement" type="checkbox" checked />Add to lead management</label>
+                <label class="checkbox-line"><input id="adHumanQueueHighIntent" type="checkbox" checked />Send to human queue if high intent</label>
+                <label class="checkbox-line"><input id="adUpdateSheet" type="checkbox" />Update Google Sheet if connected</label>
+              </div>
+
+              <div class="ad-step-panel" data-ad-step-panel="8">
+                <div id="adReview" class="ad-review-grid"></div>
+              </div>
+
+              <div class="ad-wizard-actions">
+                <button id="prevAdStepBtn" class="secondary-button" type="button"><i data-lucide="arrow-left"></i>Back</button>
+                <button id="nextAdStepBtn" class="secondary-button" type="button">Next<i data-lucide="arrow-right"></i></button>
+                <button id="saveDraftAdBtn" class="secondary-button" type="submit" data-ad-submit="DRAFT"><i data-lucide="save"></i>Save Draft</button>
+                <button id="readyAdBtn" class="secondary-button" type="submit" data-ad-submit="READY_TO_PUBLISH"><i data-lucide="check-circle-2"></i>Save as Ready to Publish</button>
+                <button id="launchWizardAdBtn" class="primary-button" type="submit" data-ad-submit="LAUNCH"><i data-lucide="rocket"></i>Launch Ad</button>
+              </div>
+            </form>
           </article>
         </section>
 
-        <section class="panel premium-card automation-table-panel">
-          <div id="adDraftsList" class="automation-list"></div>
+        <section class="panel premium-card ads-preview-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Preview</p>
+              <h2>Click-to-chat creative</h2>
+            </div>
+          </div>
+          <div id="adPreview" class="ad-preview"></div>
         </section>
       </section>
 

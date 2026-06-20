@@ -26,6 +26,7 @@ const envSchema = z.object({
   DEFAULT_COMPANY_NAME: z.string().min(1).default("Demo Company"),
   DEFAULT_COMPANY_SLUG: z.string().min(1).default("demo-company"),
   SESSION_SECRET: z.string().min(32).optional(),
+  ENCRYPTION_KEY: z.string().min(16).optional(),
   INTEGRATION_ENCRYPTION_KEY: z.string().min(16).optional(),
 
   WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
@@ -39,6 +40,10 @@ const envSchema = z.object({
   AUTOMATION_WORKERS_ENABLED: envBoolean.default(true),
   META_ADS_ACCESS_TOKEN: z.string().optional(),
   META_AD_ACCOUNT_ID: z.string().optional(),
+  FACEBOOK_PAGE_ID: z.string().optional(),
+  META_BUSINESS_ID: z.string().optional(),
+  INSTAGRAM_ACTOR_ID: z.string().optional(),
+  META_PIXEL_ID: z.string().optional(),
 
   ANTHROPIC_API_KEY: z.string().optional(),
   CLAUDE_MODEL: z.string().default("claude-sonnet-4-6"),

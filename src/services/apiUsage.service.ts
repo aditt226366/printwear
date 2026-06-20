@@ -1,6 +1,7 @@
 import { ApiProvider } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
 import { logger } from "../utils/logger.js";
+import { scrubSecretsFromLogs } from "../utils/secretVault.js";
 
 type UsageInput = {
   companyId?: string | null;
@@ -40,7 +41,7 @@ export const apiUsageService = {
           success: input.success,
           requestUnits: input.requestUnits ?? 1,
           costEstimate: input.costEstimate ?? null,
-          metadata: (input.metadata || {}) as object
+          metadata: scrubSecretsFromLogs(input.metadata || {}) as object
         }
       });
     } catch (error) {

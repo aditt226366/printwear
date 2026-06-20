@@ -140,49 +140,44 @@
       <section id="adminIntegrationsView" class="view">
         <div class="page-heading-row premium-heading">
           <div>
-            <p class="eyebrow">Connections</p>
-            <h1>Connection setup</h1>
-            <span>Configure each account's Google Sheets, WhatsApp, and Meta Ads credentials without exposing saved secrets.</span>
+            <p class="eyebrow">Secure connections</p>
+            <h1>Integration Vault</h1>
+            <span>Choose a company, then manage its tenant-specific Sheets, WhatsApp, ads, knowledge, and AI credentials.</span>
           </div>
         </div>
         <section class="panel premium-card">
           <div class="panel-heading">
-            <div><p class="eyebrow">Account</p><h2>Provider credentials</h2></div>
-            <select id="integrationCompanySelect" class="admin-select"></select>
+            <div><p class="eyebrow">Companies</p><h2>Integration workspaces</h2></div>
           </div>
-          <form id="integrationForm" class="automation-form integration-form">
-            <fieldset>
-              <legend>Google Sheets</legend>
-              <div class="form-row"><label>Sheet ID<input id="integrationGoogleSheetsId" /></label><label>Service account email<input id="integrationGoogleServiceAccountEmail" /></label></div>
-              <label>Private key<textarea id="integrationGooglePrivateKey" rows="4" placeholder="Leave blank to keep saved key"></textarea><small id="integrationGooglePrivateKeyMasked">No key saved.</small></label>
-              <div class="integration-action-row">
-                <button id="testGoogleSheetsIntegrationBtn" class="secondary-button" type="button"><i data-lucide="file-spreadsheet"></i>Test Google Sheets</button>
-                <button id="clearGoogleSheetsIntegrationBtn" class="secondary-button danger-secondary" type="button"><i data-lucide="unlink"></i>Clear Google Sheets</button>
+          <div id="integrationCompanyCards" class="integration-company-grid"></div>
+        </section>
+        <section id="integrationDrawer" class="integration-drawer hidden" aria-hidden="true">
+          <div class="integration-drawer-backdrop" data-close-integration-drawer></div>
+          <aside class="integration-drawer-panel" role="dialog" aria-modal="true" aria-labelledby="integrationDrawerTitle">
+            <header class="integration-drawer-header">
+              <div class="integration-drawer-company">
+                <span id="integrationDrawerIcon" class="integration-company-icon">--</span>
+                <div>
+                  <p class="eyebrow">Manage Integrations</p>
+                  <h2 id="integrationDrawerTitle">Company integrations</h2>
+                  <small id="integrationDrawerMeta">--</small>
+                </div>
               </div>
-            </fieldset>
-            <fieldset>
-              <legend>WhatsApp</legend>
-              <div class="form-row"><label>Phone number ID<input id="integrationWhatsappPhoneNumberId" /></label><label>WABA ID<input id="integrationWhatsappBusinessAccountId" /></label></div>
-              <div class="form-row"><label>Default template<input id="integrationWhatsappTemplateName" /></label><label>Template language<input id="integrationWhatsappTemplateLanguage" placeholder="en" /></label></div>
-              <div class="form-row"><label>Verify token<input id="integrationWhatsappVerifyToken" placeholder="Leave blank to keep saved token" /></label><label>Access token<input id="integrationWhatsappAccessToken" type="password" placeholder="Leave blank to keep saved token" /></label></div>
-              <small id="integrationWhatsappAccessTokenMasked">No token saved.</small>
-              <div class="integration-action-row">
-                <button id="testWhatsappIntegrationBtn" class="secondary-button" type="button"><i data-lucide="message-circle"></i>Test WhatsApp</button>
-                <button id="clearWhatsappIntegrationBtn" class="secondary-button danger-secondary" type="button"><i data-lucide="unlink"></i>Clear WhatsApp</button>
-              </div>
-            </fieldset>
-            <fieldset>
-              <legend>Meta Ads</legend>
-              <div class="form-row"><label>Ad account ID<input id="integrationMetaAdAccountId" /></label><label>Access token<input id="integrationMetaAdsAccessToken" type="password" placeholder="Leave blank to keep saved token" /></label></div>
-              <small id="integrationMetaAdsAccessTokenMasked">No token saved.</small>
-              <div class="integration-action-row">
-                <button id="testMetaAdsIntegrationBtn" class="secondary-button" type="button"><i data-lucide="megaphone"></i>Test Meta Ads</button>
-                <button id="clearMetaAdsIntegrationBtn" class="secondary-button danger-secondary" type="button"><i data-lucide="unlink"></i>Clear Meta Ads</button>
-              </div>
-            </fieldset>
-            <button class="primary-button" type="submit"><i data-lucide="save"></i>Save connections</button>
-          </form>
-          <div id="integrationTestResults" class="integration-test-results"></div>
+              <button class="icon-button" type="button" data-close-integration-drawer title="Close"><i data-lucide="x"></i></button>
+            </header>
+            <div id="integrationDrawerStats" class="integration-drawer-stats"></div>
+            <div class="integration-drawer-tabs" role="tablist">
+              <button class="active" type="button" data-integration-tab="integrations">Integrations</button>
+              <button type="button" data-integration-tab="logs">Verification Logs</button>
+            </div>
+            <div id="integrationDrawerIntegrationsTab" class="integration-tab-panel active">
+              <div id="integrationVaultSummary" class="integration-vault-summary"></div>
+              <div id="integrationVault" class="integration-vault-grid"></div>
+            </div>
+            <div id="integrationDrawerLogsTab" class="integration-tab-panel">
+              <div class="empty-state"><strong>No verification log browser yet.</strong><span>Saved, verified, failed, test, upload, index, and disconnect actions are written to server-side audit logs without raw secrets.</span></div>
+            </div>
+          </aside>
         </section>
       </section>
 
@@ -226,6 +221,6 @@
       </section>
     </main>
 
-    <script src="/assets/admin.js?v=20260617-console"></script>
+    <script src="/assets/admin.js?v=20260618-integrations-cards"></script>
   </body>
 </html>

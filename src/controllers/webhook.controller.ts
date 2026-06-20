@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { adCampaignService } from "../services/adCampaign.service.js";
 import { claudeService } from "../services/claude.service.js";
 import { automationService } from "../services/automation.service.js";
 import { companyIntegrationService } from "../services/companyIntegration.service.js";
@@ -6,6 +7,8 @@ import { knowledgeService } from "../services/knowledge.service.js";
 import { leadService } from "../services/lead.service.js";
 import { resolveMenuIntent } from "../services/menuIntent.service.js";
 import { messageService } from "../services/message.service.js";
+import { printwearTenantService } from "../services/printwearTenant.service.js";
+import { printwearWebhookService } from "../services/printwearWebhook.service.js";
 import { webhookStatusService } from "../services/webhookStatus.service.js";
 import { whatsappService } from "../services/whatsapp.service.js";
 import { asyncHandler, AppError } from "../utils/errors.js";
@@ -64,7 +67,11 @@ async function processStatusUpdates(payload: unknown) {
 
   for (const statusUpdate of statusUpdates) {
     try {
-      await messageService.updateMessageStatus(statusUpdate.messageId, statusUpdate.status, statusUpdate.rawPayload);
+      await printwearWebhookService.processStatusUpdate({
+        messageId: statusUpdate.messageId,
+        status: statusUpdate.status,
+        rawPayload: statusUpdate.rawPayload
+      });
       logger.info(
         {
           whatsappMessageId: statusUpdate.messageId,
@@ -149,6 +156,28 @@ async function processInboundMessage(incoming: ReturnType<typeof whatsappService
   }
 
   try {
+    await adCampaignService.attributeInboundMessage({
+      tenantId: lead.companyId,
+      leadId: lead.id,
+      whatsappMessageId: incoming.messageId,
+      rawPayload: incoming.rawPayload
+    });
+  } catch (error) {
+    logger.warn({ error, leadId: lead.id, whatsappMessageId: incoming.messageId }, "Meta Ads attribution skipped");
+  }
+
+  if (await printwearTenantService.isPrintwearTenant(lead.companyId)) {
+    await printwearWebhookService.processIncomingMessage({
+      tenantId: lead.companyId,
+      leadId: lead.id,
+      content: incoming.content,
+      whatsappMessageId: incoming.messageId
+    });
+    webhookStatusService.markMessageProcessed(incoming.messageId);
+    return;
+  }
+
+  try {
     const workflowHandled = await automationService.executeMatchingWorkflows({
       leadId: lead.id,
       phone: lead.phone,
@@ -188,6 +217,20 @@ async function processInboundMessage(incoming: ReturnType<typeof whatsappService
     );
   } catch (error) {
     logger.error({ error, leadId: lead.id }, "Database error while calculating lead status");
+  }
+
+  try {
+    await companyIntegrationService.assertConnected(lead.companyId, "KNOWLEDGE_BASE", "Knowledge base is not indexed for this company.");
+    await companyIntegrationService.assertConnected(lead.companyId, "AI_MODEL", "AI model is not connected for this company.");
+  } catch (error) {
+    logger.error({ error, leadId: lead.id, whatsappMessageId: incoming.messageId }, "AI/RAG integration gate failed");
+    await safeCreateSendLog({
+      leadId: lead.id,
+      action: "ai_rag_reply",
+      status: "failed",
+      errorMessage: errorMessage(error)
+    });
+    return;
   }
 
   const menuIntent = resolveMenuIntent(incoming.content);

@@ -6,6 +6,8 @@ const REQUIRED_TABLES = [
   "AppUser",
   "CompanyFeature",
   "CompanyIntegration",
+  "Integration",
+  "IntegrationAudit",
   "ApiUsageLog",
   "BillingSnapshot",
   "BulkMessageJob",
@@ -13,6 +15,10 @@ const REQUIRED_TABLES = [
   "Campaign",
   "CampaignRecipient",
   "AdDraft",
+  "AdCampaign",
+  "AdAudience",
+  "AdEvent",
+  "AdSyncLog",
   "AiWorkflow",
   "WorkflowExecutionLog"
 ];
@@ -20,7 +26,9 @@ const REQUIRED_TABLES = [
 const REQUIRED_MIGRATIONS = [
   "20260615170000_company_users_billing",
   "20260615190000_multi_tenant_company_isolation",
-  "20260616170000_company_integrations"
+  "20260616170000_company_integrations",
+  "20260618100000_integration_vault",
+  "20260620120000_meta_ads_module"
 ];
 
 export type DatabaseSchemaStatus = {

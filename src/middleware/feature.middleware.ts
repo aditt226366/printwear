@@ -15,7 +15,11 @@ export function requireFeature(key: FeatureKey) {
         return;
       }
 
-      next(new AppError("Feature disabled by admin.", 403, { feature: key }));
+      next(new AppError("Feature disabled by admin.", 403, {
+        code: "FEATURE_DISABLED",
+        feature: key,
+        message: "Feature disabled by admin."
+      }));
     } catch (error) {
       next(error);
     }

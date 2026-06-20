@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { ZodError } from "zod";
 import { logger } from "./logger.js";
+import { scrubSecretsFromLogs } from "./secretVault.js";
 
 export class AppError extends Error {
   constructor(
@@ -57,18 +58,25 @@ export function errorHandler(
   }
 
   if (error instanceof AppError) {
+    const safeDetails = scrubSecretsFromLogs(error.details);
+    const detailObject = safeDetails && typeof safeDetails === "object" && !Array.isArray(safeDetails)
+      ? safeDetails as Record<string, unknown>
+      : {};
     if (error.statusCode >= 500) {
-      logger.error({ error }, error.message);
+      logger.error({ error: scrubSecretsFromLogs(error), details: safeDetails }, error.message);
     }
 
     res.status(error.statusCode).json({
       error: error.message,
-      ...((error.details as { fieldErrors?: unknown } | undefined)?.fieldErrors ? { fieldErrors: (error.details as { fieldErrors: unknown }).fieldErrors } : {}),
-      details: error.details
+      ...(detailObject.ok !== undefined ? { ok: detailObject.ok } : {}),
+      ...(detailObject.code ? { code: detailObject.code } : {}),
+      ...(detailObject.message ? { message: detailObject.message } : {}),
+      ...(detailObject.fieldErrors ? { fieldErrors: detailObject.fieldErrors } : {}),
+      details: safeDetails
     });
     return;
   }
 
-  logger.error({ error }, "Unhandled server error");
+  logger.error({ error: scrubSecretsFromLogs(error) }, "Unhandled server error");
   res.status(500).json({ error: "Internal server error" });
 }

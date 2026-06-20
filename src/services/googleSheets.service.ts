@@ -41,12 +41,12 @@ function normalizePrivateKey(value: string) {
 
 export async function validateGoogleSheetsConfig(companyId?: string | null, input?: GoogleSheetsIntegrationInput) {
   const config = await companyIntegrationService.googleSheets(companyId, input);
-  if (!config.spreadsheetId?.trim()) throw new AppError("Sheet ID missing.", 400);
-  if (!config.serviceAccountEmail?.trim()) throw new AppError("Service account email missing.", 400);
-  if (!config.privateKey?.trim()) throw new AppError("Private key missing.", 400);
+  if (!config.spreadsheetId?.trim()) throw new AppError("GOOGLE_SHEETS_ID wrong", 400);
+  if (!config.serviceAccountEmail?.trim()) throw new AppError("GOOGLE_SERVICE_ACCOUNT_EMAIL wrong", 400);
+  if (!config.privateKey?.trim()) throw new AppError("GOOGLE_PRIVATE_KEY wrong", 400);
   const key = normalizePrivateKey(config.privateKey);
-  if (!key.includes("-----BEGIN PRIVATE KEY-----") || !key.includes("-----END PRIVATE KEY-----")) {
-    throw new AppError("Invalid private key format.", 400);
+  if (!key.startsWith("-----BEGIN PRIVATE KEY-----") || !key.endsWith("-----END PRIVATE KEY-----")) {
+    throw new AppError("GOOGLE_PRIVATE_KEY wrong", 400);
   }
 
   return {
@@ -103,20 +103,19 @@ function googleSheetsErrorMessage(error: unknown, serviceAccountEmail?: string |
   }
 
   if (status === 403) {
-    const email = serviceAccountEmail || env.GOOGLE_SERVICE_ACCOUNT_EMAIL || "GOOGLE_SERVICE_ACCOUNT_EMAIL";
-    return `Google Sheets permission denied. Share this spreadsheet with ${email} and give it Editor access.`;
+    return "GOOGLE_SERVICE_ACCOUNT_EMAIL wrong or sheet not shared with service account";
   }
 
   if (status === 404) {
-    return "Google Sheet not found. Check the sheet ID and sharing settings.";
+    return "GOOGLE_SHEETS_ID wrong";
   }
 
   if (/private key|PEM|DECODER|unsupported|invalid key/i.test(providerMessage)) {
-    return "Invalid private key format.";
+    return "GOOGLE_PRIVATE_KEY wrong";
   }
 
-  const safeMessage = providerMessage.replace(/-----BEGIN[\s\S]*?-----END [^-]+-----/g, "[redacted key]").slice(0, 220).trim();
-  return safeMessage ? `Google Sheets test failed: ${safeMessage}` : "Google Sheets test failed: Unknown error.";
+  if (/email|issuer|invalid_grant|unauthorized_client/i.test(providerMessage)) return "GOOGLE_SERVICE_ACCOUNT_EMAIL wrong";
+  return "GOOGLE_SHEETS_ID wrong";
 }
 
 export const googleSheetsService = {

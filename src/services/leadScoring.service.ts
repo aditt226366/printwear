@@ -1,4 +1,4 @@
-import { LeadTemperature } from "@prisma/client";
+import { LeadTemperature, MessageDirection } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
 import { chatEventsService } from "./chatEvents.service.js";
 
@@ -108,7 +108,7 @@ export function scoreLeadConversation(messages: Array<{ content: string }>): Lea
 export const leadScoringService = {
   async scoreLead(leadId: string) {
     const messages = await prisma.message.findMany({
-      where: { leadId },
+      where: { leadId, direction: MessageDirection.INBOUND },
       select: { content: true },
       orderBy: { createdAt: "asc" }
     });

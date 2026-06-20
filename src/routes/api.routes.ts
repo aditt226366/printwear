@@ -1,4 +1,5 @@
 import { Router } from "express";
+import multer from "multer";
 import {
   getDashboard,
   getConversation,
@@ -32,10 +33,17 @@ import {
 import {
   clearCompanyIntegrationProvider,
   getCompanyIntegration,
+  getCompanyIntegrationByType,
+  getCompanyIntegrations,
+  getIntegrationCompanyCards,
   getIntegrationStatus,
+  disconnectCompanyIntegration,
+  patchCompanyIntegration,
+  testCompanyIntegration,
   testGoogleSheetsIntegration,
   testMetaAdsIntegration,
   testWhatsAppIntegration,
+  verifyCompanyIntegration,
   updateCompanyIntegration
 } from "../controllers/companyIntegration.controller.js";
 import {
@@ -63,12 +71,54 @@ import {
   resumeCampaign,
   updateWorkflow
 } from "../controllers/automation.controller.js";
+import {
+  cancelAppAd,
+  createAppAd,
+  getAppAd,
+  getAppAdAnalytics,
+  launchAppAd,
+  listAppAds,
+  markAppAdManuallyLaunched,
+  pauseAppAd,
+  resumeAppAd,
+  syncAppAdInsights,
+  updateAppAd
+} from "../controllers/adCampaign.controller.js";
 import { requireAdmin, requireSession } from "../middleware/auth.middleware.js";
 import { requireFeature } from "../middleware/feature.middleware.js";
+import { requireActiveTenant, requirePrintwearTenant, requireTenantUser } from "../middleware/printwear.middleware.js";
 import { getDatabaseSchema, getIntegrationConfig, getSystemStatus } from "../controllers/systemStatus.controller.js";
 import { getGoogleSheetsStatus } from "../controllers/googleSheets.controller.js";
+import { AppError } from "../utils/errors.js";
+import {
+  getPrintwearDashboard,
+  getPrintwearHumanQueue,
+  getPrintwearIntegrationStatus,
+  getPrintwearLeads,
+  getPrintwearOrders,
+  importAndSendPrintwearTemplate,
+  indexPrintwearKnowledgeBase,
+  syncPrintwearSheet,
+  testPrintwearAI,
+  testPrintwearKnowledgeBase
+} from "../controllers/printwear.controller.js";
 
 export const apiRoutes = Router();
+
+const integrationUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter(_req, file, callback) {
+    const allowedTypes = new Set(["application/pdf"]);
+
+    if (allowedTypes.has(file.mimetype)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new AppError("Only PDF files are supported", 400));
+  }
+});
 
 apiRoutes.get("/automation/setup", getAutomationSetup);
 apiRoutes.get("/debug/system-status", getSystemStatus);
@@ -87,6 +137,13 @@ apiRoutes.get("/admin/features", requireAdmin, getAdminFeatures);
 apiRoutes.patch("/admin/features/:key", requireAdmin, updateAdminFeature);
 apiRoutes.get("/admin/billing", requireAdmin, getBilling);
 apiRoutes.get("/admin/billing/export", requireAdmin, exportBillingCsv);
+apiRoutes.get("/admin/integrations/companies", requireAdmin, getIntegrationCompanyCards);
+apiRoutes.get("/admin/companies/:companyId/integrations", requireAdmin, getCompanyIntegrations);
+apiRoutes.get("/admin/companies/:companyId/integrations/:type", requireAdmin, getCompanyIntegrationByType);
+apiRoutes.patch("/admin/companies/:companyId/integrations/:type", requireAdmin, integrationUpload.single("pdfFile"), patchCompanyIntegration);
+apiRoutes.post("/admin/companies/:companyId/integrations/:type/verify", requireAdmin, integrationUpload.single("pdfFile"), verifyCompanyIntegration);
+apiRoutes.post("/admin/companies/:companyId/integrations/:type/test", requireAdmin, integrationUpload.single("pdfFile"), testCompanyIntegration);
+apiRoutes.post("/admin/companies/:companyId/integrations/:type/disconnect", requireAdmin, disconnectCompanyIntegration);
 apiRoutes.get("/admin/company-integrations", requireAdmin, getCompanyIntegration);
 apiRoutes.put("/admin/company-integrations", requireAdmin, updateCompanyIntegration);
 apiRoutes.delete("/admin/company-integrations/:companyId/:provider", requireAdmin, clearCompanyIntegrationProvider);
@@ -95,11 +152,34 @@ apiRoutes.post("/admin/company-integrations/:companyId/test/google-sheets", requ
 apiRoutes.post("/admin/company-integrations/:companyId/test/meta-ads", requireAdmin, testMetaAdsIntegration);
 
 apiRoutes.get("/dashboard", getDashboard);
+apiRoutes.get("/app/integrations/status", getIntegrationStatus);
 apiRoutes.get("/integrations/status", getIntegrationStatus);
+apiRoutes.use("/app/printwear", requireTenantUser, requireActiveTenant, requirePrintwearTenant);
+apiRoutes.get("/app/printwear/dashboard", getPrintwearDashboard);
+apiRoutes.get("/app/printwear/integration-status", getPrintwearIntegrationStatus);
+apiRoutes.post("/app/printwear/sync-sheet", syncPrintwearSheet);
+apiRoutes.post("/app/printwear/import-and-send-template", importAndSendPrintwearTemplate);
+apiRoutes.get("/app/printwear/leads", getPrintwearLeads);
+apiRoutes.get("/app/printwear/orders", getPrintwearOrders);
+apiRoutes.get("/app/printwear/human-queue", getPrintwearHumanQueue);
+apiRoutes.post("/app/printwear/knowledge-base/index", integrationUpload.single("pdfFile"), indexPrintwearKnowledgeBase);
+apiRoutes.post("/app/printwear/knowledge-base/test", testPrintwearKnowledgeBase);
+apiRoutes.post("/app/printwear/ai/test", testPrintwearAI);
 apiRoutes.get("/debug/database-schema", requireAdmin, getDatabaseSchema);
 apiRoutes.get("/debug/integration-config", requireAdmin, getIntegrationConfig);
 apiRoutes.get("/debug/google-sheets-status", requireAdmin, getGoogleSheetsStatus);
 apiRoutes.get("/debug/webhook-status", requireFeature("settings"), getWebhookStatus);
+apiRoutes.get("/app/ads", requireFeature("ads"), listAppAds);
+apiRoutes.post("/app/ads", requireFeature("ads"), createAppAd);
+apiRoutes.get("/app/ads/:id", requireFeature("ads"), getAppAd);
+apiRoutes.patch("/app/ads/:id", requireFeature("ads"), updateAppAd);
+apiRoutes.post("/app/ads/:id/launch", requireFeature("ads"), launchAppAd);
+apiRoutes.post("/app/ads/:id/mark-manually-launched", requireFeature("ads"), markAppAdManuallyLaunched);
+apiRoutes.post("/app/ads/:id/pause", requireFeature("ads"), pauseAppAd);
+apiRoutes.post("/app/ads/:id/resume", requireFeature("ads"), resumeAppAd);
+apiRoutes.post("/app/ads/:id/cancel", requireFeature("ads"), cancelAppAd);
+apiRoutes.get("/app/ads/:id/analytics", requireFeature("ads"), getAppAdAnalytics);
+apiRoutes.post("/app/ads/:id/sync-insights", requireFeature("ads"), syncAppAdInsights);
 apiRoutes.get("/command-center", requireFeature("dashboard"), getCommandCenter);
 apiRoutes.get("/events", requireFeature("chats"), streamChatEvents);
 apiRoutes.get("/leads", requireFeature("chats"), getLeads);

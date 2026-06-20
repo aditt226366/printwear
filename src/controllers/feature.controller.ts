@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { z } from "zod";
 import { prisma } from "../config/prisma.js";
 import { featureFlagService } from "../services/featureFlag.service.js";
+import { printwearTenantService } from "../services/printwearTenant.service.js";
 import { asyncHandler } from "../utils/errors.js";
 
 const featureUpdateSchema = z.object({
@@ -15,6 +16,7 @@ export const getSession = asyncHandler(async (_req: Request, res: Response) => {
         select: { id: true, name: true, slug: true, logoUrl: true, brandColor: true, whatsappNumber: true, timezone: true, businessType: true }
       })
     : null;
+  const isPrintwearTenant = await printwearTenantService.isPrintwearTenant(res.locals.session.companyId);
   res.json({
     session: {
       userId: res.locals.session.userId,
@@ -22,6 +24,7 @@ export const getSession = asyncHandler(async (_req: Request, res: Response) => {
       username: res.locals.session.username,
       companyId: res.locals.session.companyId,
       role: res.locals.session.role,
+      isPrintwearTenant,
       company
     }
   });

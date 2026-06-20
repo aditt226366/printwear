@@ -135,6 +135,22 @@ enum ApiProvider {
   INTERNAL
 }
 
+enum IntegrationStatus {
+  CONNECTED
+  NOT_CONNECTED
+  ERROR
+  PARTIALLY_CONNECTED
+}
+
+enum IntegrationType {
+  GOOGLE_SHEETS
+  WHATSAPP_CLOUD
+  WHATSAPP_TEMPLATE_SETTINGS
+  META_ADS
+  KNOWLEDGE_BASE
+  AI_MODEL
+}
+
 model Company {
   id             String        @id @default(cuid())
   name           String
@@ -153,11 +169,17 @@ model Company {
   apiUsageLogs     ApiUsageLog[]
   billingSnapshots BillingSnapshot[]
   integration      CompanyIntegration?
+  integrations     Integration[]
+  integrationAudits IntegrationAudit[]
   leads            Lead[]
   knowledgeBase    KnowledgeBase[]
   bulkMessageJobs  BulkMessageJob[]
   campaigns        Campaign[]
   adDrafts         AdDraft[]
+  adCampaigns      AdCampaign[]
+  adAudiences      AdAudience[]
+  adEvents         AdEvent[]
+  adSyncLogs       AdSyncLog[]
   aiWorkflows      AiWorkflow[]
 
   @@index([status])
@@ -183,6 +205,48 @@ model CompanyIntegration {
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([whatsappPhoneNumberId])
+}
+
+model Integration {
+  id                    String            @id @default(cuid())
+  companyId             String
+  type                  IntegrationType
+  status                IntegrationStatus @default(NOT_CONNECTED)
+  encryptedConfig       String?
+  maskedDisplay         Json              @default("{}")
+  metadata              Json              @default("{}")
+  lastVerifiedAt        DateTime?
+  lastVerificationError String?
+  createdById           String?
+  updatedById           String?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  audits  IntegrationAudit[]
+
+  @@unique([companyId, type])
+  @@index([companyId])
+  @@index([type, status])
+}
+
+model IntegrationAudit {
+  id            String             @id @default(cuid())
+  companyId     String
+  integrationId String?
+  type          IntegrationType?
+  action        String
+  actorUserId   String?
+  status        IntegrationStatus?
+  metadata      Json               @default("{}")
+  createdAt     DateTime           @default(now())
+
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  integration Integration? @relation(fields: [integrationId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, createdAt])
+  @@index([integrationId])
+  @@index([type])
 }
 
 model AppUser {
@@ -455,6 +519,109 @@ model AdDraft {
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
+  @@index([createdAt])
+}
+
+model AdCampaign {
+  id                    String   @id @default(cuid())
+  tenantId              String
+  name                  String
+  objective             String   @default("CLICK_TO_WHATSAPP")
+  platform              String   @default("FACEBOOK_INSTAGRAM")
+  status                String   @default("DRAFT")
+  metaBusinessId        String?
+  metaAdAccountId       String?
+  metaCampaignId        String?
+  metaAdSetId           String?
+  metaCreativeId        String?
+  metaAdId              String?
+  facebookPageId        String?
+  instagramActorId      String?
+  whatsappPhoneNumberId String?
+  creativeConfig        Json     @default("{}")
+  audienceConfig        Json     @default("{}")
+  budgetConfig          Json     @default("{}")
+  automationConfig      Json     @default("{}")
+  trackingConfig        Json     @default("{}")
+  stats                 Json     @default("{}")
+  errorMessage          String?
+  createdById           String?
+  updatedById           String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  tenant   Company     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  audiences AdAudience[]
+  events    AdEvent[]
+  syncLogs  AdSyncLog[]
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([metaAdId])
+  @@index([createdAt])
+}
+
+model AdAudience {
+  id             String   @id @default(cuid())
+  tenantId       String
+  adCampaignId   String
+  name           String
+  type           String
+  uploadedCsvName String?
+  audienceConfig Json     @default("{}")
+  metaAudienceId String?
+  status         String   @default("DRAFT")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tenant     Company    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  adCampaign AdCampaign @relation(fields: [adCampaignId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([adCampaignId])
+  @@index([status])
+}
+
+model AdEvent {
+  id           String   @id @default(cuid())
+  tenantId     String
+  adCampaignId String
+  conversationId String?
+  contactId    String?
+  leadId       String?
+  metaAdId     String?
+  eventType    String
+  metadata     Json     @default("{}")
+  createdAt    DateTime @default(now())
+
+  tenant     Company    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  adCampaign AdCampaign @relation(fields: [adCampaignId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([adCampaignId])
+  @@index([metaAdId])
+  @@index([eventType])
+  @@index([leadId])
+  @@unique([adCampaignId, eventType, leadId])
+}
+
+model AdSyncLog {
+  id             String   @id @default(cuid())
+  tenantId       String
+  adCampaignId   String?
+  action         String
+  status         String
+  requestPayload Json     @default("{}")
+  responsePayload Json    @default("{}")
+  errorMessage   String?
+  createdAt      DateTime @default(now())
+
+  tenant     Company     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  adCampaign AdCampaign? @relation(fields: [adCampaignId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([adCampaignId])
+  @@index([action, status])
   @@index([createdAt])
 }
 

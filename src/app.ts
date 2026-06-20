@@ -70,6 +70,8 @@ export function createApp() {
 
   app.use(authRoutes);
   app.use("/admin/api", adminRoutes);
+  app.use("/api/webhooks/whatsapp", webhookRoutes);
+  app.use("/api/webhooks/whatsapp/:companyId", webhookRoutes);
   app.use("/api", apiRoutes);
   app.use("/webhook", webhookRoutes);
 

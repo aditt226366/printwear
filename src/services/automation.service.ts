@@ -1079,6 +1079,9 @@ export const automationService = {
     definition: WorkflowDefinition;
   }, companyId: string) {
     await assertAutomationSetup();
+    if (input.isActive) {
+      await companyIntegrationService.assertConnected(companyId, "AI_MODEL", "AI model is not connected for this company.");
+    }
     const workflow = await prisma.aiWorkflow.create({
       data: {
         companyId,
@@ -1112,6 +1115,9 @@ export const automationService = {
     if (companyId) {
       const existing = await prisma.aiWorkflow.findFirst({ where: { id, companyId }, select: { id: true } });
       if (!existing) throw new AppError("Workflow not found", 404);
+      if (input.isActive) {
+        await companyIntegrationService.assertConnected(companyId, "AI_MODEL", "AI model is not connected for this company.");
+      }
     }
     const workflow = await prisma.aiWorkflow.update({
       where: { id },

@@ -1437,7 +1437,8 @@ mark.red {
 .pulse-node.warm::before,
 .tag.warm,
 .priority-badge.medium,
-mark.amber {
+mark.amber,
+mark.yellow {
   background: color-mix(in srgb, var(--signal) 62%, var(--coral));
 }
 
@@ -2752,6 +2753,325 @@ input[type="file"] {
   grid-template-columns: minmax(220px, 1fr) 150px 150px auto auto;
 }
 
+.integration-company-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.integration-company-card {
+  display: grid;
+  gap: 14px;
+  min-height: 300px;
+  border: 1px solid color-mix(in srgb, var(--ink) 12%, var(--paper));
+  border-radius: 8px;
+  padding: 16px;
+  background: color-mix(in srgb, var(--paper) 84%, white);
+  animation: integrationCardIn 360ms ease both;
+  animation-delay: calc(var(--card-index, 0) * 42ms);
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.integration-company-card:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--cyan) 40%, var(--paper));
+  box-shadow: 0 18px 42px color-mix(in srgb, var(--cyan) 14%, transparent);
+}
+
+.integration-company-card-head {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+}
+
+.integration-company-card-head strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.integration-company-card-head small {
+  display: block;
+  margin-top: 3px;
+  color: color-mix(in srgb, var(--ink) 58%, var(--paper));
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.integration-company-icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: color-mix(in srgb, var(--blue) 78%, var(--ink));
+  background: color-mix(in srgb, var(--cyan) 14%, var(--paper));
+  border: 1px solid color-mix(in srgb, var(--cyan) 20%, transparent);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.integration-company-metrics,
+.integration-drawer-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.integration-company-metrics span,
+.integration-drawer-stats span {
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--ink) 10%, var(--paper));
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--paper) 72%, white);
+}
+
+.integration-company-metrics small,
+.integration-drawer-stats small {
+  display: block;
+  color: color-mix(in srgb, var(--ink) 55%, var(--paper));
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.integration-company-metrics strong,
+.integration-drawer-stats strong {
+  display: block;
+  color: var(--ink);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.integration-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+}
+
+.integration-drawer.hidden {
+  display: none;
+}
+
+.integration-drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.48);
+  backdrop-filter: blur(10px);
+}
+
+.integration-drawer-panel {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: min(1120px, calc(100vw - 28px));
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  gap: 14px;
+  padding: 20px;
+  border-left: 1px solid color-mix(in srgb, var(--cyan) 20%, transparent);
+  background: color-mix(in srgb, var(--paper) 88%, white);
+  overflow: auto;
+  animation: integrationDrawerIn 220ms ease both;
+}
+
+.integration-drawer-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.integration-drawer-company {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.integration-drawer-company h2 {
+  margin: 0;
+}
+
+.integration-drawer-company small {
+  color: color-mix(in srgb, var(--ink) 58%, var(--paper));
+  font-weight: 800;
+}
+
+.integration-drawer-tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--ink) 10%, var(--paper));
+  padding-bottom: 8px;
+}
+
+.integration-drawer-tabs button {
+  min-height: 38px;
+  padding: 0 13px;
+  border: 1px solid color-mix(in srgb, var(--ink) 12%, var(--paper));
+  border-radius: 8px;
+  background: transparent;
+  color: color-mix(in srgb, var(--ink) 72%, var(--paper));
+  font-weight: 900;
+}
+
+.integration-drawer-tabs button.active {
+  border-color: color-mix(in srgb, var(--cyan) 30%, var(--paper));
+  background: color-mix(in srgb, var(--cyan) 12%, var(--paper));
+  color: var(--ink);
+}
+
+.integration-tab-panel {
+  display: none;
+}
+
+.integration-tab-panel.active {
+  display: block;
+}
+
+.integration-vault-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.integration-vault-summary span,
+.integration-meta span {
+  border: 1px solid color-mix(in srgb, var(--ink) 10%, var(--paper));
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--paper) 72%, white);
+  min-width: 0;
+}
+
+.integration-vault-summary strong,
+.integration-meta strong {
+  display: block;
+  color: var(--ink);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.integration-vault-summary small,
+.integration-meta small,
+.saved-value {
+  display: block;
+  color: color-mix(in srgb, var(--ink) 55%, var(--paper));
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.integration-vault-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.integration-vault-card {
+  display: grid;
+  gap: 14px;
+  border: 1px solid color-mix(in srgb, var(--ink) 12%, var(--paper));
+  border-radius: 8px;
+  padding: 14px;
+  background: color-mix(in srgb, var(--paper) 84%, white);
+}
+
+.integration-card-head {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+}
+
+.integration-card-head strong {
+  display: block;
+}
+
+.integration-card-head small {
+  display: block;
+  margin-top: 3px;
+  color: color-mix(in srgb, var(--ink) 58%, var(--paper));
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.integration-provider-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: color-mix(in srgb, var(--blue) 76%, var(--ink));
+  background: color-mix(in srgb, var(--cyan) 14%, var(--paper));
+}
+
+.integration-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.integration-field-grid label {
+  min-width: 0;
+}
+
+.integration-field-grid input,
+.integration-field-grid select,
+.integration-field-grid textarea {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid color-mix(in srgb, var(--ink) 12%, var(--paper));
+  border-radius: 8px;
+  padding: 0 12px;
+  background: color-mix(in srgb, var(--paper) 84%, white);
+  color: var(--ink);
+}
+
+.integration-field-grid textarea {
+  padding-block: 12px;
+}
+
+.integration-field-grid textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
+.secret-field-wrap {
+  position: relative;
+}
+
+.secret-field-wrap input,
+.secret-field-wrap textarea {
+  padding-right: 46px;
+}
+
+.secret-toggle {
+  position: absolute;
+  top: 26px;
+  right: 6px;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  border-radius: 8px;
+}
+
+.secret-hidden {
+  -webkit-text-security: disc;
+}
+
+.integration-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.integration-meta.empty {
+  display: block;
+  color: color-mix(in srgb, var(--ink) 56%, var(--paper));
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .integration-form fieldset {
   display: grid;
   gap: 12px;
@@ -2777,6 +3097,28 @@ input[type="file"] {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+@keyframes integrationCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes integrationDrawerIn {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .danger-secondary {
@@ -3654,6 +3996,9 @@ small {
 .input-shell,
 .admin-select,
 .admin-filter-row input,
+.integration-field-grid input,
+.integration-field-grid select,
+.integration-field-grid textarea,
 .flow-toolbar input,
 .flow-toolbar select {
   border: 1px solid rgba(129, 223, 255, 0.15);
@@ -3667,14 +4012,148 @@ small {
 .automation-form select,
 .automation-form textarea,
 .admin-select,
-.admin-filter-row input {
+.admin-filter-row input,
+.integration-field-grid input,
+.integration-field-grid select,
+.integration-field-grid textarea {
   width: 100%;
   min-height: 44px;
   padding: 0 13px;
 }
 
-.automation-form textarea {
+.automation-form textarea,
+.integration-field-grid textarea {
   padding-block: 12px;
+}
+
+.integration-vault-summary span,
+.integration-vault-card,
+.integration-meta span,
+.integration-company-card,
+.integration-company-metrics span,
+.integration-drawer-stats span,
+.integration-drawer-panel {
+  border-color: rgba(129,223,255,0.14);
+  background: rgba(255,255,255,0.035);
+}
+
+.integration-company-card,
+.integration-vault-card {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 18px 54px rgba(0,0,0,0.2);
+}
+
+.integration-company-card:hover {
+  border-color: rgba(71,217,255,0.42);
+  box-shadow: 0 24px 72px rgba(35,118,255,0.18), inset 0 1px 0 rgba(255,255,255,0.08);
+}
+
+.integration-drawer-backdrop {
+  background: rgba(0,0,0,0.62);
+}
+
+.integration-drawer-panel {
+  background:
+    linear-gradient(145deg, rgba(71,217,255,0.06), transparent 42%),
+    rgba(4, 9, 19, 0.94);
+  backdrop-filter: blur(24px);
+}
+
+.integration-vault-summary strong,
+.integration-meta strong,
+.integration-card-head strong,
+.integration-company-card-head strong,
+.integration-company-metrics strong,
+.integration-drawer-stats strong,
+.integration-drawer-company h2 {
+  color: var(--text-main);
+}
+
+.integration-card-head small,
+.integration-company-card-head small,
+.integration-company-metrics small,
+.integration-drawer-stats small,
+.integration-drawer-company small,
+.integration-meta.empty,
+.saved-value {
+  color: var(--text-muted);
+}
+
+.integration-company-icon,
+.integration-provider-icon {
+  border: 1px solid rgba(129,223,255,0.18);
+  background: linear-gradient(135deg, rgba(35,118,255,0.2), rgba(71,217,255,0.12));
+  color: var(--cyan);
+}
+
+.integration-drawer-tabs {
+  border-bottom-color: rgba(129,223,255,0.14);
+}
+
+.integration-drawer-tabs button {
+  border-color: rgba(129,223,255,0.14);
+  background: rgba(255,255,255,0.035);
+  color: var(--text-muted);
+}
+
+.integration-drawer-tabs button.active {
+  border-color: rgba(71,217,255,0.4);
+  background: rgba(71,217,255,0.12);
+  color: var(--text-main);
+}
+
+.secret-toggle {
+  border-color: rgba(129,223,255,0.15);
+  background: rgba(255,255,255,0.04);
+  color: var(--text-main);
+}
+
+.integration-provider-icon,
+.integration-company-icon {
+  color: #bcefff;
+  background: rgba(71,217,255,0.12);
+  border: 1px solid rgba(129,223,255,0.14);
+}
+
+.integration-card-head small,
+.integration-company-card-head small,
+.integration-company-metrics small,
+.integration-drawer-stats small,
+.integration-drawer-company small,
+.integration-meta.empty,
+.saved-value {
+  color: var(--text-muted);
+}
+
+.integration-company-card:hover {
+  border-color: rgba(129,223,255,0.34);
+  box-shadow: 0 24px 72px rgba(47,192,255,0.13), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+.integration-drawer-backdrop {
+  background: rgba(0,0,0,0.62);
+}
+
+.integration-drawer-panel {
+  background:
+    radial-gradient(circle at 12% 8%, rgba(71,217,255,0.14), transparent 30%),
+    rgba(3,8,18,0.96);
+  box-shadow: -24px 0 80px rgba(0,0,0,0.42);
+}
+
+.integration-drawer-tabs {
+  border-bottom-color: rgba(129,223,255,0.14);
+}
+
+.integration-drawer-tabs button {
+  border-color: rgba(129,223,255,0.14);
+  color: var(--text-muted);
+  background: rgba(255,255,255,0.04);
+}
+
+.integration-drawer-tabs button.active {
+  border-color: rgba(129,223,255,0.32);
+  background: rgba(71,217,255,0.12);
+  color: #fff;
 }
 
 .primary-button,
@@ -4175,6 +4654,7 @@ mark.red,
 }
 
 mark.amber,
+mark.yellow,
 .tag.warm {
   color: #ffe6a3;
   background: rgba(247,187,69,0.13);
@@ -4209,6 +4689,10 @@ mark.amber,
     grid-template-columns: 1fr;
   }
 
+  .integration-company-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .chat-layout {
     height: auto;
   }
@@ -4229,6 +4713,21 @@ mark.amber,
 
   .top-nav {
     flex-direction: row;
+  }
+
+  .integration-vault-grid,
+  .integration-company-grid,
+  .integration-field-grid,
+  .integration-meta,
+  .integration-vault-summary,
+  .integration-company-metrics,
+  .integration-drawer-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .integration-drawer-panel {
+    width: 100vw;
+    padding: 16px;
   }
 
   .nav-item {
@@ -4577,11 +5076,234 @@ mark.amber,
   color: var(--text-main);
 }
 
+.ads-connection-card,
+.ads-toolbar,
+.ads-list-panel,
+.ads-wizard-panel,
+.ads-preview-panel {
+  border-color: rgba(71,217,255,0.18);
+  background:
+    linear-gradient(145deg, rgba(8, 16, 32, 0.86), rgba(2, 7, 17, 0.72)),
+    rgba(2, 7, 17, 0.62);
+  color: var(--text-main);
+}
+
+.ads-connection-head,
+.ad-campaign-main,
+.ad-wizard-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ads-connection-grid,
+.ad-campaign-facts,
+.ad-review-grid,
+.ads-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ads-metric-grid {
+  grid-template-columns: repeat(9, minmax(120px, 1fr));
+  margin-bottom: 14px;
+}
+
+.ads-connection-grid span,
+.ad-campaign-facts span,
+.ad-review-grid span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  border: 1px solid rgba(129,223,255,0.13);
+  border-radius: 12px;
+  background: rgba(255,255,255,0.045);
+  padding: 12px;
+}
+
+.ads-connection-grid span.ready {
+  border-color: rgba(39,217,149,0.35);
+}
+
+.ads-connection-grid span.missing {
+  border-color: rgba(255,125,137,0.28);
+}
+
+.ads-connection-grid small,
+.ad-campaign-facts small,
+.ad-review-grid small {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.ads-connection-grid strong,
+.ad-campaign-facts b,
+.ad-review-grid strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-main);
+  font-size: 13px;
+}
+
+.ads-toolbar {
+  margin-bottom: 14px;
+  padding: 12px;
+}
+
+.ads-filter-tabs {
+  margin: 0;
+}
+
+.ads-command-grid {
+  display: grid;
+  grid-template-columns: minmax(420px, 0.96fr) minmax(520px, 1.04fr);
+  gap: 14px;
+  align-items: start;
+  margin-bottom: 14px;
+}
+
+.ads-campaign-list {
+  display: grid;
+  gap: 12px;
+}
+
+.ad-campaign-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid rgba(129,223,255,0.13);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.045);
+  padding: 14px;
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.ad-campaign-card:hover {
+  border-color: rgba(71,217,255,0.36);
+  box-shadow: 0 18px 48px rgba(35,118,255,0.14);
+  transform: translateY(-1px);
+}
+
+.ad-campaign-main {
+  align-items: flex-start;
+}
+
+.ad-campaign-main > div {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 4px;
+}
+
+.ad-campaign-main strong {
+  color: var(--text-main);
+}
+
+.ad-campaign-main small,
+.ad-error {
+  color: var(--text-muted);
+}
+
+.ad-error {
+  margin: 0;
+  color: #ff9aa4;
+  font-weight: 800;
+}
+
+.ad-campaign-facts {
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+}
+
+.ads-row-actions {
+  flex-wrap: wrap;
+}
+
+.ads-wizard-steps {
+  grid-template-columns: repeat(4, minmax(130px, 1fr));
+}
+
+.ads-wizard-steps button,
+.choice-card {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(129,223,255,0.13);
+  border-radius: 12px;
+  background: rgba(255,255,255,0.04);
+  color: var(--text-muted);
+  padding: 10px;
+  font-weight: 800;
+}
+
+.ads-wizard-steps button.active,
+.choice-card.active {
+  border-color: rgba(39,217,149,0.55);
+  box-shadow: inset 0 -3px 0 rgba(39,217,149,0.85);
+  color: var(--text-main);
+}
+
+.ads-wizard-steps b {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(129,223,255,0.32);
+  border-radius: 8px;
+}
+
+.ad-step-panel {
+  display: none;
+  gap: 10px;
+}
+
+.ad-step-panel.active {
+  display: grid;
+}
+
+.choice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.choice-card input {
+  width: auto;
+  min-height: auto;
+}
+
+.choice-card.disabled {
+  opacity: 0.58;
+}
+
+.ad-wizard-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  border-top: 1px solid rgba(129,223,255,0.12);
+  padding-top: 12px;
+}
+
+.ad-review-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 @media (max-width: 1180px) {
   .broadcast-toolbar,
   .broadcast-workspace-grid,
-  .workflow-steps.compact {
+  .workflow-steps.compact,
+  .ads-command-grid,
+  .ads-wizard-steps,
+  .ads-connection-grid,
+  .choice-grid,
+  .ad-review-grid {
     grid-template-columns: 1fr;
+  }
+
+  .ads-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

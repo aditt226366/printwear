@@ -35,6 +35,15 @@ const state = {
   selectedCampaignId: null,
   adDrafts: [],
   metaAdsConnected: false,
+  ads: {
+    campaigns: [],
+    metrics: {},
+    connection: null,
+    filter: "ALL",
+    wizardStep: 1,
+    editingId: null,
+    adsManagerUrl: "https://business.facebook.com/adsmanager/manage/campaigns"
+  },
   workflows: [],
   activeWorkflowId: null,
   workflowSearch: "",
@@ -2353,6 +2362,24 @@ function firstAvailableView() {
   return Object.keys(views).find((view) => featureEnabledForView(view)) || "overview";
 }
 
+function requestedViewFromLocation() {
+  const hashView = window.location.hash.replace("#", "");
+  if (views[hashView]) return hashView;
+
+  const pathMap = {
+    "/app/dashboard": "overview",
+    "/app/inbox": "chats",
+    "/app/leads": "leads",
+    "/app/ads": "ads",
+    "/app/orders": "orders",
+    "/app/human-queue": "human",
+    "/app/knowledge-base": "settings",
+    "/app/settings": "settings"
+  };
+
+  return pathMap[window.location.pathname] || "";
+}
+
 function applyFeatureVisibility() {
   document.body.dataset.role = state.session?.role || "USER";
   const company = state.session?.company;
@@ -2412,7 +2439,7 @@ function applyIntegrationAvailability() {
     button.disabled = !googleSheetsConnected;
     button.title = googleSheetsConnected ? "" : "Google Sheets not connected.";
   });
-  state.metaAdsConnected = state.metaAdsConnected && metaAdsConnected;
+  state.metaAdsConnected = Boolean(metaAdsConnected || state.ads.connection?.metaAds?.connected);
   renderAds();
 }
 
@@ -2747,90 +2774,300 @@ async function loadCampaignDetail(campaignId) {
 
 async function loadAds() {
   try {
-    const data = await publicApi("/ads");
-    state.metaAdsConnected = Boolean(data.metaConnected);
-    state.adDrafts = data.drafts || [];
-    applyIntegrationAvailability();
+    const data = await publicApi("/app/ads");
+    state.ads.connection = data.connection || null;
+    state.ads.metrics = data.metrics || {};
+    state.ads.campaigns = data.campaigns || [];
+    state.ads.adsManagerUrl = data.connection?.adsManagerUrl || state.ads.adsManagerUrl;
+    state.metaAdsConnected = Boolean(data.connection?.metaAds?.connected);
     renderAds();
   } catch (error) {
     if (error.setupRequired) {
-      state.adDrafts = [];
+      state.ads.campaigns = [];
       renderAdPreview();
-      renderSetupRequired(["#adDraftsList"], error);
+      renderSetupRequired(["#adCampaignList"], error);
       return;
     }
     throw error;
   }
 }
 
+function connectionLabel(connected, readyText = "Connected", missingText = "Not Connected") {
+  return connected ? readyText : missingText;
+}
+
+function moneyLabel(value) {
+  if (value === null || value === undefined || value === "") return "Coming soon";
+  return String(value);
+}
+
+function campaignBudgetLabel(campaign) {
+  const budget = campaign?.budgetConfig || {};
+  if (budget.dailyBudget) return `${budget.currency || ""} ${budget.dailyBudget}/day`.trim();
+  if (budget.lifetimeBudget) return `${budget.currency || ""} ${budget.lifetimeBudget} lifetime`.trim();
+  return "Budget not set";
+}
+
+function currentAdObjective() {
+  return document.querySelector("input[name='adObjective']:checked")?.value || "CLICK_TO_WHATSAPP";
+}
+
+function collectAdPayload(status = "DRAFT") {
+  const creativeConfig = {
+    adName: $("#adName")?.value.trim() || "",
+    primaryText: $("#adPrimaryText")?.value.trim() || "",
+    headline: $("#adHeadline")?.value.trim() || "",
+    description: $("#adDescription")?.value.trim() || "",
+    cta: $("#adCta")?.value.trim() || "Send WhatsApp Message",
+    utmParams: $("#adUtm")?.value.trim() || ""
+  };
+  const audienceConfig = {
+    type: $("#adAudienceType")?.value || "manual",
+    manualTargeting: $("#adAudienceText")?.value.trim() || "",
+    csvPlaceholder: Boolean($("#adAudienceCsv")?.files?.length)
+  };
+  const budgetConfig = {
+    dailyBudget: $("#adDailyBudget")?.value ? Number($("#adDailyBudget").value) : null,
+    lifetimeBudget: $("#adLifetimeBudget")?.value ? Number($("#adLifetimeBudget").value) : null,
+    startDate: $("#adStartDate")?.value || null,
+    endDate: $("#adEndDate")?.value || null,
+    timezone: $("#adTimezone")?.value.trim() || ""
+  };
+  const automationConfig = {
+    whatsappNumber: $("#adWhatsappNumber")?.value.trim() || "",
+    phoneNumberId: $("#adPhoneNumberId")?.value.trim() || "",
+    welcomeText: $("#adWelcomeText")?.value.trim() || "",
+    tagNewLeadAsAdLead: Boolean($("#adTagLead")?.checked),
+    startAiWorkflow: Boolean($("#adStartAiWorkflow")?.checked),
+    assignAgent: $("#adAssignAgent")?.value.trim() || "",
+    addToLeadManagement: Boolean($("#adAddToLeadManagement")?.checked),
+    humanQueueHighIntent: Boolean($("#adHumanQueueHighIntent")?.checked),
+    updateGoogleSheet: Boolean($("#adUpdateSheet")?.checked)
+  };
+
+  return {
+    name: creativeConfig.adName || "Untitled Click-to-WhatsApp Ad",
+    objective: currentAdObjective(),
+    platform: $("#adPlatform")?.value || "FACEBOOK_INSTAGRAM",
+    status,
+    creativeConfig,
+    audienceConfig,
+    budgetConfig,
+    automationConfig,
+    trackingConfig: {
+      utmParams: creativeConfig.utmParams,
+      source: "CRM_OS_ADS"
+    }
+  };
+}
+
+function setAdWizardStep(step) {
+  state.ads.wizardStep = Math.min(8, Math.max(1, Number(step) || 1));
+  document.querySelectorAll("[data-ad-step]").forEach((button) => {
+    button.classList.toggle("active", Number(button.dataset.adStep) === state.ads.wizardStep);
+  });
+  document.querySelectorAll("[data-ad-step-panel]").forEach((panel) => {
+    panel.classList.toggle("active", Number(panel.dataset.adStepPanel) === state.ads.wizardStep);
+  });
+  $("#prevAdStepBtn")?.toggleAttribute("disabled", state.ads.wizardStep === 1);
+  $("#nextAdStepBtn")?.toggleAttribute("disabled", state.ads.wizardStep === 8);
+  renderAdPreview();
+}
+
+function fillAdForm(campaign) {
+  state.ads.editingId = campaign?.id || null;
+  const creative = campaign?.creativeConfig || {};
+  const audience = campaign?.audienceConfig || {};
+  const budget = campaign?.budgetConfig || {};
+  const automation = campaign?.automationConfig || {};
+  const objectiveInput = document.querySelector(`input[name='adObjective'][value='${campaign?.objective || "CLICK_TO_WHATSAPP"}']`);
+  if (objectiveInput) objectiveInput.checked = true;
+  if ($("#adPlatform")) $("#adPlatform").value = campaign?.platform || "FACEBOOK_INSTAGRAM";
+  if ($("#adWhatsappNumber")) $("#adWhatsappNumber").value = automation.whatsappNumber || "";
+  if ($("#adPhoneNumberId")) $("#adPhoneNumberId").value = automation.phoneNumberId || "";
+  if ($("#adWelcomeText")) $("#adWelcomeText").value = automation.welcomeText || "";
+  if ($("#adAudienceType")) $("#adAudienceType").value = audience.type || "manual";
+  if ($("#adAudienceText")) $("#adAudienceText").value = audience.manualTargeting || "";
+  if ($("#adName")) $("#adName").value = creative.adName || campaign?.name || "";
+  if ($("#adPrimaryText")) $("#adPrimaryText").value = creative.primaryText || "";
+  if ($("#adHeadline")) $("#adHeadline").value = creative.headline || "";
+  if ($("#adDescription")) $("#adDescription").value = creative.description || "";
+  if ($("#adCta")) $("#adCta").value = creative.cta || "Send WhatsApp Message";
+  if ($("#adUtm")) $("#adUtm").value = creative.utmParams || "";
+  if ($("#adDailyBudget")) $("#adDailyBudget").value = budget.dailyBudget || "";
+  if ($("#adLifetimeBudget")) $("#adLifetimeBudget").value = budget.lifetimeBudget || "";
+  if ($("#adStartDate")) $("#adStartDate").value = budget.startDate || "";
+  if ($("#adEndDate")) $("#adEndDate").value = budget.endDate || "";
+  if ($("#adTimezone")) $("#adTimezone").value = budget.timezone || "";
+  if ($("#adTagLead")) $("#adTagLead").checked = automation.tagNewLeadAsAdLead !== false;
+  if ($("#adStartAiWorkflow")) $("#adStartAiWorkflow").checked = Boolean(automation.startAiWorkflow);
+  if ($("#adAssignAgent")) $("#adAssignAgent").value = automation.assignAgent || "";
+  if ($("#adAddToLeadManagement")) $("#adAddToLeadManagement").checked = automation.addToLeadManagement !== false;
+  if ($("#adHumanQueueHighIntent")) $("#adHumanQueueHighIntent").checked = automation.humanQueueHighIntent !== false;
+  if ($("#adUpdateSheet")) $("#adUpdateSheet").checked = Boolean(automation.updateGoogleSheet);
+  setAdWizardStep(1);
+  $("#adWizard")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 function renderAds() {
+  const connection = state.ads.connection || {};
+  const meta = connection.metaAds || {};
+  const whatsApp = connection.whatsApp || {};
+  state.metaAdsConnected = Boolean(meta.connected);
   setHtmlIfChanged($("#metaAdsStatus"), `<i data-lucide="${state.metaAdsConnected ? "plug-zap" : "plug"}"></i>${state.metaAdsConnected ? "Meta Ads connected" : "Meta Ads not connected"}`);
   $("#metaAdsStatus")?.classList.toggle("connected", state.metaAdsConnected);
   setText(
     "metaAdsStatusText",
     state.metaAdsConnected
-      ? "Meta Ads API credentials are configured. Draft launch controls can be enabled once account review is complete."
-      : "Meta Ads integration is not configured for this company."
+      ? "Meta Ads is connected. Click-to-WhatsApp ads can be launched directly when WhatsApp Cloud API is also connected."
+      : "Connect Meta Ads in Admin Integrations to publish ads directly. You can still create drafts and map manually launched ads."
   );
+
+  const connectionGrid = $("#adsConnectionGrid");
+  if (connectionGrid) {
+    connectionGrid.innerHTML = [
+      ["Meta Ads", connectionLabel(meta.connected), meta.connected],
+      ["WhatsApp Cloud API", connectionLabel(whatsApp.connected), whatsApp.connected],
+      ["Facebook Page", connectionLabel(connection.facebookPage?.connected, "Connected", "Missing"), connection.facebookPage?.connected],
+      ["Ad Account", connectionLabel(connection.adAccount?.connected, "Connected", "Missing"), connection.adAccount?.connected]
+    ].map(([label, value, ok]) => `<span class="${ok ? "ready" : "missing"}"><small>${escapeHtml(label)}</small><strong>${escapeHtml(value)}</strong></span>`).join("");
+  }
+
+  const metrics = state.ads.metrics || {};
+  const metricRows = [
+    ["Active Ads", metrics.activeAds || 0],
+    ["Draft Ads", metrics.draftAds || 0],
+    ["Conversations Started", metrics.conversationsStarted || 0],
+    ["Leads Generated", metrics.leadsGenerated || 0],
+    ["Hot Leads", metrics.hotLeads || 0],
+    ["Orders Generated", metrics.ordersGenerated || 0],
+    ["Human Queue from Ads", metrics.humanQueueFromAds || 0],
+    ["Spend", moneyLabel(metrics.spend)],
+    ["Cost per Conversation", moneyLabel(metrics.costPerConversation)]
+  ];
+  setHtmlIfChanged($("#adsMetrics"), metricRows.map(([label, value]) => `<span><strong>${escapeHtml(value)}</strong><small>${escapeHtml(label)}</small></span>`).join(""));
+
+  document.querySelectorAll("[data-ad-filter]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.adFilter === state.ads.filter);
+  });
+
+  const list = $("#adCampaignList");
+  if (list) {
+    const rows = state.ads.campaigns.filter((campaign) => state.ads.filter === "ALL" || campaign.status === state.ads.filter);
+    list.innerHTML = rows.length ? rows.map((campaign) => {
+      const stats = campaign.stats || {};
+      return `
+        <article class="ad-campaign-card" data-ad-id="${escapeHtml(campaign.id)}">
+          <div class="ad-campaign-main">
+            <span class="integration-provider-icon"><i data-lucide="megaphone"></i></span>
+            <div>
+              <strong>${escapeHtml(campaign.name)}</strong>
+              <small>${escapeHtml(pretty(campaign.objective))} - ${escapeHtml(pretty(campaign.platform))}</small>
+            </div>
+            <mark class="${statusTone(campaign.status)}">${escapeHtml(pretty(campaign.status))}</mark>
+          </div>
+          <div class="ad-campaign-facts">
+            <span><small>Budget</small><b>${escapeHtml(campaignBudgetLabel(campaign))}</b></span>
+            <span><small>Start date</small><b>${escapeHtml(campaign.budgetConfig?.startDate || "--")}</b></span>
+            <span><small>End date</small><b>${escapeHtml(campaign.budgetConfig?.endDate || "--")}</b></span>
+            <span><small>Meta Ad ID</small><b>${escapeHtml(campaign.metaAdId || "--")}</b></span>
+            <span><small>Conversations</small><b>${escapeHtml(stats.conversationsStarted || 0)}</b></span>
+            <span><small>Leads</small><b>${escapeHtml(stats.leadsGenerated || 0)}</b></span>
+            <span><small>Orders</small><b>${escapeHtml(stats.ordersGenerated || 0)}</b></span>
+          </div>
+          ${campaign.errorMessage ? `<p class="ad-error">${escapeHtml(campaign.errorMessage)}</p>` : ""}
+          <div class="row-actions ads-row-actions">
+            <button class="secondary-button" type="button" data-view-ad="${escapeHtml(campaign.id)}"><i data-lucide="eye"></i>View</button>
+            <button class="secondary-button" type="button" data-edit-ad="${escapeHtml(campaign.id)}"><i data-lucide="pencil"></i>Edit</button>
+            <button class="primary-button" type="button" data-launch-ad="${escapeHtml(campaign.id)}"><i data-lucide="rocket"></i>Launch</button>
+            <button class="secondary-button" type="button" data-manual-ad="${escapeHtml(campaign.id)}"><i data-lucide="link"></i>Mark Manually Launched</button>
+            ${campaign.status === "PAUSED" ? `<button class="secondary-button" type="button" data-resume-ad="${escapeHtml(campaign.id)}"><i data-lucide="play"></i>Resume</button>` : `<button class="secondary-button" type="button" data-pause-ad="${escapeHtml(campaign.id)}"><i data-lucide="pause"></i>Pause</button>`}
+            <button class="secondary-button" type="button" data-open-ad-manager="${escapeHtml(campaign.id)}"><i data-lucide="external-link"></i>Open Meta Ads Manager</button>
+          </div>
+        </article>
+      `;
+    }).join("") : emptyState("No ads yet.", "Create a Click-to-WhatsApp ad draft or map a manually launched Meta ad.");
+
+    bindDelegatedClick(list, "adView", "[data-view-ad]", async (button) => {
+      const campaign = state.ads.campaigns.find((item) => item.id === button.dataset.viewAd);
+      if (!campaign) return;
+      fillAdForm(campaign);
+      setAdWizardStep(8);
+    });
+    bindDelegatedClick(list, "adEdit", "[data-edit-ad]", (button) => {
+      const campaign = state.ads.campaigns.find((item) => item.id === button.dataset.editAd);
+      if (campaign) fillAdForm(campaign);
+    });
+    bindDelegatedClick(list, "adLaunch", "[data-launch-ad]", async (button) => {
+      if (!window.confirm("Launch this Click-to-WhatsApp ad through Meta Ads API?")) return;
+      try {
+        await publicApi(`/app/ads/${button.dataset.launchAd}/launch`, { method: "POST" });
+        showNotice("Ad launch requested.");
+        await loadAds();
+      } catch (error) {
+        showNotice(error.message, true);
+        await loadAds();
+      }
+    });
+    bindDelegatedClick(list, "adManual", "[data-manual-ad]", async (button) => {
+      const metaAdId = window.prompt("Paste Meta Ad ID");
+      if (!metaAdId) return;
+      const metaCampaignId = window.prompt("Optional Meta Campaign ID") || "";
+      const metaAdSetId = window.prompt("Optional Meta Ad Set ID") || "";
+      const launchUrl = window.prompt("Optional Meta Ads Manager URL") || "";
+      await publicApi(`/app/ads/${button.dataset.manualAd}/mark-manually-launched`, {
+        method: "POST",
+        body: JSON.stringify({ metaAdId, metaCampaignId, metaAdSetId, launchUrl })
+      });
+      showNotice("Meta Ad ID mapped for tracking.");
+      await loadAds();
+    });
+    bindDelegatedClick(list, "adPause", "[data-pause-ad]", async (button) => {
+      await publicApi(`/app/ads/${button.dataset.pauseAd}/pause`, { method: "POST" });
+      showNotice("Ad paused in CRM.");
+      await loadAds();
+    });
+    bindDelegatedClick(list, "adResume", "[data-resume-ad]", async (button) => {
+      await publicApi(`/app/ads/${button.dataset.resumeAd}/resume`, { method: "POST" });
+      showNotice("Ad resumed in CRM.");
+      await loadAds();
+    });
+    bindDelegatedClick(list, "adOpenManager", "[data-open-ad-manager]", () => {
+      window.open(state.ads.adsManagerUrl, "_blank", "noopener,noreferrer");
+    });
+  }
+
   renderAdPreview();
-  const list = $("#adDraftsList");
-  if (!list) return;
-  renderKeyedChildren(
-    list,
-    state.adDrafts,
-    (draft) => draft.id,
-    (draft) => `
-      <article class="automation-row ad-draft-row" data-ad-draft="${escapeHtml(draft.id)}">
-        <div>
-          <strong>${escapeHtml(draft.name)}</strong>
-          <small>${escapeHtml(draft.objective)} - ${escapeHtml(draft.audience)} - ${formatDate(draft.createdAt)}</small>
-        </div>
-        <div class="row-actions">
-          <mark class="amber">${escapeHtml(pretty(draft.status || "Draft"))}</mark>
-          <button class="secondary-button icon-button" type="button" data-edit-ad="${escapeHtml(draft.id)}" aria-label="Edit ad draft"><i data-lucide="pencil"></i></button>
-          <button class="danger-button icon-button" type="button" data-delete-ad="${escapeHtml(draft.id)}" aria-label="Delete ad draft"><i data-lucide="trash-2"></i></button>
-        </div>
-      </article>
-    `,
-    emptyState("No ad drafts yet.", "Saved click-to-WhatsApp drafts will appear here.")
-  );
-  bindDelegatedClick(list, "adEdit", "[data-edit-ad]", (button) => {
-    const draft = state.adDrafts.find((item) => item.id === button.dataset.editAd);
-    if (!draft) return;
-    if ($("#adName")) $("#adName").value = draft.name || "";
-    if ($("#adObjective")) $("#adObjective").value = draft.objective || "";
-    if ($("#adAudience")) $("#adAudience").value = draft.audience || "";
-    if ($("#adHeadline")) $("#adHeadline").value = draft.headline || "";
-    if ($("#adBodyText")) $("#adBodyText").value = draft.bodyText || "";
-    if ($("#adCta")) $("#adCta").value = draft.cta || "";
-    if ($("#adDestination")) $("#adDestination").value = draft.destinationWhatsAppNumber || "";
-    if ($("#adTemplatePreview")) $("#adTemplatePreview").value = draft.templatePreview || "";
-    renderAdPreview();
-    $("#adDraftForm")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  });
-  bindDelegatedClick(list, "adDelete", "[data-delete-ad]", async (button) => {
-    if (!window.confirm("Delete this ad draft?")) return;
-    await publicApi(`/ads/${button.dataset.deleteAd}`, { method: "DELETE" });
-    showNotice("Ad draft deleted.");
-    await loadAds();
-  });
   refreshIcons();
-  renderReports();
 }
 
 function renderAdPreview() {
   const target = $("#adPreview");
   if (!target) return;
-  const headline = $("#adHeadline")?.value || "Talk to our team on WhatsApp";
-  const body = $("#adBodyText")?.value || "Launch a WhatsApp enquiry from this ad.";
-  const cta = $("#adCta")?.value || "Send WhatsApp";
-  const opening = $("#adTemplatePreview")?.value || "Hi, I am interested in speaking with your team.";
-  const platform = $("#adPlatform")?.value || "Facebook + Instagram";
-  const budget = $("#adBudget")?.value || "Budget not set";
-  const location = $("#adLocation")?.value || "Location not set";
+  const payload = collectAdPayload(state.ads.editingId ? "READY_TO_PUBLISH" : "DRAFT");
+  const headline = payload.creativeConfig.headline || "Message us on WhatsApp";
+  const body = payload.creativeConfig.primaryText || "Start a WhatsApp conversation from this ad.";
+  const cta = payload.creativeConfig.cta || "Send WhatsApp Message";
+  const opening = payload.automationConfig.welcomeText || "Hi, I want to know more.";
+  const platform = pretty(payload.platform);
+  const budget = payload.budgetConfig.dailyBudget ? `${payload.budgetConfig.dailyBudget}/day` : payload.budgetConfig.lifetimeBudget ? `${payload.budgetConfig.lifetimeBudget} lifetime` : "Budget not set";
+  setText("adStartingPreview", opening);
+  const review = $("#adReview");
+  if (review) {
+    review.innerHTML = [
+      ["Ad account", state.ads.connection?.adAccount?.name || "Connected account from vault"],
+      ["Page", state.ads.connection?.facebookPage?.name || "Facebook Page from vault"],
+      ["WhatsApp number", payload.automationConfig.whatsappNumber || state.ads.connection?.whatsApp?.displayPhoneNumber || "WhatsApp integration"],
+      ["Budget", budget],
+      ["Creative", `${headline} - ${cta}`],
+      ["Audience", payload.audienceConfig.manualTargeting || pretty(payload.audienceConfig.type)],
+      ["Automation", payload.automationConfig.humanQueueHighIntent ? "Human queue for high intent enabled" : "Standard CRM tracking"],
+      ["Compliance", "Opt-in, WhatsApp policy, Page identity, and Meta review remain required"]
+    ].map(([label, value]) => `<span><small>${escapeHtml(label)}</small><strong>${escapeHtml(value)}</strong></span>`).join("");
+  }
   target.innerHTML = `
     <article class="ad-card-preview">
-      <small class="ad-platform">${escapeHtml(platform)} - ${escapeHtml(location)} - ${escapeHtml(budget)}</small>
+      <small class="ad-platform">${escapeHtml(platform)} - ${escapeHtml(budget)}</small>
       <span class="ad-media"><i data-lucide="messages-square"></i></span>
       <strong>${escapeHtml(headline)}</strong>
       <p>${escapeHtml(body)}</p>
@@ -2842,6 +3079,45 @@ function renderAdPreview() {
     </article>
   `;
   refreshIcons();
+}
+
+function resetAdWizard() {
+  state.ads.editingId = null;
+  $("#adWizardForm")?.reset();
+  if ($("#adCta")) $("#adCta").value = "Send WhatsApp Message";
+  document.querySelector("input[name='adObjective'][value='CLICK_TO_WHATSAPP']")?.click();
+  setAdWizardStep(1);
+}
+
+function setAdWizardBusy(busy) {
+  $("#adWizardForm")?.querySelectorAll("button, input, select, textarea").forEach((element) => {
+    element.disabled = busy;
+  });
+}
+
+async function saveAdFromWizard(action) {
+  const status = action === "LAUNCH" ? "READY_TO_PUBLISH" : action;
+  const payload = collectAdPayload(status);
+  setAdWizardBusy(true);
+  try {
+    const saved = state.ads.editingId
+      ? await publicApi(`/app/ads/${state.ads.editingId}`, { method: "PATCH", body: JSON.stringify(payload) })
+      : await publicApi("/app/ads", { method: "POST", body: JSON.stringify(payload) });
+    const campaign = saved.campaign;
+    state.ads.editingId = campaign?.id || state.ads.editingId;
+
+    if (action === "LAUNCH") {
+      await publicApi(`/app/ads/${state.ads.editingId}/launch`, { method: "POST" });
+      showNotice("Ad launch requested.");
+    } else {
+      showNotice(action === "READY_TO_PUBLISH" ? "Ad saved as ready to publish." : "Ad draft saved.");
+    }
+
+    await loadAds();
+  } finally {
+    setAdWizardBusy(false);
+    setAdWizardStep(state.ads.wizardStep);
+  }
 }
 
 const flowDefaults = {
@@ -3702,34 +3978,72 @@ function bindEvents() {
     $("#campaignName")?.focus();
   });
 
-  ["adHeadline", "adBodyText", "adCta", "adTemplatePreview", "adPlatform", "adBudget", "adLocation"].forEach((id) => {
+  [
+    "adHeadline",
+    "adPrimaryText",
+    "adDescription",
+    "adCta",
+    "adWelcomeText",
+    "adPlatform",
+    "adDailyBudget",
+    "adLifetimeBudget",
+    "adAudienceText",
+    "adAudienceType",
+    "adWhatsappNumber",
+    "adPhoneNumberId",
+    "adTimezone",
+    "adUtm",
+    "adName"
+  ].forEach((id) => {
     $(`#${id}`)?.addEventListener("input", renderAdPreview);
     $(`#${id}`)?.addEventListener("change", renderAdPreview);
   });
 
-  $("#launchAdBtn")?.addEventListener("click", () => {
-    $("#adDraftForm")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  document.querySelectorAll("[data-ad-step]").forEach((button) => {
+    button.addEventListener("click", () => setAdWizardStep(button.dataset.adStep));
+  });
+
+  document.querySelectorAll("[data-ad-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.ads.filter = button.dataset.adFilter || "ALL";
+      renderAds();
+    });
+  });
+
+  $("#createAdBtn")?.addEventListener("click", () => {
+    resetAdWizard();
+    $("#adWizard")?.scrollIntoView({ behavior: "smooth", block: "start" });
     $("#adName")?.focus();
   });
 
-  $("#adDraftForm")?.addEventListener("submit", async (event) => {
-    event.preventDefault();
+  $("#openAdsManagerBtn")?.addEventListener("click", () => {
+    window.open(state.ads.adsManagerUrl, "_blank", "noopener,noreferrer");
+  });
+
+  $("#syncAdsBtn")?.addEventListener("click", async () => {
+    const campaign = state.ads.campaigns.find((item) => item.metaAdId);
+    if (!campaign) {
+      showNotice("Map a Meta Ad ID before syncing insights.", true);
+      return;
+    }
     try {
-      await publicApi("/ads", {
-        method: "POST",
-        body: JSON.stringify({
-          name: $("#adName")?.value.trim(),
-          objective: $("#adObjective")?.value.trim(),
-          audience: $("#adAudience")?.value.trim(),
-          headline: $("#adHeadline")?.value.trim(),
-          bodyText: $("#adBodyText")?.value.trim(),
-          cta: $("#adCta")?.value.trim(),
-          destinationWhatsAppNumber: $("#adDestination")?.value.trim(),
-          templatePreview: $("#adTemplatePreview")?.value.trim()
-        })
-      });
-      showNotice("Ad draft saved.");
+      const result = await publicApi(`/app/ads/${campaign.id}/sync-insights`, { method: "POST" });
+      showNotice(result.message || "Ads sync complete.");
       await loadAds();
+    } catch (error) {
+      showNotice(error.message, true);
+    }
+  });
+
+  $("#prevAdStepBtn")?.addEventListener("click", () => setAdWizardStep(state.ads.wizardStep - 1));
+  $("#nextAdStepBtn")?.addEventListener("click", () => setAdWizardStep(state.ads.wizardStep + 1));
+
+  $("#adWizardForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const submitter = event.submitter || document.activeElement;
+    const action = submitter?.dataset?.adSubmit || "DRAFT";
+    try {
+      await saveAdFromWizard(action);
     } catch (error) {
       showNotice(error.message, true);
     }
@@ -4067,7 +4381,7 @@ async function startDashboard() {
     bindSessionRestoreGuard();
     refreshIcons();
     if (featureEnabledForView("chats")) connectChatEvents();
-    const requestedView = window.location.hash.replace("#", "");
+    const requestedView = requestedViewFromLocation();
     switchView(views[requestedView] ? requestedView : featureEnabledForView("overview") ? "overview" : firstAvailableView());
     startDashboardPolling();
   } catch (error) {
