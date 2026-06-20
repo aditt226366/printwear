@@ -496,6 +496,7 @@
           </div>
           <div class="lead-controls">
             <button id="createAdBtn" class="primary-button" type="button"><i data-lucide="plus"></i>Create Ad</button>
+            <button id="manualMapAdBtn" class="secondary-button" type="button"><i data-lucide="link"></i>Manually Map Existing Ad</button>
             <button id="syncAdsBtn" class="secondary-button" type="button"><i data-lucide="refresh-cw"></i>Sync Ads</button>
             <button id="openAdsManagerBtn" class="secondary-button" type="button"><i data-lucide="external-link"></i>Open Meta Ads Manager</button>
           </div>
@@ -516,6 +517,7 @@
             <span><small>Facebook Page</small><strong>Checking</strong></span>
             <span><small>Ad Account</small><strong>Checking</strong></span>
           </div>
+          <div id="adsWarnings" class="ads-warning-stack"></div>
         </section>
 
         <section id="adsMetrics" class="metric-mini-grid ads-metric-grid"></section>
@@ -529,7 +531,41 @@
             <button class="segment-tab" type="button" data-ad-filter="PAUSED">Paused</button>
             <button class="segment-tab" type="button" data-ad-filter="FAILED">Failed</button>
             <button class="segment-tab" type="button" data-ad-filter="COMPLETED">Completed</button>
+            <button class="segment-tab" type="button" data-ad-filter="MANUALLY_LAUNCHED">Manually Launched</button>
           </div>
+        </section>
+
+        <section id="manualAdMapPanel" class="panel premium-card manual-map-panel hidden">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Manual mapping</p>
+              <h2>Track an ad launched in Meta Ads Manager</h2>
+              <span>Create a CRM campaign and paste the Meta Ad ID so WhatsApp referral webhooks can attribute conversations, leads, orders, and human queue items.</span>
+            </div>
+          </div>
+          <form id="manualAdMapForm" class="automation-form">
+            <div class="form-row">
+              <label>Ad name<input id="manualAdName" placeholder="Meta campaign name" /></label>
+              <label>Meta Ad ID<input id="manualMetaAdId" placeholder="120000000000000000" /></label>
+            </div>
+            <div class="form-row">
+              <label>Meta Campaign ID optional<input id="manualMetaCampaignId" placeholder="Optional" /></label>
+              <label>Meta Ad Set ID optional<input id="manualMetaAdSetId" placeholder="Optional" /></label>
+            </div>
+            <div class="form-row">
+              <label>Platform<select id="manualAdPlatform">
+                <option value="FACEBOOK_INSTAGRAM">Facebook + Instagram</option>
+                <option value="FACEBOOK">Facebook</option>
+                <option value="INSTAGRAM">Instagram</option>
+              </select></label>
+              <label>Meta Ads Manager URL optional<input id="manualLaunchUrl" placeholder="https://business.facebook.com/adsmanager/..." /></label>
+            </div>
+            <label>Notes<input id="manualAdNotes" placeholder="Audience, creative, or launch notes for this mapping" /></label>
+            <div class="form-actions">
+              <button id="cancelManualMapBtn" class="secondary-button" type="button">Cancel</button>
+              <button id="saveManualMapBtn" class="primary-button" type="submit"><i data-lucide="link"></i>Save Manual Mapping</button>
+            </div>
+          </form>
         </section>
 
         <section class="ads-command-grid">
@@ -646,6 +682,7 @@
                 <button id="saveDraftAdBtn" class="secondary-button" type="submit" data-ad-submit="DRAFT"><i data-lucide="save"></i>Save Draft</button>
                 <button id="readyAdBtn" class="secondary-button" type="submit" data-ad-submit="READY_TO_PUBLISH"><i data-lucide="check-circle-2"></i>Save as Ready to Publish</button>
                 <button id="launchWizardAdBtn" class="primary-button" type="submit" data-ad-submit="LAUNCH"><i data-lucide="rocket"></i>Launch Ad</button>
+                <small id="adLaunchHelp" class="ad-launch-help hidden">Connect Meta Ads integration to publish.</small>
               </div>
             </form>
           </article>

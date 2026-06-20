@@ -339,8 +339,10 @@ export const adCampaignService = {
     return {
       connection: connections,
       metrics: {
+        totalAds: campaigns.length,
         activeAds: campaigns.filter((campaign) => ["PUBLISHING", "RUNNING", "MANUALLY_LAUNCHED"].includes(campaign.status)).length,
         draftAds: campaigns.filter((campaign) => ["DRAFT", "READY_TO_PUBLISH"].includes(campaign.status)).length,
+        runningAds: campaigns.filter((campaign) => ["PUBLISHING", "RUNNING", "MANUALLY_LAUNCHED"].includes(campaign.status)).length,
         conversationsStarted: totals.conversationsStarted,
         leadsGenerated: totals.leadsGenerated,
         hotLeads: temperatureCounts.HOT ?? 0,
@@ -543,7 +545,9 @@ export const adCampaignService = {
   async markManuallyLaunched(tenantId: string, id: string, actorUserId: string | null, input: ManualLaunchInput) {
     const metaAdId = clean(input.metaAdId);
     if (!metaAdId) throw new AppError("Meta Ad ID is required.", 400);
-    await this.get(tenantId, id);
+    const current = await prisma.adCampaign.findFirst({ where: { id, tenantId } });
+    if (!current) throw new AppError("Ad campaign not found.", 404);
+    const trackingConfig = asObject(current.trackingConfig);
     const campaign = await prisma.adCampaign.update({
       where: { id },
       data: {
@@ -551,7 +555,12 @@ export const adCampaignService = {
         metaAdId,
         metaCampaignId: clean(input.metaCampaignId) || undefined,
         metaAdSetId: clean(input.metaAdSetId) || undefined,
-        trackingConfig: asJson({ launchUrl: clean(input.launchUrl) || null, manualMappingAt: new Date().toISOString() }),
+        trackingConfig: asJson({
+          ...trackingConfig,
+          launchUrl: clean(input.launchUrl) || trackingConfig.launchUrl || null,
+          manualMapping: true,
+          manualMappingAt: new Date().toISOString()
+        }),
         errorMessage: null,
         updatedById: actorUserId
       }

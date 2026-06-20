@@ -5080,7 +5080,8 @@ mark.yellow,
 .ads-toolbar,
 .ads-list-panel,
 .ads-wizard-panel,
-.ads-preview-panel {
+.ads-preview-panel,
+.manual-map-panel {
   border-color: rgba(71,217,255,0.18);
   background:
     linear-gradient(145deg, rgba(8, 16, 32, 0.86), rgba(2, 7, 17, 0.72)),
@@ -5107,7 +5108,7 @@ mark.yellow,
 }
 
 .ads-metric-grid {
-  grid-template-columns: repeat(9, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
   margin-bottom: 14px;
 }
 
@@ -5158,6 +5159,38 @@ mark.yellow,
   margin: 0;
 }
 
+.ads-warning-stack {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.ads-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  border: 1px solid rgba(255, 209, 102, 0.22);
+  border-radius: 12px;
+  background: rgba(255, 209, 102, 0.08);
+  color: var(--text-muted);
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.ads-warning svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  color: var(--signal);
+}
+
+.manual-map-panel {
+  margin-bottom: 14px;
+}
+
 .ads-command-grid {
   display: grid;
   grid-template-columns: minmax(420px, 0.96fr) minmax(520px, 1.04fr);
@@ -5169,6 +5202,45 @@ mark.yellow,
 .ads-campaign-list {
   display: grid;
   gap: 12px;
+}
+
+.ads-empty-state {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  border: 1px dashed rgba(129,223,255,0.24);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(71,217,255,0.12), transparent 28%),
+    rgba(255,255,255,0.035);
+  padding: 18px;
+}
+
+.ads-empty-state > span {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(71,217,255,0.28);
+  border-radius: 12px;
+  background: rgba(71,217,255,0.1);
+  color: var(--blue);
+  flex: 0 0 auto;
+}
+
+.ads-empty-state > div {
+  display: grid;
+  gap: 8px;
+}
+
+.ads-empty-state strong {
+  color: var(--text-main);
+}
+
+.ads-empty-state p {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.45;
 }
 
 .ad-campaign-card {
@@ -5284,6 +5356,14 @@ mark.yellow,
   justify-content: flex-end;
   border-top: 1px solid rgba(129,223,255,0.12);
   padding-top: 12px;
+}
+
+.ad-launch-help {
+  flex-basis: 100%;
+  color: #ffcc72;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .ad-review-grid {
