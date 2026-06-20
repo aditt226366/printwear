@@ -36,7 +36,7 @@ const envSchema = z.object({
   WHATSAPP_TEMPLATE_NAME: z.string().optional(),
   WHATSAPP_TEMPLATE_LANGUAGE: z.string().default("en_US"),
   WHATSAPP_API_VERSION: z.string().default("v20.0"),
-  AUTOMATION_SEND_DELAY_MS: z.coerce.number().int().min(250).max(60000).default(1200),
+  AUTOMATION_SEND_DELAY_MS: z.coerce.number().int().min(250).max(60000).default(6000),
   AUTOMATION_WORKERS_ENABLED: envBoolean.default(true),
   META_ADS_ACCESS_TOKEN: z.string().optional(),
   META_AD_ACCOUNT_ID: z.string().optional(),

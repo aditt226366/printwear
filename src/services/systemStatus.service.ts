@@ -10,6 +10,7 @@ const REQUIRED_TABLES = [
   "IntegrationAudit",
   "ApiUsageLog",
   "BillingSnapshot",
+  "ContactBroadcastTemplate",
   "BulkMessageJob",
   "BulkMessageRecipient",
   "Campaign",
@@ -28,7 +29,8 @@ const REQUIRED_MIGRATIONS = [
   "20260615190000_multi_tenant_company_isolation",
   "20260616170000_company_integrations",
   "20260618100000_integration_vault",
-  "20260620120000_meta_ads_module"
+  "20260620120000_meta_ads_module",
+  "20260620143000_contact_broadcast_templates"
 ];
 
 export type DatabaseSchemaStatus = {

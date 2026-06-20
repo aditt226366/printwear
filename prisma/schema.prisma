@@ -173,6 +173,7 @@ model Company {
   integrationAudits IntegrationAudit[]
   leads            Lead[]
   knowledgeBase    KnowledgeBase[]
+  contactBroadcastTemplates ContactBroadcastTemplate[]
   bulkMessageJobs  BulkMessageJob[]
   campaigns        Campaign[]
   adDrafts         AdDraft[]
@@ -413,6 +414,33 @@ model SendLog {
 
   @@index([leadId])
   @@index([action, status])
+}
+
+model ContactBroadcastTemplate {
+  id              String   @id @default(cuid())
+  companyId       String
+  name            String
+  category        String   @default("MARKETING")
+  language        String   @default("en_US")
+  body            String
+  headerText      String?
+  footerText      String?
+  metaTemplateId  String?
+  metaStatus      String?
+  status          String   @default("SUBMITTED")
+  rejectionReason String?
+  lastSubmittedAt DateTime?
+  lastSyncedAt    DateTime?
+  createdById     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, name, language])
+  @@index([companyId])
+  @@index([companyId, status])
+  @@index([metaTemplateId])
 }
 
 model BulkMessageJob {

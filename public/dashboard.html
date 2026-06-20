@@ -21,7 +21,7 @@
       <nav class="top-nav" aria-label="Operating sections">
         <button class="nav-item active" data-view="overview"><i data-lucide="layout-dashboard"></i>Command Center</button>
         <button class="nav-item" data-view="chats"><i data-lucide="inbox"></i>Inbox</button>
-        <button class="nav-item" data-view="broadcasts"><i data-lucide="send-horizontal"></i>Broadcasts</button>
+        <button class="nav-item" data-view="broadcasts"><i data-lucide="send-horizontal"></i>Contacts</button>
         <button class="nav-item" data-view="campaigns"><i data-lucide="calendar-clock"></i>Campaigns</button>
         <button class="nav-item" data-view="ads"><i data-lucide="megaphone"></i>Ads</button>
         <button class="nav-item" data-view="flows"><i data-lucide="workflow"></i>AI Flows</button>
@@ -286,12 +286,13 @@
       <section id="broadcastsView" class="view">
         <div class="page-heading-row compact-heading premium-heading">
           <div>
-            <p class="eyebrow">Broadcasts</p>
-            <h1>Audience Broadcasts</h1>
-            <span>Select real contacts, build a template, send WhatsApp broadcasts, and monitor delivery state.</span>
+            <p class="eyebrow">Contacts</p>
+            <h1>Contacts & Template Broadcasts</h1>
+            <span>Submit Meta-approved templates, import CSV contacts, then broadcast with a 6000ms gap between each WhatsApp message.</span>
           </div>
           <div class="lead-controls">
-            <button id="newTemplateBtn" class="secondary-button" type="button"><i data-lucide="file-plus-2"></i>New Template</button>
+            <button id="newTemplateBtn" class="secondary-button" type="button"><i data-lucide="file-plus-2"></i>Upload Template</button>
+            <button id="syncContactTemplatesBtn" class="secondary-button" type="button"><i data-lucide="refresh-cw"></i>Sync Templates</button>
             <button id="addContactBtn" class="secondary-button" type="button"><i data-lucide="user-plus"></i>Add Contact</button>
             <button id="csvImportShortcutBtn" class="secondary-button" type="button"><i data-lucide="upload"></i>Import</button>
             <button id="sendSelectedBulkBtn" class="primary-button" type="submit" form="bulkSendForm"><i data-lucide="radio-tower"></i>Broadcast</button>
@@ -326,18 +327,28 @@
               <div>
                 <p class="eyebrow">Send flow</p>
                 <h2>Template broadcast</h2>
+                <span>Only templates accepted by Meta can be broadcast.</span>
               </div>
+            </div>
+            <div class="contact-template-library">
+              <div class="mini-section-heading">
+                <span><i data-lucide="badge-check"></i>Meta templates</span>
+                <small id="acceptedTemplateCount">0 accepted</small>
+              </div>
+              <div id="contactTemplateLibrary" class="template-library-list"></div>
             </div>
             <form id="bulkSendForm" class="automation-form broadcast-form">
               <label>Broadcast name<input id="bulkName" placeholder="June WhatsApp outreach" /></label>
               <div class="form-row">
-                <label>Template Name<input id="bulkTemplateName" placeholder="approved_template_name" /></label>
-                <label>Language<input id="bulkTemplateLanguage" placeholder="en_US" /></label>
+                <label>Approved Meta template<select id="bulkTemplateSelect"><option value="">Select accepted template</option></select></label>
+                <label>Language<input id="bulkTemplateLanguage" placeholder="en_US" readonly /></label>
               </div>
+              <label>Template name<input id="bulkTemplateName" placeholder="approved_template_name" readonly /></label>
               <div class="form-row">
                 <label>Audience tag<input id="bulkAudienceTag" placeholder="optional tag" /></label>
                 <label>Source<input id="bulkAudienceSource" placeholder="optional source" /></label>
               </div>
+              <p class="broadcast-pacing-note"><i data-lucide="timer"></i>Messages are sent one by one with a fixed 6000 millisecond gap.</p>
               <div class="broadcast-preview">
                 <span><i data-lucide="message-square-text"></i>Preview</span>
                 <p id="broadcastPreviewText">Select a template and audience to preview this WhatsApp broadcast.</p>
@@ -384,8 +395,9 @@
             </div>
             <div class="form-row">
               <label>Template Name *<input id="templateNameInput" placeholder="welcome_message" required /></label>
-              <label>Type<select id="templateTypeInput"><option value="custom">custom</option><option value="marketing">marketing</option><option value="utility">utility</option></select></label>
+              <label>Category<select id="templateTypeInput"><option value="MARKETING">Marketing</option><option value="UTILITY">Utility</option><option value="AUTHENTICATION">Authentication</option></select></label>
             </div>
+            <label>Language<input id="templateLanguageInput" placeholder="en_US" value="en_US" /></label>
             <label>Message Content *<textarea id="templateContentInput" rows="5" placeholder="Hi {name}! Welcome to our service." required></textarea></label>
             <div class="template-variable-row">
               <span>Personalization</span>
@@ -399,10 +411,10 @@
               <label>Footer Text optional<input id="templateFooterInput" placeholder="Footer..." /></label>
             </div>
             <label>Meta Template Name<input id="templateMetaNameInput" placeholder="exact_name_in_meta_dashboard" /></label>
-            <label class="checkbox-line"><input id="templatePreapprovedInput" type="checkbox" /> Pre-approved by Meta / WhatsApp</label>
+            <div id="templateSubmitStatus" class="template-submit-status hidden"></div>
             <div class="form-actions">
               <button class="secondary-button" value="cancel" type="submit">Cancel</button>
-              <button id="createTemplateBtn" class="primary-button" value="default" type="submit">Create Template</button>
+              <button id="createTemplateBtn" class="primary-button" value="default" type="submit">Submit Template to Meta</button>
             </div>
           </form>
         </dialog>

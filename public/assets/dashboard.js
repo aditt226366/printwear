@@ -30,6 +30,7 @@ const state = {
   contactFacets: { tags: [], sources: [], statuses: [] },
   selectedContactIds: new Set(),
   contactFilters: { search: "", tag: "", status: "", source: "" },
+  contactTemplates: [],
   bulkJobs: [],
   campaigns: [],
   selectedCampaignId: null,
@@ -104,7 +105,7 @@ const featureDescriptions = {
   dashboard: "Operating homepage with Conversation Pulse, Priority Queue, and Pulse Interpreter.",
   chats: "WhatsApp-style live inbox with AI replies, manual replies, takeover, tags, lead status, and message history.",
   contacts: "Audience workspace with CSV import, Google Sheets import, tags, source, lifecycle status, and segments.",
-  broadcasts: "Bulk WhatsApp template messaging with audience selection, progress tracking, delivery/read status, and CRM history capture.",
+  broadcasts: "Contacts workspace with Meta-approved template submission, CSV import, paced broadcasts, delivery status, and CRM inbox history.",
   campaigns: "Scheduled and multi-step WhatsApp outreach with templates, run now, pause/cancel, delivery metrics, and reply tracking.",
   ads: "Facebook, Instagram, and WhatsApp click-to-chat ad planning with Meta status, drafts, previews, and tracking.",
   ai_flows: "Workflow automation builder with triggers, messages, conditions, delays, takeover, order draft blocks, tests, and logs.",
@@ -2256,6 +2257,15 @@ function renderCsvPreview() {
   `;
 }
 
+function getFilteredContactsForBroadcast() {
+  return state.contacts.filter((contact) => {
+    const matchesTag = !state.contactFilters.tag || (contact.tags || []).includes(state.contactFilters.tag);
+    const matchesSource = !state.contactFilters.source || String(contact.source || "").toLowerCase() === state.contactFilters.source.toLowerCase();
+    const matchesStatus = !state.contactFilters.status || String(contact.status || "").toUpperCase() === state.contactFilters.status.toUpperCase();
+    return matchesTag && matchesSource && matchesStatus;
+  });
+}
+
 function selectedAudienceFromContacts(extra = {}) {
   const leadIds = [...state.selectedContactIds];
   return {
@@ -2271,9 +2281,9 @@ function selectedAudienceFromContacts(extra = {}) {
 
 function statusTone(status) {
   const value = String(status || "").toLowerCase();
-  if (["sent", "completed", "read", "delivered", "running", "manually_launched"].includes(value)) return "green";
-  if (["failed", "cancelled"].includes(value)) return "red";
-  if (["scheduled", "queued", "draft", "paused", "ready_to_publish", "publishing"].includes(value)) return "amber";
+  if (["sent", "completed", "read", "delivered", "running", "manually_launched", "accepted", "approved"].includes(value)) return "green";
+  if (["failed", "cancelled", "rejected", "error"].includes(value)) return "red";
+  if (["scheduled", "queued", "draft", "paused", "ready_to_publish", "publishing", "pending", "submitted", "needs_attention"].includes(value)) return "amber";
   return "neutral";
 }
 
@@ -2489,6 +2499,90 @@ function renderFeatureDisabled(view) {
   `;
 }
 
+function acceptedContactTemplates() {
+  return state.contactTemplates.filter((template) => String(template.status).toUpperCase() === "ACCEPTED");
+}
+
+async function loadContactTemplates() {
+  try {
+    const data = await publicApi("/contact-templates");
+    state.contactTemplates = data.templates || [];
+    renderContactTemplates();
+  } catch (error) {
+    if (error.setupRequired) {
+      state.contactTemplates = [];
+      const target = $("#contactTemplateLibrary");
+      if (target) target.innerHTML = setupRequiredHtml(error.setupDetails || {});
+      return;
+    }
+    throw error;
+  }
+}
+
+function chooseBroadcastTemplate(templateId) {
+  const template = state.contactTemplates.find((item) => item.id === templateId);
+  if (!template) {
+    if ($("#bulkTemplateName")) $("#bulkTemplateName").value = "";
+    if ($("#bulkTemplateLanguage")) $("#bulkTemplateLanguage").value = "";
+    if ($("#bulkTemplateSelect")) $("#bulkTemplateSelect").value = "";
+    updateBroadcastPreview();
+    return;
+  }
+  if ($("#bulkTemplateName")) $("#bulkTemplateName").value = template.name || "";
+  if ($("#bulkTemplateLanguage")) $("#bulkTemplateLanguage").value = template.language || "en_US";
+  if ($("#bulkTemplateSelect")) $("#bulkTemplateSelect").value = template.id;
+  updateBroadcastPreview();
+}
+
+function renderContactTemplates() {
+  const accepted = acceptedContactTemplates();
+  setText("acceptedTemplateCount", `${accepted.length} accepted`);
+  const select = $("#bulkTemplateSelect");
+  if (select) {
+    const current = select.value;
+    select.innerHTML = [
+      `<option value="">Select accepted template</option>`,
+      ...accepted.map((template) => `<option value="${escapeHtml(template.id)}">${escapeHtml(template.name)} / ${escapeHtml(template.language)}</option>`)
+    ].join("");
+    if (accepted.some((template) => template.id === current)) select.value = current;
+    else if (accepted.length && !$("#bulkTemplateName")?.value) chooseBroadcastTemplate(accepted[0].id);
+  }
+
+  const target = $("#contactTemplateLibrary");
+  if (!target) return;
+  target.innerHTML = state.contactTemplates.length ? state.contactTemplates.map((template) => `
+    <article class="template-library-card ${template.accepted ? "accepted" : ""}" data-template-id="${escapeHtml(template.id)}">
+      <div>
+        <strong>${escapeHtml(template.name)}</strong>
+        <small>${escapeHtml(template.category)} / ${escapeHtml(template.language)}</small>
+      </div>
+      <mark class="${statusTone(template.status)}">${escapeHtml(template.status === "ACCEPTED" ? "Accepted" : pretty(template.status))}</mark>
+      <p>${escapeHtml(template.body)}</p>
+      <div class="row-actions">
+        ${template.accepted ? `<button class="secondary-button" type="button" data-use-template="${escapeHtml(template.id)}"><i data-lucide="send"></i>Use</button>` : ""}
+        <button class="secondary-button" type="button" data-sync-template="${escapeHtml(template.id)}"><i data-lucide="refresh-cw"></i>Sync</button>
+      </div>
+      ${template.rejectionReason ? `<small class="template-error">${escapeHtml(template.rejectionReason)}</small>` : ""}
+    </article>
+  `).join("") : emptyState("No Meta templates yet.", "Upload a template here, wait for Meta acceptance, then broadcast it to imported contacts.");
+
+  bindDelegatedClick(target, "useContactTemplate", "[data-use-template]", (button) => {
+    chooseBroadcastTemplate(button.dataset.useTemplate);
+    showNotice("Accepted template selected for broadcast.");
+  });
+  bindDelegatedClick(target, "syncContactTemplate", "[data-sync-template]", async (button) => {
+    try {
+      const data = await publicApi(`/contact-templates/${button.dataset.syncTemplate}/sync`, { method: "POST" });
+      state.contactTemplates = state.contactTemplates.map((template) => template.id === data.template.id ? data.template : template);
+      renderContactTemplates();
+      showNotice(data.template.status === "ACCEPTED" ? "Template accepted by Meta." : `Template status: ${pretty(data.template.status)}.`);
+    } catch (error) {
+      showNotice(error.message, true);
+    }
+  });
+  refreshIcons();
+}
+
 async function loadContacts() {
   try {
     const query = buildQuery(state.contactFilters);
@@ -2523,7 +2617,7 @@ function renderContacts() {
 
   table.innerHTML = `
     <div class="data-row data-head">
-      <span></span><span>Name</span><span>Mobile Number</span><span>Tags</span><span>Source</span><span>Status</span><span>Last touch</span><span>Action</span>
+      <span></span><span>Name</span><span>Mobile Number</span><span>Tags</span><span>Source</span><span>Status</span><span>Templates sent</span><span>Last touch</span><span>Action</span>
     </div>
     ${state.contacts
       .map((contact) => `
@@ -2534,6 +2628,14 @@ function renderContacts() {
           <span class="tag-list">${(contact.tags || []).map((tag) => `<b>${escapeHtml(tag)}</b>`).join("") || "--"}</span>
           <span>${escapeHtml(contact.source || "--")}</span>
           <span><mark class="${statusTone(contact.status)}">${escapeHtml(pretty(contact.status))}</mark></span>
+          <span class="template-sent-cell">
+            ${contact.lastTemplate ? `
+              <strong>${escapeHtml(contact.lastTemplate.name || "Template")}</strong>
+              <small>${escapeHtml(contact.lastTemplate.content || "")}</small>
+              <mark class="${statusTone(contact.lastTemplate.status)}">${escapeHtml(pretty(contact.lastTemplate.status || "sent"))}</mark>
+            ` : "--"}
+            ${Number(contact.templatesSentCount || 0) > 1 ? `<small>${escapeHtml(contact.templatesSentCount)} total</small>` : ""}
+          </span>
           <span>${contact.lastContacted ? formatDate(contact.lastContacted) : "--"}</span>
           <span><button class="ghost-action" type="button" data-open-chat="${escapeHtml(contact.id)}"><i data-lucide="messages-square"></i>Chat</button></span>
         </div>
@@ -2640,12 +2742,13 @@ function renderBulkJobs() {
 
 function updateBroadcastPreview() {
   const templateName = $("#bulkTemplateName")?.value.trim();
-  const audienceCount = state.selectedContactIds.size || state.contacts.length;
-  const content = $("#templateContentInput")?.value.trim();
+  const audienceCount = state.selectedContactIds.size || getFilteredContactsForBroadcast().length;
+  const selectedTemplate = state.contactTemplates.find((template) => template.id === $("#bulkTemplateSelect")?.value);
+  const content = selectedTemplate?.body || $("#templateContentInput")?.value.trim();
   setText(
     "broadcastPreviewText",
     templateName
-      ? `${audienceCount} selected/filtered contact${audienceCount === 1 ? "" : "s"} will receive template ${templateName}.${content ? ` Preview: ${content}` : ""}`
+      ? `${audienceCount} selected/filtered contact${audienceCount === 1 ? "" : "s"} will receive accepted template ${templateName} with a 6000ms gap.${content ? ` Preview: ${content}` : ""}`
       : "Select a template and audience to preview this WhatsApp broadcast."
   );
 }
@@ -3693,6 +3796,7 @@ function switchView(name) {
   if (name === "overview") loadOverview();
   if (name === "leads" || name === "chats") loadLeads().catch((error) => showNotice(error.message, true));
   if (name === "broadcasts") {
+    loadContactTemplates().catch((error) => showNotice(error.message, true));
     loadContacts().catch((error) => showNotice(error.message, true));
     loadBulkJobs().catch((error) => showNotice(error.message, true));
   }
@@ -3992,6 +4096,11 @@ function bindEvents() {
       });
       showNotice(`Imported ${result.imported} contacts. ${result.skipped} skipped.`);
       await loadContacts();
+      if (Array.isArray(result.leadIds) && result.leadIds.length) {
+        state.selectedContactIds = new Set(result.leadIds);
+        renderContacts();
+      }
+      updateBroadcastPreview();
     } catch (error) {
       showNotice(error.message, true);
     }
@@ -4016,8 +4125,20 @@ function bindEvents() {
   });
 
   $("#newTemplateBtn")?.addEventListener("click", () => {
+    $("#templateSubmitStatus")?.classList.add("hidden");
     $("#templateDialog")?.showModal();
     refreshIcons();
+  });
+
+  $("#syncContactTemplatesBtn")?.addEventListener("click", async () => {
+    try {
+      const data = await publicApi("/contact-templates/sync", { method: "POST" });
+      state.contactTemplates = data.templates || [];
+      renderContactTemplates();
+      showNotice("Meta template statuses synced.");
+    } catch (error) {
+      showNotice(error.message, true);
+    }
   });
 
   document.querySelectorAll("[data-template-var]").forEach((button) => {
@@ -4034,7 +4155,7 @@ function bindEvents() {
     });
   });
 
-  $("#templateForm")?.addEventListener("submit", (event) => {
+  $("#templateForm")?.addEventListener("submit", async (event) => {
     const submitter = event.submitter;
     if (submitter?.value === "cancel") return;
     event.preventDefault();
@@ -4043,13 +4164,47 @@ function bindEvents() {
       showNotice("Template name is required.", true);
       return;
     }
-    if ($("#bulkTemplateName")) $("#bulkTemplateName").value = templateName;
-    updateBroadcastPreview();
-    $("#templateDialog")?.close();
-    showNotice("Template prepared for broadcast send.");
+    const status = $("#templateSubmitStatus");
+    if (status) {
+      status.classList.remove("hidden");
+      status.textContent = "Submitting template to Meta...";
+    }
+    $("#createTemplateBtn")?.toggleAttribute("disabled", true);
+    try {
+      const data = await publicApi("/contact-templates", {
+        method: "POST",
+        body: JSON.stringify({
+          name: templateName,
+          category: $("#templateTypeInput")?.value || "MARKETING",
+          language: $("#templateLanguageInput")?.value.trim() || "en_US",
+          body: $("#templateContentInput")?.value.trim() || "",
+          headerText: $("#templateHeaderInput")?.value.trim() || "",
+          footerText: $("#templateFooterInput")?.value.trim() || ""
+        })
+      });
+      state.contactTemplates = [
+        data.template,
+        ...state.contactTemplates.filter((template) => template.id !== data.template.id)
+      ];
+      renderContactTemplates();
+      if (data.template.accepted) chooseBroadcastTemplate(data.template.id);
+      showNotice(data.template.accepted ? "Template accepted by Meta." : `Template submitted. Current status: ${pretty(data.template.status)}.`);
+      $("#templateDialog")?.close();
+      $("#templateForm")?.reset();
+      if ($("#templateLanguageInput")) $("#templateLanguageInput").value = "en_US";
+    } catch (error) {
+      if (status) status.textContent = error.message;
+      showNotice(error.message, true);
+    } finally {
+      $("#createTemplateBtn")?.toggleAttribute("disabled", false);
+    }
   });
 
-  ["bulkTemplateName", "templateContentInput", "bulkAudienceTag", "bulkAudienceSource"].forEach((id) => {
+  $("#bulkTemplateSelect")?.addEventListener("change", (event) => {
+    chooseBroadcastTemplate(event.target.value);
+  });
+
+  ["bulkTemplateName", "bulkTemplateLanguage", "templateContentInput", "bulkAudienceTag", "bulkAudienceSource"].forEach((id) => {
     $(`#${id}`)?.addEventListener("input", updateBroadcastPreview);
   });
 
@@ -4057,6 +4212,8 @@ function bindEvents() {
     event.preventDefault();
     try {
       if (!integrationConnected("whatsapp")) throw new Error("WhatsApp not connected for your company.");
+      const selectedTemplate = state.contactTemplates.find((template) => template.id === $("#bulkTemplateSelect")?.value);
+      if (!selectedTemplate || selectedTemplate.status !== "ACCEPTED") throw new Error("Select a Meta accepted template before broadcasting.");
       const body = {
         name: $("#bulkName")?.value.trim() || "Bulk WhatsApp template send",
         templateName: $("#bulkTemplateName")?.value.trim(),
@@ -4067,8 +4224,9 @@ function bindEvents() {
         })
       };
       await publicApi("/bulk-messages", { method: "POST", body: JSON.stringify(body) });
-      showNotice("Bulk send queued.");
+      showNotice("Broadcast queued. Messages will send every 6000 milliseconds.");
       await loadBulkJobs();
+      await loadContacts();
     } catch (error) {
       showNotice(error.message, true);
     }

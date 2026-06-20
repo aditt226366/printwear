@@ -65,10 +65,14 @@ import {
   listAdDrafts,
   listBulkJobs,
   listCampaigns,
+  listContactTemplates,
   listContacts,
   listWorkflows,
   pauseCampaign,
   resumeCampaign,
+  submitContactTemplate,
+  syncContactTemplate,
+  syncContactTemplates,
   updateWorkflow
 } from "../controllers/automation.controller.js";
 import {
@@ -190,6 +194,10 @@ apiRoutes.get("/contacts", requireFeature("broadcasts"), listContacts);
 apiRoutes.post("/contacts", requireFeature("broadcasts"), createContact);
 apiRoutes.post("/contacts/import/csv", requireFeature("broadcasts"), importContactsCsv);
 apiRoutes.post("/contacts/import/google-sheets", requireFeature("broadcasts"), importContactsSheets);
+apiRoutes.get("/contact-templates", requireFeature("broadcasts"), listContactTemplates);
+apiRoutes.post("/contact-templates", requireFeature("broadcasts"), submitContactTemplate);
+apiRoutes.post("/contact-templates/sync", requireFeature("broadcasts"), syncContactTemplates);
+apiRoutes.post("/contact-templates/:templateId/sync", requireFeature("broadcasts"), syncContactTemplate);
 apiRoutes.get("/bulk-messages", requireFeature("broadcasts"), listBulkJobs);
 apiRoutes.post("/bulk-messages", requireFeature("broadcasts"), createBulkSend);
 apiRoutes.get("/campaigns", requireFeature("campaigns"), listCampaigns);

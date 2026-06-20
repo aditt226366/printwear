@@ -54,9 +54,19 @@ type WorkflowDefinition = {
   edges?: WorkflowEdge[];
 };
 
+type ContactTemplateInput = {
+  name: string;
+  category?: string;
+  language?: string;
+  body: string;
+  headerText?: string | null;
+  footerText?: string | null;
+};
+
 const activeBulkJobs = new Set<string>();
 const activeCampaigns = new Set<string>();
 let workersStarted = false;
+const CONTACT_BROADCAST_SEND_DELAY_MS = 6000;
 
 type AutomationSetupStatus = {
   ready: boolean;
@@ -67,6 +77,7 @@ type AutomationSetupStatus = {
 
 const AUTOMATION_MIGRATION_NAME = "20260615120000_printwear_automation_modules";
 const REQUIRED_TABLES = [
+  "ContactBroadcastTemplate",
   "BulkMessageJob",
   "BulkMessageRecipient",
   "Campaign",
@@ -115,7 +126,7 @@ async function automationSetupStatus(force = false): Promise<AutomationSetupStat
       SELECT table_name
       FROM information_schema.tables
       WHERE table_schema = 'public'
-        AND table_name IN ('BulkMessageJob', 'BulkMessageRecipient', 'Campaign', 'CampaignRecipient', 'AdDraft', 'AiWorkflow', 'WorkflowExecutionLog')
+        AND table_name IN ('ContactBroadcastTemplate', 'BulkMessageJob', 'BulkMessageRecipient', 'Campaign', 'CampaignRecipient', 'AdDraft', 'AiWorkflow', 'WorkflowExecutionLog')
     `;
     const columnRows = await prisma.$queryRaw<Array<{ column_name: string }>>`
       SELECT column_name
@@ -221,6 +232,257 @@ function csvIndex(headers: string[], names: string[], fallback: number) {
 
 function templateContent(templateName: string, source: string) {
   return `[WhatsApp template: ${templateName}] Sent by ${source}.`;
+}
+
+function normalizeTemplateName(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function normalizeTemplateCategory(value: unknown) {
+  const category = String(value || "MARKETING").trim().toUpperCase();
+  return ["MARKETING", "UTILITY", "AUTHENTICATION"].includes(category) ? category : "MARKETING";
+}
+
+function normalizeTemplateLanguage(value: unknown) {
+  return String(value || "en_US").trim() || "en_US";
+}
+
+function graphErrorMessage(data: unknown) {
+  if (!data || typeof data !== "object") return null;
+  const error = (data as { error?: { message?: string } }).error;
+  return error?.message ?? null;
+}
+
+function contactTemplateStatusFromMeta(status: unknown) {
+  const value = String(status || "").trim().toUpperCase();
+  if (value === "APPROVED" || value === "ACCEPTED") return "ACCEPTED";
+  if (value === "REJECTED") return "REJECTED";
+  if (value === "PAUSED" || value === "DISABLED") return "NEEDS_ATTENTION";
+  if (value === "PENDING" || value === "IN_REVIEW" || value === "SUBMITTED") return "PENDING";
+  return value || "SUBMITTED";
+}
+
+function templateComponents(input: ContactTemplateInput) {
+  const components: Array<Record<string, string>> = [];
+  const headerText = input.headerText?.trim();
+  if (headerText) components.push({ type: "HEADER", format: "TEXT", text: headerText });
+  components.push({ type: "BODY", text: input.body.trim() });
+  const footerText = input.footerText?.trim();
+  if (footerText) components.push({ type: "FOOTER", text: footerText });
+  return components;
+}
+
+function bodyFromMetaComponents(components: unknown) {
+  if (!Array.isArray(components)) return "";
+  const body = components.find((component) => (
+    component &&
+    typeof component === "object" &&
+    String((component as { type?: unknown }).type || "").toUpperCase() === "BODY"
+  )) as { text?: string } | undefined;
+  return body?.text ?? "";
+}
+
+async function graphRequest(input: {
+  companyId: string;
+  method: "GET" | "POST";
+  path: string;
+  accessToken: string;
+  params?: Record<string, string>;
+  body?: Record<string, unknown>;
+  purpose: string;
+}) {
+  const url = new URL(`https://graph.facebook.com/${env.WHATSAPP_API_VERSION}${input.path}`);
+  Object.entries(input.params ?? {}).forEach(([key, value]) => url.searchParams.set(key, value));
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+
+  try {
+    const response = await fetch(url, {
+      method: input.method,
+      headers: {
+        Authorization: `Bearer ${input.accessToken}`,
+        "Content-Type": "application/json"
+      },
+      body: input.body ? JSON.stringify(input.body) : undefined,
+      signal: controller.signal
+    });
+    const data = await response.json().catch(() => ({}));
+    void apiUsageService.log({
+      companyId: input.companyId,
+      provider: "META_WHATSAPP",
+      endpoint: input.path,
+      method: input.method,
+      statusCode: response.status,
+      success: response.ok,
+      metadata: {
+        purpose: input.purpose,
+        templateName: typeof input.body?.name === "string" ? input.body.name : input.params?.name,
+        error: graphErrorMessage(data)
+      }
+    });
+    return { response, data };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function findMetaTemplate(input: {
+  companyId: string;
+  businessAccountId: string;
+  accessToken: string;
+  name: string;
+  language: string;
+}) {
+  const result = await graphRequest({
+    companyId: input.companyId,
+    method: "GET",
+    path: `/${input.businessAccountId}/message_templates`,
+    accessToken: input.accessToken,
+    params: {
+      fields: "id,name,language,status,rejected_reason,components",
+      limit: "100"
+    },
+    purpose: "contact_template_sync"
+  });
+
+  if (!result.response.ok) {
+    throw new AppError(
+      "WhatsApp template sync failed",
+      result.response.status >= 400 && result.response.status < 500 ? 400 : 500,
+      graphErrorMessage(result.data) ?? `Meta API returned HTTP ${result.response.status}`
+    );
+  }
+
+  const rows = (result.data as {
+    data?: Array<{
+      id?: string;
+      name?: string;
+      language?: string;
+      status?: string;
+      rejected_reason?: string;
+      components?: unknown;
+    }>;
+  }).data ?? [];
+
+  return rows.find((row) => row.name === input.name && row.language === input.language) ?? null;
+}
+
+function publicContactTemplate(template: {
+  id: string;
+  name: string;
+  category: string;
+  language: string;
+  body: string;
+  headerText: string | null;
+  footerText: string | null;
+  metaTemplateId: string | null;
+  metaStatus: string | null;
+  status: string;
+  rejectionReason: string | null;
+  lastSubmittedAt: Date | null;
+  lastSyncedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  return {
+    id: template.id,
+    name: template.name,
+    category: template.category,
+    language: template.language,
+    body: template.body,
+    headerText: template.headerText,
+    footerText: template.footerText,
+    metaTemplateId: template.metaTemplateId,
+    metaStatus: template.metaStatus,
+    status: template.status,
+    accepted: template.status === "ACCEPTED",
+    rejectionReason: template.rejectionReason,
+    lastSubmittedAt: template.lastSubmittedAt,
+    lastSyncedAt: template.lastSyncedAt,
+    createdAt: template.createdAt,
+    updatedAt: template.updatedAt
+  };
+}
+
+async function syncContactTemplateRecord(template: { id: string; companyId: string; name: string; language: string }) {
+  const whatsApp = await companyIntegrationService.whatsApp(template.companyId);
+  const metaTemplate = await findMetaTemplate({
+    companyId: template.companyId,
+    businessAccountId: whatsApp.businessAccountId,
+    accessToken: whatsApp.accessToken,
+    name: template.name,
+    language: template.language
+  });
+
+  if (!metaTemplate) {
+    return prisma.contactBroadcastTemplate.update({
+      where: { id: template.id },
+      data: {
+        status: "ERROR",
+        rejectionReason: "Template not found in Meta.",
+        lastSyncedAt: new Date()
+      }
+    });
+  }
+
+  return prisma.contactBroadcastTemplate.update({
+    where: { id: template.id },
+    data: {
+      metaTemplateId: metaTemplate.id ?? null,
+      metaStatus: metaTemplate.status ?? null,
+      status: contactTemplateStatusFromMeta(metaTemplate.status),
+      rejectionReason: metaTemplate.rejected_reason ?? null,
+      lastSyncedAt: new Date()
+    }
+  });
+}
+
+async function ensureAcceptedContactTemplate(companyId: string, templateName: string, templateLanguage: string) {
+  const name = normalizeTemplateName(templateName);
+  const language = normalizeTemplateLanguage(templateLanguage);
+  if (!name) throw new AppError("Template name is required.", 400);
+
+  const local = await prisma.contactBroadcastTemplate.findUnique({
+    where: { companyId_name_language: { companyId, name, language } }
+  });
+
+  if (local?.status === "ACCEPTED") return local;
+  if (local) {
+    const synced = await syncContactTemplateRecord(local);
+    if (synced.status === "ACCEPTED") return synced;
+    throw new AppError("Template is not accepted by Meta yet.", 400, `Current template status: ${synced.status}`);
+  }
+
+  const whatsApp = await companyIntegrationService.whatsApp(companyId);
+  const metaTemplate = await findMetaTemplate({
+    companyId,
+    businessAccountId: whatsApp.businessAccountId,
+    accessToken: whatsApp.accessToken,
+    name,
+    language
+  });
+
+  if (!metaTemplate || contactTemplateStatusFromMeta(metaTemplate.status) !== "ACCEPTED") {
+    throw new AppError("Template is not accepted by Meta yet.", 400);
+  }
+
+  return prisma.contactBroadcastTemplate.create({
+    data: {
+      companyId,
+      name,
+      category: "MARKETING",
+      language,
+      body: bodyFromMetaComponents(metaTemplate.components) || `Approved WhatsApp template ${name}`,
+      metaTemplateId: metaTemplate.id ?? null,
+      metaStatus: metaTemplate.status ?? null,
+      status: "ACCEPTED",
+      lastSyncedAt: new Date()
+    }
+  });
 }
 
 function campaignAudienceLabel(audience: Prisma.JsonValue) {
@@ -419,6 +681,109 @@ export const automationService = {
     return setupRequiredResponse(status);
   },
 
+  async listContactTemplates(companyId: string) {
+    await assertAutomationSetup();
+    const templates = await prisma.contactBroadcastTemplate.findMany({
+      where: { companyId },
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }]
+    });
+    return templates.map(publicContactTemplate);
+  },
+
+  async submitContactTemplate(input: ContactTemplateInput, companyId: string, actorUserId?: string | null) {
+    await assertAutomationSetup();
+    const name = normalizeTemplateName(input.name);
+    const language = normalizeTemplateLanguage(input.language);
+    const category = normalizeTemplateCategory(input.category);
+    const body = input.body.trim();
+    if (!name) throw new AppError("Template name is required.", 400);
+    if (!body) throw new AppError("Template content is required.", 400);
+
+    const whatsApp = await companyIntegrationService.whatsApp(companyId);
+    const payload = {
+      name,
+      category,
+      language,
+      components: templateComponents({ ...input, name, category, language, body })
+    };
+    const result = await graphRequest({
+      companyId,
+      method: "POST",
+      path: `/${whatsApp.businessAccountId}/message_templates`,
+      accessToken: whatsApp.accessToken,
+      body: payload,
+      purpose: "contact_template_submit"
+    });
+    const meta = result.data as { id?: string; status?: string; category?: string };
+    const nextStatus = result.response.ok ? contactTemplateStatusFromMeta(meta.status || "SUBMITTED") : "ERROR";
+    const rejectionReason = result.response.ok ? null : graphErrorMessage(result.data) ?? `Meta API returned HTTP ${result.response.status}`;
+
+    const template = await prisma.contactBroadcastTemplate.upsert({
+      where: { companyId_name_language: { companyId, name, language } },
+      create: {
+        companyId,
+        name,
+        category,
+        language,
+        body,
+        headerText: input.headerText?.trim() || null,
+        footerText: input.footerText?.trim() || null,
+        metaTemplateId: meta.id ?? null,
+        metaStatus: meta.status ?? null,
+        status: nextStatus,
+        rejectionReason,
+        lastSubmittedAt: new Date(),
+        lastSyncedAt: result.response.ok ? new Date() : null,
+        createdById: actorUserId ?? null
+      },
+      update: {
+        category,
+        body,
+        headerText: input.headerText?.trim() || null,
+        footerText: input.footerText?.trim() || null,
+        metaTemplateId: meta.id ?? undefined,
+        metaStatus: meta.status ?? undefined,
+        status: nextStatus,
+        rejectionReason,
+        lastSubmittedAt: new Date(),
+        lastSyncedAt: result.response.ok ? new Date() : undefined,
+        createdById: actorUserId ?? undefined
+      }
+    });
+
+    if (!result.response.ok) {
+      throw new AppError("Meta template submission failed.", 400, rejectionReason ?? "Meta template submission failed.");
+    }
+
+    await messageService.createSendLog({
+      action: "contact_template_submit",
+      status: nextStatus === "ACCEPTED" ? "sent" : "submitted",
+      errorMessage: `${name}/${language}: ${nextStatus}`
+    });
+
+    return publicContactTemplate(template);
+  },
+
+  async syncContactTemplate(id: string, companyId: string) {
+    await assertAutomationSetup();
+    const template = await prisma.contactBroadcastTemplate.findFirst({ where: { id, companyId } });
+    if (!template) throw new AppError("Template not found.", 404);
+    return publicContactTemplate(await syncContactTemplateRecord(template));
+  },
+
+  async syncContactTemplates(companyId: string) {
+    await assertAutomationSetup();
+    const templates = await prisma.contactBroadcastTemplate.findMany({
+      where: { companyId },
+      orderBy: { updatedAt: "desc" }
+    });
+    const synced = [];
+    for (const template of templates) {
+      synced.push(publicContactTemplate(await syncContactTemplateRecord(template)));
+    }
+    return synced;
+  },
+
   async listContacts(filters: ContactFilters = {}, companyId?: string) {
     await assertAutomationSetup();
     const scopedCompanyId = companyId ?? null;
@@ -430,6 +795,11 @@ export const automationService = {
       source: string;
       status: string;
       last_contacted: Date | null;
+      last_template_name: string | null;
+      last_template_content: string | null;
+      last_template_status: string | null;
+      last_template_at: Date | null;
+      templates_sent_count: number | bigint;
       updated_at: Date;
     }>>`
       SELECT
@@ -446,6 +816,39 @@ export const automationService = {
           ORDER BY m."createdAt" DESC
           LIMIT 1
         ) AS last_contacted,
+        (
+          SELECT COALESCE(m."rawPayload"->>'templateName', '')
+          FROM "Message" m
+          WHERE m."leadId" = l.id AND m.direction = 'outbound' AND m.type = 'template'
+          ORDER BY m."createdAt" DESC
+          LIMIT 1
+        ) AS last_template_name,
+        (
+          SELECT m.content
+          FROM "Message" m
+          WHERE m."leadId" = l.id AND m.direction = 'outbound' AND m.type = 'template'
+          ORDER BY m."createdAt" DESC
+          LIMIT 1
+        ) AS last_template_content,
+        (
+          SELECT m.status::text
+          FROM "Message" m
+          WHERE m."leadId" = l.id AND m.direction = 'outbound' AND m.type = 'template'
+          ORDER BY m."createdAt" DESC
+          LIMIT 1
+        ) AS last_template_status,
+        (
+          SELECT m."createdAt"
+          FROM "Message" m
+          WHERE m."leadId" = l.id AND m.direction = 'outbound' AND m.type = 'template'
+          ORDER BY m."createdAt" DESC
+          LIMIT 1
+        ) AS last_template_at,
+        (
+          SELECT COUNT(*)::bigint
+          FROM "Message" m
+          WHERE m."leadId" = l.id AND m.direction = 'outbound' AND m.type = 'template'
+        ) AS templates_sent_count,
         l."updatedAt" AS updated_at
       FROM "Lead" l
       WHERE (${scopedCompanyId}::text IS NULL OR l."companyId" = ${scopedCompanyId})
@@ -470,6 +873,13 @@ export const automationService = {
         source: lead.source,
         status: lead.status.toUpperCase(),
         lastContacted: lead.last_contacted,
+        templatesSentCount: Number(lead.templates_sent_count ?? 0),
+        lastTemplate: lead.last_template_name || lead.last_template_content ? {
+          name: lead.last_template_name || null,
+          content: lead.last_template_content,
+          status: lead.last_template_status?.toUpperCase() ?? null,
+          sentAt: lead.last_template_at
+        } : null,
         updatedAt: lead.updated_at
       })),
       facets: {
@@ -525,6 +935,7 @@ export const automationService = {
 
     let imported = 0;
     let skipped = 0;
+    const leadIds: string[] = [];
 
     for (const row of dataRows) {
       const phone = normalizePhoneNumber(row[phoneIndex] ?? "");
@@ -553,6 +964,7 @@ export const automationService = {
         SET tags = ${tags}::text[]
         WHERE id = ${lead.id}
       `;
+      leadIds.push(lead.id);
       imported += 1;
     }
 
@@ -568,7 +980,7 @@ export const automationService = {
       metadata: { skipped }
     });
     await messageService.createSendLog({ action: "contacts_csv_import", status: "sent", errorMessage: `Imported ${imported}; skipped ${skipped}` });
-    return { imported, skipped };
+    return { imported, skipped, leadIds };
   },
 
   async importContactsFromGoogleSheets(companyId?: string) {
@@ -612,6 +1024,9 @@ export const automationService = {
   async createBulkSend(input: { name: string; templateName: string; templateLanguage?: string; audience: AudienceFilter }, companyId: string) {
     await assertAutomationSetup();
     const whatsApp = await companyIntegrationService.whatsApp(companyId);
+    const templateName = input.templateName || whatsApp.templateName || "";
+    const templateLanguage = input.templateLanguage || whatsApp.templateLanguage || "en_US";
+    await ensureAcceptedContactTemplate(companyId, templateName, templateLanguage);
     const leads = await selectAudience(input.audience, companyId);
     if (!leads.length) throw new AppError("No contacts matched this bulk-send audience", 400);
 
@@ -619,8 +1034,8 @@ export const automationService = {
       data: {
         name: input.name,
         companyId,
-        templateName: input.templateName || whatsApp.templateName || "",
-        templateLanguage: input.templateLanguage || whatsApp.templateLanguage,
+        templateName,
+        templateLanguage,
         totalCount: leads.length,
         recipients: {
           create: leads.map((lead) => ({
@@ -631,7 +1046,7 @@ export const automationService = {
       }
     });
 
-    logger.info({ jobId: job.id, count: leads.length, templateName: input.templateName }, "bulk send started");
+    logger.info({ jobId: job.id, count: leads.length, templateName }, "bulk send started");
     void apiUsageService.log({
       companyId,
       provider: "INTERNAL",
@@ -640,7 +1055,7 @@ export const automationService = {
       statusCode: 202,
       success: true,
       requestUnits: leads.length,
-      metadata: { jobId: job.id, templateName: input.templateName }
+      metadata: { jobId: job.id, templateName, sendGapMs: CONTACT_BROADCAST_SEND_DELAY_MS }
     });
     void this.processBulkJob(job.id);
     return job;
@@ -690,7 +1105,7 @@ export const automationService = {
           await messageService.createSendLog({ leadId: recipient.leadId, action: "bulk_message", status: "failed", errorMessage });
         }
 
-        await delay(env.AUTOMATION_SEND_DELAY_MS);
+        await delay(CONTACT_BROADCAST_SEND_DELAY_MS);
       }
 
       await refreshBulkJobCounts(jobId);

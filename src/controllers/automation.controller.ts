@@ -40,6 +40,15 @@ const bulkSendSchema = z.object({
   audience: audienceSchema.default({})
 });
 
+const contactTemplateSchema = z.object({
+  name: z.string().trim().min(1),
+  category: z.string().trim().optional(),
+  language: z.string().trim().optional(),
+  body: z.string().trim().min(1),
+  headerText: z.string().trim().optional().nullable(),
+  footerText: z.string().trim().optional().nullable()
+});
+
 const campaignSchema = z.object({
   name: z.string().trim().min(2),
   audience: audienceSchema.default({}),
@@ -111,6 +120,25 @@ export const importContactsSheets = asyncHandler(async (_req: Request, res: Resp
 
 export const listBulkJobs = asyncHandler(async (_req: Request, res: Response) => {
   res.json({ jobs: await automationService.listBulkJobs(companyScope(res)) });
+});
+
+export const listContactTemplates = asyncHandler(async (_req: Request, res: Response) => {
+  res.json({ templates: await automationService.listContactTemplates(sessionCompanyId(res)) });
+});
+
+export const submitContactTemplate = asyncHandler(async (req: Request, res: Response) => {
+  const body = contactTemplateSchema.parse(req.body);
+  res.status(201).json({
+    template: await automationService.submitContactTemplate(body, sessionCompanyId(res), res.locals.session?.userId ?? null)
+  });
+});
+
+export const syncContactTemplate = asyncHandler(async (req: Request, res: Response) => {
+  res.json({ template: await automationService.syncContactTemplate(req.params.templateId, sessionCompanyId(res)) });
+});
+
+export const syncContactTemplates = asyncHandler(async (_req: Request, res: Response) => {
+  res.json({ templates: await automationService.syncContactTemplates(sessionCompanyId(res)) });
 });
 
 export const createBulkSend = asyncHandler(async (req: Request, res: Response) => {
